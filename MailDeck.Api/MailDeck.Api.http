@@ -1,0 +1,6 @@
+@MailDeck.Api_HostAddress = http://localhost:5213
+
+GET {{MailDeck.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
