@@ -1,0 +1,18 @@
+[Unit]
+Description=MailDeck UI Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/maildeck/ui
+# Assumes 'serve' is installed globally or available in path. 
+# Alternatively use: ExecStart=/usr/bin/npx serve -s dist -l 3000
+ExecStart=/usr/bin/npx serve -s dist -l 3000
+Restart=always
+RestartSec=10
+SyslogIdentifier=maildeck-ui
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
