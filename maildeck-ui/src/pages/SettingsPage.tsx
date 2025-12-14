@@ -179,7 +179,39 @@ export default function SettingsPage() {
                 )}
             </div>
 
+            {/* Notification Settings */}
+            <div className="bg-white p-6 rounded-lg shadow mb-8">
+                <h2 className="text-lg font-semibold mb-4">Notification Settings</h2>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <div className="font-medium">Web Push Notifications</div>
+                        <div className="text-sm text-gray-500">Receive notifications for new emails</div>
+                    </div>
+                    <button
+                        onClick={async () => {
+                            if (!('serviceWorker' in navigator)) {
+                                alert('Service Worker is not supported in this browser.');
+                                return;
+                            }
+                            try {
+                                const { registerServiceWorker, subscribeToPush } = await import('../lib/webpush');
+                                await registerServiceWorker();
+                                await subscribeToPush();
+                                alert('Notifications enabled successfully!');
+                            } catch (err) {
+                                console.error(err);
+                                alert('Failed to enable notifications. See console for details.');
+                            }
+                        }}
+                        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium"
+                    >
+                        Enable Notifications
+                    </button>
+                </div>
+            </div>
+
             <div ref={formRef} className="bg-white p-6 rounded-lg shadow mb-8">
+
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-lg font-semibold">{editingId ? 'Edit Account' : 'Add New Account'}</h2>
                     {editingId && (

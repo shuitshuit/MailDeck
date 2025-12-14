@@ -40,8 +40,16 @@ public class UserServerConfig
 
     [Name("is_default")]
     public bool IsDefault { get; set; }
+    
+    [Name("last_known_uid")]
+    public long LastKnownUid { get; set; }
+    
+    [Name("last_checked_at")]
+    public DateTime? LastCheckedAt { get; set; }
+
     [Name("created_at")]
     public DateTime CreatedAt { get; set; }
     [Name("updated_at")]
     public DateTime UpdatedAt { get; set; }
 }
+

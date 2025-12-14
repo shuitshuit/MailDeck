@@ -43,4 +43,23 @@ CREATE TABLE IF NOT EXISTS contacts (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_contacts_user_id ON contacts(user_id);
+
+-- Create Web Push Subscriptions table
+CREATE TABLE IF NOT EXISTS web_push_subscriptions (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL REFERENCES users(id),
+    endpoint TEXT NOT NULL,
+    p256dh VARCHAR(255) NOT NULL,
+    auth VARCHAR(255) NOT NULL,
+    user_agent VARCHAR(1024),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_web_push_subscriptions_user_id ON web_push_subscriptions(user_id);
+
+-- Update user_server_configs table
+ALTER TABLE user_server_configs 
+ADD COLUMN IF NOT EXISTS last_known_uid BIGINT DEFAULT 0,
+ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+

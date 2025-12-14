@@ -1,6 +1,7 @@
 import { fetchAuthSession } from 'aws-amplify/auth';
 import axios from 'axios';
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import ComposeModal from '../components/ComposeModal';
 import MailDetailModal from '../components/MailDetailModal';
 import { getInbox, getServerConfigs } from '../lib/api';
@@ -22,6 +23,8 @@ interface Email {
 }
 
 export default function DashboardPage() {
+    const { accountId } = useParams();
+    const navigate = useNavigate();
     const [selectedMail, setSelectedMail] = useState<Email | null>(null);
     const [mails, setMails] = useState<Email[]>([]);
     const [loading, setLoading] = useState(false);
@@ -34,12 +37,37 @@ export default function DashboardPage() {
         try {
             const configs = await getServerConfigs();
             setAccounts(configs);
-            // Default to "All Accounts" (0) if configs exist
-            if (configs.length > 0) {
-                setActiveTab(0);
-            }
         } catch (error) {
             console.error('Failed to load accounts', error);
+        }
+    };
+
+    // Effect to sync URL param to activeTab
+    useEffect(() => {
+        if (accounts.length === 0) return;
+
+        if (accountId) {
+            const id = parseInt(accountId);
+            if (!isNaN(id)) {
+                setActiveTab(id);
+                return;
+            }
+        }
+
+        // Default to all (0) if no ID or invalid
+        // Only set default if we are at root or /inbox without ID
+        if (!accountId && activeTab === null) {
+            setActiveTab(0);
+        }
+    }, [accountId, accounts]);
+
+    // Handle tab change
+    const onTabChange = (id: number) => {
+        setActiveTab(id);
+        if (id === 0) {
+            navigate('/inbox');
+        } else {
+            navigate(`/inbox/${id}`);
         }
     };
 
@@ -140,7 +168,7 @@ export default function DashboardPage() {
 
                 {accounts.length > 0 && (
                     <button
-                        onClick={() => setActiveTab(0)}
+                        onClick={() => onTabChange(0)}
                         className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 0
                             ? 'border-brand-600 text-brand-600'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -153,7 +181,7 @@ export default function DashboardPage() {
                 {accounts.map(account => (
                     <button
                         key={account.id}
-                        onClick={() => setActiveTab(account.id)}
+                        onClick={() => onTabChange(account.id)}
                         className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === account.id
                             ? 'border-brand-600 text-brand-600'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'

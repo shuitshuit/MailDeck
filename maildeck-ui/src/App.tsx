@@ -85,6 +85,20 @@ function App() {
           </Layout>
         </ProtectedRoute>
       } />
+      <Route path="/inbox" element={
+        <ProtectedRoute>
+          <Layout>
+            <DashboardPage />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/inbox/:accountId" element={
+        <ProtectedRoute>
+          <Layout>
+            <DashboardPage />
+          </Layout>
+        </ProtectedRoute>
+      } />
       <Route path="/contacts" element={
         <ProtectedRoute>
           <Layout>

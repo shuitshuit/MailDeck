@@ -115,6 +115,10 @@ try
     builder.Services.AddAWSService<Amazon.KeyManagementService.IAmazonKeyManagementService>();
     builder.Services.AddSingleton<MailDeck.Api.Services.IEncryptionService, MailDeck.Api.Services.KmsEncryptionService>();
 
+    // Web Push
+    builder.Services.AddHttpClient<Lib.Net.Http.WebPush.PushServiceClient>();
+    builder.Services.AddHostedService<MailDeck.Api.Services.EmailCheckBackgroundService>();
+
     var app = builder.Build();
 
     // Configure the HTTP request pipeline.
