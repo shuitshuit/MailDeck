@@ -65,9 +65,9 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl relative z-10 flex flex-col max-h-[90vh]">
+            <div className="bg-white md:rounded-xl shadow-xl w-full max-w-2xl relative z-10 flex flex-col h-full md:h-auto md:max-h-[90vh]">
                 <div className="flex items-center justify-between p-4 border-b">
                     <h2 className="text-lg font-bold text-gray-800">新規メール作成</h2>
                     <button
