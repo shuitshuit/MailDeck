@@ -103,25 +103,86 @@ public class ServerConfigController : ControllerBase
         }
 
         var domain = email.Split('@')[1];
-        var ispdbUrl = $"https://autoconfig.thunderbird.net/v1.1/{domain}";
+        using var client = new HttpClient();
+        client.Timeout = TimeSpan.FromSeconds(5); // Set timeout for each request
 
-        try 
+        // Method 1: Mozilla ISPDB (Thunderbird's public database)
+        try
         {
-            using var client = new HttpClient();
+            var ispdbUrl = $"https://autoconfig.thunderbird.net/v1.1/{domain}";
+            _logger.LogInformation("Trying Mozilla ISPDB: {Url}", ispdbUrl);
+
             var response = await client.GetAsync(ispdbUrl);
-            
             if (response.IsSuccessStatusCode)
             {
                 var xmlContent = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation("Found config in Mozilla ISPDB for domain: {Domain}", domain);
                 return Ok(new { source = "ispdb", xml = xmlContent });
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to fetch autoconfig");
+            _logger.LogWarning(ex, "Mozilla ISPDB failed for domain: {Domain}", domain);
         }
 
-        // Fallback or empty return
+        // Method 2: autoconfig.domain.com
+        try
+        {
+            var autoconfigUrl = $"http://autoconfig.{domain}/mail/config-v1.1.xml?emailaddress={Uri.EscapeDataString(email)}";
+            _logger.LogInformation("Trying autoconfig subdomain: {Url}", autoconfigUrl);
+
+            var response = await client.GetAsync(autoconfigUrl);
+            if (response.IsSuccessStatusCode)
+            {
+                var xmlContent = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation("Found config at autoconfig.{Domain}", domain);
+                return Ok(new { source = "autoconfig_subdomain", xml = xmlContent });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "autoconfig subdomain failed for domain: {Domain}", domain);
+        }
+
+        // Method 3: domain.com/.well-known/autoconfig/mail/config-v1.1.xml
+        try
+        {
+            var wellKnownUrl = $"https://{domain}/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress={Uri.EscapeDataString(email)}";
+            _logger.LogInformation("Trying .well-known: {Url}", wellKnownUrl);
+
+            var response = await client.GetAsync(wellKnownUrl);
+            if (response.IsSuccessStatusCode)
+            {
+                var xmlContent = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation("Found config at .well-known for domain: {Domain}", domain);
+                return Ok(new { source = "well_known", xml = xmlContent });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, ".well-known failed for domain: {Domain}", domain);
+        }
+
+        // Method 4: Try HTTP version of .well-known (some servers don't have HTTPS)
+        try
+        {
+            var wellKnownHttpUrl = $"http://{domain}/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress={Uri.EscapeDataString(email)}";
+            _logger.LogInformation("Trying .well-known (HTTP): {Url}", wellKnownHttpUrl);
+
+            var response = await client.GetAsync(wellKnownHttpUrl);
+            if (response.IsSuccessStatusCode)
+            {
+                var xmlContent = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation("Found config at .well-known (HTTP) for domain: {Domain}", domain);
+                return Ok(new { source = "well_known_http", xml = xmlContent });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, ".well-known (HTTP) failed for domain: {Domain}", domain);
+        }
+
+        _logger.LogInformation("No autoconfig found for domain: {Domain}", domain);
         return Ok(new { source = "none" });
     }
 

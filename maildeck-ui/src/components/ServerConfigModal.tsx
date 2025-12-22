@@ -110,17 +110,29 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
             const { autoConfig } = await import('../lib/api');
             const result = await autoConfig(email);
 
-            if (result.source === 'ispdb' && result.xml) {
+            // Check if we got a valid config from any source
+            const validSources = ['ispdb', 'autoconfig_subdomain', 'well_known', 'well_known_http'];
+            if (validSources.includes(result.source) && result.xml) {
                 // Parse XML to extract server settings
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(result.xml, 'text/xml');
+
+                // Check for parsing errors
+                const parserError = xmlDoc.querySelector('parsererror');
+                if (parserError) {
+                    console.error('XML parsing error:', parserError.textContent);
+                    alert('設定の解析に失敗しました。手動で設定を入力してください。');
+                    setShowManualConfig(true);
+                    return;
+                }
 
                 // Extract IMAP settings
                 const imapServer = xmlDoc.querySelector('emailProvider incomingServer[type="imap"]');
                 if (imapServer) {
                     const imapHost = imapServer.querySelector('hostname')?.textContent || '';
                     const imapPort = parseInt(imapServer.querySelector('port')?.textContent || '993');
-                    const imapSsl = imapServer.querySelector('socketType')?.textContent === 'SSL';
+                    const socketType = imapServer.querySelector('socketType')?.textContent;
+                    const imapSsl = socketType === 'SSL' || socketType === 'STARTTLS';
 
                     handleChange('imapHost', imapHost);
                     handleChange('imapPort', imapPort);
@@ -132,7 +144,8 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
                 if (smtpServer) {
                     const smtpHost = smtpServer.querySelector('hostname')?.textContent || '';
                     const smtpPort = parseInt(smtpServer.querySelector('port')?.textContent || '465');
-                    const smtpSsl = smtpServer.querySelector('socketType')?.textContent === 'SSL';
+                    const socketType = smtpServer.querySelector('socketType')?.textContent;
+                    const smtpSsl = socketType === 'SSL' || socketType === 'STARTTLS';
 
                     handleChange('smtpHost', smtpHost);
                     handleChange('smtpPort', smtpPort);
@@ -145,7 +158,15 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
                 handleChange('accountName', email.split('@')[1]); // Use domain as account name
 
                 setShowManualConfig(true);
-                alert('サーバー設定を自動検出しました！');
+
+                // Show appropriate message based on source
+                const sourceMessages: Record<string, string> = {
+                    'ispdb': 'Mozilla ISPDBからサーバー設定を自動検出しました！',
+                    'autoconfig_subdomain': 'autoconfigサブドメインからサーバー設定を検出しました！',
+                    'well_known': '.well-knownからサーバー設定を検出しました！',
+                    'well_known_http': '.well-known (HTTP)からサーバー設定を検出しました！'
+                };
+                alert(sourceMessages[result.source] || 'サーバー設定を自動検出しました！');
             } else {
                 alert('自動設定が見つかりませんでした。手動で設定を入力してください。');
                 setShowManualConfig(true);
