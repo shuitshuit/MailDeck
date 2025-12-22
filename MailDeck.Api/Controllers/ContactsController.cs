@@ -72,10 +72,10 @@ public class ContactsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteContact(Guid id)
+    public async Task<IActionResult> DeleteContact(string id)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value ?? "anonymous";
-        
+
         try
         {
             await _db.OpenAsync();
@@ -98,10 +98,10 @@ public class ContactsController : ControllerBase
         }
     }
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateContact(Guid id, [FromBody] Contact updatedContact)
+    public async Task<IActionResult> UpdateContact(string id, [FromBody] Contact updatedContact)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
-        
+
         try
         {
             await _db.OpenAsync();
