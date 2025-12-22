@@ -7,7 +7,7 @@ public class UserServerConfig
 {
     [Name("id")]
     [Key]
-    public string Id { get; set; } = string.Empty;
+    public Guid Id { get; set; }
     [Name("user_id")]
     public string UserId { get; set; } = string.Empty;
     [Name("account_name")]

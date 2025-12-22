@@ -51,7 +51,7 @@ public class WebPushController : ControllerBase
             // A cleanup job might be needed for old subscriptions in the future.
             
             subscription.UserId = userId;
-            subscription.Id = Guid.NewGuid().ToString(); // Generate new UUID
+            subscription.Id = Guid.NewGuid(); // Generate new UUID
             subscription.CreatedAt = DateTime.UtcNow;
             subscription.UpdatedAt = DateTime.UtcNow;
 

@@ -59,7 +59,7 @@ public class ServerConfigController : ControllerBase
 
         if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
-        config.Id = Guid.NewGuid().ToString(); // Generate new UUID
+        config.Id = Guid.NewGuid(); // Generate new UUID
         config.UserId = userId;
         config.CreatedAt = DateTime.UtcNow;
         config.UpdatedAt = DateTime.UtcNow;

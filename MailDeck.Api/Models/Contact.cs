@@ -7,7 +7,7 @@ public class Contact
 {
     [Key]
     [Name("id")]
-    public string Id { get; set; } = string.Empty;
+    public Guid Id { get; set; }
 
     [Name("name")]
     public string Name { get; set; } = string.Empty;

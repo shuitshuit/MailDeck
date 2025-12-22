@@ -52,7 +52,7 @@ public class ContactsController : ControllerBase
         }
 
         contact.UserId = userId;
-        contact.Id = Guid.NewGuid().ToString(); // Generate new UUID
+        contact.Id = Guid.NewGuid(); // Generate new UUID
 
         try
         {

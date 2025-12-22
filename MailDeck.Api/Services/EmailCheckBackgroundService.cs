@@ -147,7 +147,7 @@ public class EmailCheckBackgroundService : BackgroundService
         }
     }
 
-    private async Task SendPushNotificationAsync(PostgreSqlConnect db, string userId, int count, string lastSubject, string configId, CancellationToken stoppingToken)
+    private async Task SendPushNotificationAsync(PostgreSqlConnect db, string userId, int count, string lastSubject, Guid configId, CancellationToken stoppingToken)
     {
         var subscriptions = await db.GetMultipleAsync<WebPushSubscription>(new { user_id = userId });
 
