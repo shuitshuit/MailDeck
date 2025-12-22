@@ -5,6 +5,9 @@ using Serilog.Enrichers.Span;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
 
+// Configure Npgsql to handle DateTime with UTC properly
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 dotenv.net.DotEnv.Load();
 
 #region Initialize Serilog
