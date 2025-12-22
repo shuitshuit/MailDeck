@@ -440,6 +440,7 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
                     </div>
 
                     {/* Footer */}
+                    {(mode === 'edit' || showManualConfig) && (
                     <div className="p-4 md:p-6 border-t bg-gray-50 flex justify-end gap-3">
                         <button
                             type="button"
@@ -471,6 +472,7 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
                             )}
                         </button>
                     </div>
+                    )}
                 </form>
             </div>
         </div>
