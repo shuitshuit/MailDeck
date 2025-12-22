@@ -6,9 +6,8 @@ namespace MailDeck.Api.Models;
 public class UserServerConfig
 {
     [Name("id")]
-    [Serial]
     [Key]
-    public int Id { get; set; }
+    public string Id { get; set; } = string.Empty;
     [Name("user_id")]
     public string UserId { get; set; } = string.Empty;
     [Name("account_name")]

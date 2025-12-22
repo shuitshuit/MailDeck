@@ -55,11 +55,11 @@ public class ServerConfigController : ControllerBase
     public async Task<IActionResult> AddConfig([FromBody] UserServerConfig config)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
-                     ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+            ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
 
         if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
-        config.Id = 0; // incremented by DB
+        config.Id = Guid.NewGuid().ToString(); // Generate new UUID
         config.UserId = userId;
         config.CreatedAt = DateTime.UtcNow;
         config.UpdatedAt = DateTime.UtcNow;
@@ -126,7 +126,7 @@ public class ServerConfigController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateConfig(int id, [FromBody] UserServerConfig updatedConfig)
+    public async Task<IActionResult> UpdateConfig(Guid id, [FromBody] UserServerConfig updatedConfig)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
                      ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
@@ -175,7 +175,7 @@ public class ServerConfigController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteConfig(int id)
+    public async Task<IActionResult> DeleteConfig(Guid id)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
                      ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;

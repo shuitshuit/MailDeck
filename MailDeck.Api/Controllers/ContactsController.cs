@@ -51,7 +51,8 @@ public class ContactsController : ControllerBase
             return BadRequest("Name and Email are required.");
         }
 
-        contact.UserId = userId; 
+        contact.UserId = userId;
+        contact.Id = Guid.NewGuid().ToString(); // Generate new UUID
 
         try
         {
@@ -71,7 +72,7 @@ public class ContactsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteContact(int id)
+    public async Task<IActionResult> DeleteContact(Guid id)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value ?? "anonymous";
         
@@ -97,7 +98,7 @@ public class ContactsController : ControllerBase
         }
     }
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateContact(int id, [FromBody] Contact updatedContact)
+    public async Task<IActionResult> UpdateContact(Guid id, [FromBody] Contact updatedContact)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
         

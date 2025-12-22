@@ -35,7 +35,7 @@ public class WebPushController : ControllerBase
     public async Task<IActionResult> Subscribe([FromBody] Models.WebPushSubscription subscription)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
-                     ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+            ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
 
         if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
@@ -51,6 +51,7 @@ public class WebPushController : ControllerBase
             // A cleanup job might be needed for old subscriptions in the future.
             
             subscription.UserId = userId;
+            subscription.Id = Guid.NewGuid().ToString(); // Generate new UUID
             subscription.CreatedAt = DateTime.UtcNow;
             subscription.UpdatedAt = DateTime.UtcNow;
 

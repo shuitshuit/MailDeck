@@ -8,7 +8,7 @@ import { getServerConfigs, updateContact } from '../lib/api';
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 interface Contact {
-    id: number;
+    id: string;
     name: string;
     email: string;
 }
@@ -77,7 +77,7 @@ export default function ContactsPage() {
         setIsModalOpen(true);
     };
 
-    const handleDelete = async (id: number) => {
+    const handleDelete = async (id: string) => {
         if (!confirm('本当に削除しますか？')) return;
 
         const session = await fetchAuthSession();
@@ -93,7 +93,7 @@ export default function ContactsPage() {
         }
     };
 
-    const handleSendMail = async (to: string, subject: string, body: string, configId: number) => {
+    const handleSendMail = async (to: string, subject: string, body: string, configId: string) => {
         const session = await fetchAuthSession();
         const token = session.tokens?.idToken?.toString();
 

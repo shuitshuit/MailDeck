@@ -59,7 +59,7 @@ export async function getServerConfigs() {
 /**
  * Get inbox messages
  */
-export async function getInbox(configId: number, page = 1) {
+export async function getInbox(configId: string, page = 1) {
     const response = await authFetch(`/mail/inbox?configId=${configId}&page=${page}`);
     return await response.json();
 }
@@ -67,7 +67,7 @@ export async function getInbox(configId: number, page = 1) {
 /**
  * Get single message details
  */
-export async function getMessage(configId: number, messageId: string) {
+export async function getMessage(configId: string, messageId: string) {
     const response = await authFetch(`/mail/message/${messageId}?configId=${configId}`);
     return await response.json();
 }
@@ -97,7 +97,7 @@ export async function autoConfig(email: string) {
 /**
  * Update server configuration
  */
-export async function updateServerConfig(id: number, config: any) {
+export async function updateServerConfig(id: string, config: any) {
     const response = await authFetch(`/serverconfig/${id}`, {
         method: 'PUT',
         body: JSON.stringify(config)
@@ -108,7 +108,7 @@ export async function updateServerConfig(id: number, config: any) {
 /**
  * Delete server configuration
  */
-export async function deleteServerConfig(id: number) {
+export async function deleteServerConfig(id: string) {
     await authFetch(`/serverconfig/${id}`, {
         method: 'DELETE'
     });
@@ -125,7 +125,7 @@ export async function getContacts() {
 /**
  * Update contact
  */
-export async function updateContact(id: number, name: string, email: string) {
+export async function updateContact(id: string, name: string, email: string) {
     const response = await authFetch(`/contacts/${id}`, {
         method: 'PUT',
         body: JSON.stringify({ name, email })

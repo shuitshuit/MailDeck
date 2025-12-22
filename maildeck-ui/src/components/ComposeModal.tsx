@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import { getContacts } from '../lib/api';
 
 export interface Account {
-    id: number;
+    id: string;
     accountName: string;
 }
 
 interface ComposeModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSend: (to: string, subject: string, body: string, configId: number) => Promise<void>;
+    onSend: (to: string, subject: string, body: string, configId: string) => Promise<void>;
     accounts: Account[];
     initialTo?: string;
 }
@@ -17,7 +17,7 @@ interface ComposeModalProps {
 export default function ComposeModal({ isOpen, onClose, onSend, accounts, initialTo = '' }: ComposeModalProps) {
     const [to, setTo] = useState(initialTo);
     // Initialize with the first account ID if available
-    const [configId, setConfigId] = useState<number | undefined>(undefined);
+    const [configId, setConfigId] = useState<string | undefined>(undefined);
     const [subject, setSubject] = useState('');
     const [body, setBody] = useState('');
     const [isSending, setIsSending] = useState(false);
@@ -85,7 +85,7 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
                         <div>
                             <select
                                 value={configId || ''}
-                                onChange={(e) => setConfigId(Number(e.target.value))}
+                                onChange={(e) => setConfigId(e.target.value)}
                                 className="w-full px-3 py-2 border-b border-gray-200 focus:outline-none focus:border-brand-500 transition-colors bg-transparent"
                                 required
                             >
