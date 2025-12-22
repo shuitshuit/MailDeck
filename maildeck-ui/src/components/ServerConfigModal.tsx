@@ -221,6 +221,12 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
                                             type="email"
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    handleAutoConfig();
+                                                }
+                                            }}
                                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                                             placeholder="user@example.com"
                                             disabled={isAutoConfiguring}
