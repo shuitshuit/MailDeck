@@ -158,15 +158,7 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
                 handleChange('accountName', email.split('@')[1]); // Use domain as account name
 
                 setShowManualConfig(true);
-
-                // Show appropriate message based on source
-                const sourceMessages: Record<string, string> = {
-                    'ispdb': 'Mozilla ISPDBからサーバー設定を自動検出しました！',
-                    'autoconfig_subdomain': 'autoconfigサブドメインからサーバー設定を検出しました！',
-                    'well_known': '.well-knownからサーバー設定を検出しました！',
-                    'well_known_http': '.well-known (HTTP)からサーバー設定を検出しました！'
-                };
-                alert(sourceMessages[result.source] || 'サーバー設定を自動検出しました！');
+                alert('サーバー設定を自動検出しました！');
             } else {
                 alert('自動設定が見つかりませんでした。手動で設定を入力してください。');
                 setShowManualConfig(true);
