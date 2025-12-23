@@ -3,7 +3,7 @@ import { addServerConfig, deleteServerConfig, getServerConfigs, updateServerConf
 import ServerConfigModal from '../components/ServerConfigModal';
 
 interface ServerConfig {
-    id: string;
+    id?: string;
     accountName: string;
     imapHost: string;
     imapPort: number;
@@ -50,7 +50,7 @@ export default function SettingsPage() {
 
     const handleSave = async (config: ServerConfig) => {
         try {
-            if (modalMode === 'edit' && editingAccount) {
+            if (modalMode === 'edit' && editingAccount?.id) {
                 await updateServerConfig(editingAccount.id, config);
                 alert('アカウントを更新しました');
             } else {
@@ -120,7 +120,7 @@ export default function SettingsPage() {
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            {accounts.map((account) => (
+                            {accounts.map((account) => account.id && (
                                 <div
                                     key={account.id}
                                     className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-brand-300 hover:bg-gray-50 transition-all group"
@@ -155,7 +155,7 @@ export default function SettingsPage() {
                                             </svg>
                                         </button>
                                         <button
-                                            onClick={() => handleDelete(account.id)}
+                                            onClick={() => account.id && handleDelete(account.id)}
                                             className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                             title="削除"
                                         >

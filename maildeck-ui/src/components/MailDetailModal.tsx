@@ -4,7 +4,7 @@ import { getMessage } from '../lib/api';
 interface MailDetailModalProps {
     isOpen: boolean;
     onClose: () => void;
-    configId: number;
+    configId: string;
     messageId: string;
 }
 
