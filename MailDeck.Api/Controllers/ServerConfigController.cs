@@ -197,7 +197,7 @@ public class ServerConfigController : ControllerBase
         try
         {
             await _db.OpenAsync();
-            var existing = await _db.GetAsync<UserServerConfig>(id);
+            var existing = await _db.GetAsync<UserServerConfig>(Guid.Parse(id));
             if (existing == null || existing.UserId != userId)
             {
                 return NotFound();
@@ -246,7 +246,7 @@ public class ServerConfigController : ControllerBase
         try
         {
             await _db.OpenAsync();
-            var existing = await _db.GetAsync<UserServerConfig>(id);
+            var existing = await _db.GetAsync<UserServerConfig>(Guid.Parse(id));
             if (existing == null || existing.UserId != userId)
             {
                 return NotFound();

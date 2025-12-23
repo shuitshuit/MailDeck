@@ -79,7 +79,7 @@ public class ContactsController : ControllerBase
         try
         {
             await _db.OpenAsync();
-            var contact = await _db.GetAsync<Contact>(id);
+            var contact = await _db.GetAsync<Contact>(Guid.Parse(id));
             if (contact != null && contact.UserId == userId)
             {
                 await _db.DeleteAsync(contact);
@@ -105,7 +105,7 @@ public class ContactsController : ControllerBase
         try
         {
             await _db.OpenAsync();
-            var existing = await _db.GetAsync<Contact>(id);
+            var existing = await _db.GetAsync<Contact>(Guid.Parse(id));
             if (existing == null || existing.UserId != userId)
             {
                 return NotFound();

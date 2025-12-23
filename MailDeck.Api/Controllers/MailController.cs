@@ -26,7 +26,7 @@ public class MailController : ControllerBase
     }
 
     [HttpGet("inbox")]
-    public async Task<IActionResult> GetInbox(int configId, int page = 1, int pageSize = 20)
+    public async Task<IActionResult> GetInbox(Guid configId, int page = 1, int pageSize = 20)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
                      ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
@@ -79,7 +79,7 @@ public class MailController : ControllerBase
     }
 
     [HttpGet("message/{id}")]
-    public async Task<IActionResult> GetMessage(string id, int configId)
+    public async Task<IActionResult> GetMessage(string id, Guid configId)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
                      ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;

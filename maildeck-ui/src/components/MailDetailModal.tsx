@@ -25,13 +25,29 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
     const [showImages, setShowImages] = useState(false);
     const [hasBlockedImages, setHasBlockedImages] = useState(false);
 
+    // Check if HTML has external images
+    const checkForImages = useMemo(() => {
+        if (!message?.bodyHtml) return false;
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(message.bodyHtml, 'text/html');
+        const images = doc.querySelectorAll('img');
+
+        for (const img of images) {
+            const src = img.getAttribute('src');
+            if (src && (src.startsWith('http') || src.startsWith('//'))) {
+                return true;
+            }
+        }
+        return false;
+    }, [message?.bodyHtml]);
+
     // Process HTML to safe render
     const processedHtml = useMemo(() => {
         if (!message?.bodyHtml) return '';
 
         const parser = new DOMParser();
         const doc = parser.parseFromString(message.bodyHtml, 'text/html');
-        let blocked = false;
 
         // Process images
         const images = doc.querySelectorAll('img');
@@ -39,12 +55,21 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
             const src = img.getAttribute('src');
             if (src && (src.startsWith('http') || src.startsWith('//'))) {
                 if (!showImages) {
+                    // Remove src to prevent loading
+                    img.removeAttribute('src');
                     img.setAttribute('data-original-src', src);
-                    img.setAttribute('src', 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjOTA5MDkwIiAgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxyZWN0IHg9IjMiIHk9IjMiIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgcng9IjIiIHJ5PSIyIj48L3JlY3Q+PGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiPjwvY2lyY2xlPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDE2IDEwIDUgMjEiPjwvcG9seWxpbmU+PC9zdmc+');
+                    img.setAttribute('alt', '[画像がブロックされました]');
                     img.style.maxWidth = '100px';
+                    img.style.minHeight = '100px';
                     img.style.border = '1px dashed #ccc';
                     img.style.padding = '10px';
-                    blocked = true;
+                    img.style.backgroundColor = '#f5f5f5';
+                } else {
+                    // Restore original src when showing images
+                    const originalSrc = img.getAttribute('data-original-src');
+                    if (originalSrc) {
+                        img.setAttribute('src', originalSrc);
+                    }
                 }
             }
         });
@@ -56,11 +81,17 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
             link.setAttribute('rel', 'noopener noreferrer');
         });
 
-        if (showImages) blocked = false; // Reset flag if we are showing them
-        setHasBlockedImages(blocked);
-
         return doc.body.innerHTML;
     }, [message?.bodyHtml, showImages]);
+
+    // Update hasBlockedImages state based on checkForImages
+    useEffect(() => {
+        if (!showImages) {
+            setHasBlockedImages(checkForImages);
+        } else {
+            setHasBlockedImages(false);
+        }
+    }, [checkForImages, showImages]);
 
     useEffect(() => {
         setShowImages(false);

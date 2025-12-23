@@ -128,34 +128,64 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
 
                 // Extract IMAP settings
                 const imapServer = xmlDoc.querySelector('emailProvider incomingServer[type="imap"]');
+                let imapUsername = email; // Default to email
+                let usernamePattern = '%EMAILADDRESS%'; // Default pattern
                 if (imapServer) {
                     const imapHost = imapServer.querySelector('hostname')?.textContent || '';
                     const imapPort = parseInt(imapServer.querySelector('port')?.textContent || '993');
                     const socketType = imapServer.querySelector('socketType')?.textContent;
                     const imapSsl = socketType === 'SSL' || socketType === 'STARTTLS';
 
+                    // Extract username pattern from XML
+                    const usernameElement = imapServer.querySelector('username');
+                    if (usernameElement?.textContent) {
+                        usernamePattern = usernameElement.textContent;
+                        // Replace %EMAILADDRESS% with the actual email
+                        // Replace %EMAILLOCALPART% with the part before @
+                        // Replace %EMAILDOMAIN% with the domain
+                        imapUsername = usernamePattern
+                            .replace('%EMAILADDRESS%', email)
+                            .replace('%EMAILLOCALPART%', email.split('@')[0])
+                            .replace('%EMAILDOMAIN%', email.split('@')[1]);
+                    }
+
                     handleChange('imapHost', imapHost);
                     handleChange('imapPort', imapPort);
                     handleChange('imapSslEnabled', imapSsl);
+                    handleChange('imapUsername', imapUsername);
                 }
 
                 // Extract SMTP settings
                 const smtpServer = xmlDoc.querySelector('emailProvider outgoingServer[type="smtp"]');
+                let smtpUsername = email; // Default to email
                 if (smtpServer) {
                     const smtpHost = smtpServer.querySelector('hostname')?.textContent || '';
                     const smtpPort = parseInt(smtpServer.querySelector('port')?.textContent || '465');
                     const socketType = smtpServer.querySelector('socketType')?.textContent;
                     const smtpSsl = socketType === 'SSL' || socketType === 'STARTTLS';
 
+                    // Extract username pattern from XML
+                    const usernameElement = smtpServer.querySelector('username');
+                    if (usernameElement?.textContent) {
+                        const smtpUsernamePattern = usernameElement.textContent;
+                        smtpUsername = smtpUsernamePattern
+                            .replace('%EMAILADDRESS%', email)
+                            .replace('%EMAILLOCALPART%', email.split('@')[0])
+                            .replace('%EMAILDOMAIN%', email.split('@')[1]);
+                    }
+
                     handleChange('smtpHost', smtpHost);
                     handleChange('smtpPort', smtpPort);
                     handleChange('smtpSslEnabled', smtpSsl);
+                    handleChange('smtpUsername', smtpUsername);
                 }
 
-                // Set username fields
-                handleChange('imapUsername', email);
-                handleChange('smtpUsername', email);
-                handleChange('accountName', email.split('@')[1]); // Use domain as account name
+                // Set account name based on username pattern
+                // If username is local part only, use that as account name, otherwise use domain
+                const accountName = usernamePattern.includes('%EMAILLOCALPART%') && !usernamePattern.includes('%EMAILDOMAIN%')
+                    ? email.split('@')[0]  // Use local part
+                    : email.split('@')[1]; // Use domain
+                handleChange('accountName', accountName);
 
                 setShowManualConfig(true);
                 alert('サーバー設定を自動検出しました！');
