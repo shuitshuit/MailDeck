@@ -22,6 +22,8 @@ echo ""
 # Step 2: Build backend
 echo "[2/5] Building backend (ASP.NET Core)..."
 cd MailDeck.Api
+# Clean and build (in development, services run from bin/Release)
+dotnet clean --configuration Release
 dotnet build --configuration Release
 echo "✓ Backend build completed"
 echo ""
