@@ -22,8 +22,8 @@ echo ""
 # Step 2: Build backend
 echo "[2/5] Building backend (ASP.NET Core)..."
 cd MailDeck.Api
-# Clean and build (in development, services run from bin/Release)
-dotnet publish . -c Release
+# Publish to /opt/maildeck/MailDeck.Api/ where systemd expects it
+dotnet publish . -c Release -o /opt/maildeck/MailDeck.Api/
 echo "✓ Backend build completed"
 echo ""
 
