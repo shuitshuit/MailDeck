@@ -5,8 +5,8 @@ After=network.target
 [Service]
 Type=notify
 User=root
-WorkingDirectory=/opt/maildeck/api
-ExecStart=/usr/bin/dotnet /opt/maildeck/api/MailDeck.Api.dll
+WorkingDirectory=/opt/maildeck/build
+ExecStart=/usr/bin/dotnet /opt/maildeck/build/MailDeck.Api.dll
 Restart=always
 RestartSec=10
 KillSignal=SIGINT
