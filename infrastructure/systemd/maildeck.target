@@ -1,7 +1,0 @@
-[Unit]
-Description=MailDeck Application Target
-Requires=maildeck-api.service maildeck-ui.service
-After=maildeck-api.service maildeck-ui.service
-
-[Install]
-WantedBy=multi-user.target

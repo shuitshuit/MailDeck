@@ -36,13 +36,13 @@ echo ""
 
 # Step 4: Stop services
 echo "[4/5] Stopping MailDeck services..."
-sudo systemctl stop maildeck.target
+sudo systemctl stop maildeck-api.service
 echo "✓ Services stopped"
 echo ""
 
 # Step 5: Start services
 echo "[5/5] Starting MailDeck services..."
-sudo systemctl start maildeck.target
+sudo systemctl start maildeck-api.service
 echo "✓ Services started"
 echo ""
 
@@ -51,8 +51,6 @@ echo "=========================================="
 echo "Deployment Status"
 echo "=========================================="
 sudo systemctl status maildeck-api --no-pager -l
-echo ""
-sudo systemctl status maildeck-ui --no-pager -l
 echo ""
 
 echo "=========================================="
