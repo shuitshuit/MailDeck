@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useModalClose } from '../hooks/useModalClose';
 
 interface ServerConfig {
     id?: string;
@@ -41,6 +42,7 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
     const [email, setEmail] = useState('');
     const [isAutoConfiguring, setIsAutoConfiguring] = useState(false);
     const [showManualConfig, setShowManualConfig] = useState(false);
+    const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
 
     useEffect(() => {
         if (isOpen && initialData) {
@@ -203,9 +205,8 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="bg-white md:rounded-xl shadow-xl w-full max-w-3xl relative z-10 flex flex-col h-full md:h-auto md:max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4" onClick={handleBackdropClick}>
+            <div ref={modalContentRef} className="bg-white md:rounded-xl shadow-xl w-full max-w-3xl relative z-10 flex flex-col h-full md:h-auto md:max-h-[90vh]">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 md:p-6 border-b border-gray-200">
                     <div>

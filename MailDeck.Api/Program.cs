@@ -1,9 +1,15 @@
+using MailDeck.Api.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Enrichers.Span;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
+using System.Text;
+
+// Register CodePages encoding provider for legacy encodings (ISO-2022-JP, Shift_JIS, etc.)
+// This is required for handling Japanese and other non-UTF8 email encodings
+Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
 // Configure Npgsql to handle DateTime with UTC properly
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
@@ -43,12 +49,24 @@ Log.Logger = new LoggerConfiguration()
             rollingInterval: RollingInterval.Day,
             retainedFileCountLimit: 7,
             buffered: false))
+    // 操作パフォーマンスログ専用ファイル（IMAP/SMTP操作計測用）
+    .WriteTo.Logger(lc => lc
+        .Filter.ByIncludingOnly(evt =>
+            evt.Properties.ContainsKey("SourceContext") &&
+            evt.Properties["SourceContext"].ToString().Contains("OperationPerformanceLogger"))
+        .WriteTo.File(
+            new CompactJsonFormatter(),
+            path: "logs/operations-.json",
+            rollingInterval: RollingInterval.Day,
+            retainedFileCountLimit: 7,
+            buffered: false))
     // アプリケーションログファイル（Fluent Bit用JSON形式）
     .WriteTo.Logger(lc => lc
         .Filter.ByExcluding(evt =>
             evt.Properties.ContainsKey("SourceContext") &&
             (evt.Properties["SourceContext"].ToString().Contains("RequestLoggingMiddleware") ||
-                evt.Properties["SourceContext"].ToString().Contains("PerformanceLoggingMiddleware")))
+                evt.Properties["SourceContext"].ToString().Contains("PerformanceLoggingMiddleware") ||
+                evt.Properties["SourceContext"].ToString().Contains("OperationPerformanceLogger")))
         .WriteTo.File(
             new CompactJsonFormatter(),
             path: "logs/maildeck-.json",
@@ -118,11 +136,20 @@ try
     builder.Services.AddAWSService<Amazon.KeyManagementService.IAmazonKeyManagementService>();
     builder.Services.AddSingleton<MailDeck.Api.Services.IEncryptionService, MailDeck.Api.Services.KmsEncryptionService>();
 
+    // Operation Performance Logger
+    builder.Services.AddScoped<MailDeck.Api.Services.IOperationPerformanceLogger, MailDeck.Api.Services.OperationPerformanceLogger>();
+
     // Web Push
     builder.Services.AddHttpClient<Lib.Net.Http.WebPush.PushServiceClient>();
     builder.Services.AddHostedService<MailDeck.Api.Services.EmailCheckBackgroundService>();
 
+    // Log Compression
+    builder.Services.AddHostedService<MailDeck.Api.Services.LogCompressionBackgroundService>();
+
     var app = builder.Build();
+
+    app.UseMiddleware<RequestLoggingMiddleware>();
+    app.UseMiddleware<PerformanceLoggingMiddleware>();
 
     // Configure the HTTP request pipeline.
     if (app.Environment.IsDevelopment())
@@ -130,7 +157,6 @@ try
         app.UseSwagger();
         app.UseSwaggerUI();
     }
-    app.UseMiddleware<MailDeck.Api.Middleware.TokenLoggingMiddleware>();
 
     //app.UseHttpsRedirection();
     app.UseCors("AllowFrontend");

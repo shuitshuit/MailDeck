@@ -17,12 +17,18 @@ public class MailController : ControllerBase
     private readonly ILogger<MailController> _logger;
     private readonly ShuitNet.ORM.PostgreSQL.PostgreSqlConnect _db;
     private readonly Services.IEncryptionService _encryptionService;
+    private readonly Services.IOperationPerformanceLogger _perfLogger;
 
-    public MailController(ILogger<MailController> logger, ShuitNet.ORM.PostgreSQL.PostgreSqlConnect db, Services.IEncryptionService encryptionService)
+    public MailController(
+        ILogger<MailController> logger,
+        ShuitNet.ORM.PostgreSQL.PostgreSqlConnect db,
+        Services.IEncryptionService encryptionService,
+        Services.IOperationPerformanceLogger perfLogger)
     {
         _logger = logger;
         _db = db;
         _encryptionService = encryptionService;
+        _perfLogger = perfLogger;
     }
 
     [HttpGet("inbox")]
@@ -43,21 +49,42 @@ public class MailController : ControllerBase
 
             var password = await _encryptionService.DecryptAsync(config.ImapPassword);
 
-            using (var client = new ImapClient()) {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await client.AuthenticateAsync(config.ImapUsername, password);
-                
+            using (var client = new ImapClient())
+            {
+                // IMAP接続を計測
+                using (_perfLogger.StartOperation("IMAP_Connect", new { Host = config.ImapHost, Port = config.ImapPort, UserId = userId }))
+                {
+                    await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
+                }
+
+                // IMAP認証を計測
+                using (_perfLogger.StartOperation("IMAP_Authenticate", new { Host = config.ImapHost, Username = config.ImapUsername, UserId = userId }))
+                {
+                    await client.AuthenticateAsync(config.ImapUsername, password);
+                }
+
                 var inbox = client.Inbox;
-                await inbox.OpenAsync(FolderAccess.ReadOnly);
+
+                // フォルダオープンを計測
+                using (_perfLogger.StartOperation("IMAP_OpenFolder", new { Folder = "Inbox", UserId = userId }))
+                {
+                    await inbox.OpenAsync(FolderAccess.ReadOnly);
+                }
 
                 var total = inbox.Count;
                 var start = Math.Max(0, total - (page * pageSize));
                 var end = Math.Max(0, total - ((page - 1) * pageSize) - 1);
-                
+
                 if (start > end) return Ok(new { messages = new List<object>(), total });
 
-                var summaries = await inbox.FetchAsync(start, end, MessageSummaryItems.Envelope | MessageSummaryItems.InternalDate | MessageSummaryItems.UniqueId);
-                
+                IList<IMessageSummary> summaries;
+
+                // メッセージフェッチを計測
+                using (_perfLogger.StartOperation("IMAP_FetchSummaries", new { MessageCount = end - start + 1, Page = page, PageSize = pageSize, UserId = userId }))
+                {
+                    summaries = await inbox.FetchAsync(start, end, MessageSummaryItems.Envelope | MessageSummaryItems.InternalDate | MessageSummaryItems.UniqueId);
+                }
+
                 var messages = summaries.Select(s => new {
                     Id = s.UniqueId.Id,
                     Subject = s.Envelope.Subject,
@@ -67,7 +94,7 @@ public class MailController : ControllerBase
                 }).OrderByDescending(m => m.Date).ToList();
 
                 await client.DisconnectAsync(true);
-                
+
                 return Ok(new { messages, total });
             }
         }
@@ -99,15 +126,36 @@ public class MailController : ControllerBase
 
             var password = await _encryptionService.DecryptAsync(config.ImapPassword);
 
-            using (var client = new ImapClient()) {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await client.AuthenticateAsync(config.ImapUsername, password);
-                
-                var inbox = client.Inbox;
-                await inbox.OpenAsync(FolderAccess.ReadOnly);
+            using (var client = new ImapClient())
+            {
+                // IMAP接続を計測
+                using (_perfLogger.StartOperation("IMAP_Connect", new { Host = config.ImapHost, Port = config.ImapPort, UserId = userId }))
+                {
+                    await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
+                }
 
-                var message = await inbox.GetMessageAsync(uid);
-                
+                // IMAP認証を計測
+                using (_perfLogger.StartOperation("IMAP_Authenticate", new { Host = config.ImapHost, Username = config.ImapUsername, UserId = userId }))
+                {
+                    await client.AuthenticateAsync(config.ImapUsername, password);
+                }
+
+                var inbox = client.Inbox;
+
+                // フォルダオープンを計測
+                using (_perfLogger.StartOperation("IMAP_OpenFolder", new { Folder = "Inbox", UserId = userId }))
+                {
+                    await inbox.OpenAsync(FolderAccess.ReadOnly);
+                }
+
+                MimeMessage message;
+
+                // メッセージ取得を計測
+                using (_perfLogger.StartOperation("IMAP_GetMessage", new { MessageId = uid.Id, UserId = userId }))
+                {
+                    message = await inbox.GetMessageAsync(uid);
+                }
+
                 var result = new {
                     Id = uid.Id.ToString(),
                     Subject = message.Subject,
@@ -120,7 +168,7 @@ public class MailController : ControllerBase
                 };
 
                 await client.DisconnectAsync(true);
-                
+
                 return Ok(result);
             }
         }
@@ -161,12 +209,27 @@ public class MailController : ControllerBase
 
             using (var client = new SmtpClient())
             {
-                await client.ConnectAsync(config.SmtpHost, config.SmtpPort, GetSecureSocketOptions(config.SmtpPort, config.SmtpSslEnabled));
-                await client.AuthenticateAsync(config.SmtpUsername, password);
-                await client.SendAsync(message);
+                // SMTP接続を計測
+                using (_perfLogger.StartOperation("SMTP_Connect", new { Host = config.SmtpHost, Port = config.SmtpPort, UserId = userId }))
+                {
+                    await client.ConnectAsync(config.SmtpHost, config.SmtpPort, GetSecureSocketOptions(config.SmtpPort, config.SmtpSslEnabled));
+                }
+
+                // SMTP認証を計測
+                using (_perfLogger.StartOperation("SMTP_Authenticate", new { Host = config.SmtpHost, Username = config.SmtpUsername, UserId = userId }))
+                {
+                    await client.AuthenticateAsync(config.SmtpUsername, password);
+                }
+
+                // メール送信を計測
+                using (_perfLogger.StartOperation("SMTP_Send", new { To = request.To, Subject = request.Subject, UserId = userId }))
+                {
+                    await client.SendAsync(message);
+                }
+
                 await client.DisconnectAsync(true);
             }
-            
+
             _logger.LogInformation($"Email sent to {request.To}");
 
             return Ok(new { success = true });

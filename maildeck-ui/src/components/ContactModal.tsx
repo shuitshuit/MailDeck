@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useModalClose } from '../hooks/useModalClose';
 
 interface ContactModalProps {
     isOpen: boolean;
@@ -11,6 +12,7 @@ export default function ContactModal({ isOpen, onClose, onSave, initialData }: C
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
 
     useEffect(() => {
         if (isOpen) {
@@ -43,9 +45,8 @@ export default function ContactModal({ isOpen, onClose, onSave, initialData }: C
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md relative z-10 p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={handleBackdropClick}>
+            <div ref={modalContentRef} className="bg-white rounded-xl shadow-xl w-full max-w-md relative z-10 p-6">
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-lg font-bold text-gray-800">{initialData ? '連絡先を編集' : '連絡先を追加'}</h2>
                     <button onClick={onClose} className="text-gray-500 hover:text-gray-700">

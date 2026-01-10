@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getContacts } from '../lib/api';
+import { useModalClose } from '../hooks/useModalClose';
 
 export interface Account {
     id: string;
@@ -22,6 +23,7 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
     const [body, setBody] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [contacts, setContacts] = useState<{ name: string, email: string }[]>([]);
+    const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
 
     useEffect(() => {
         getContacts().then(setContacts).catch(console.error);
@@ -65,9 +67,8 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="bg-white md:rounded-xl shadow-xl w-full max-w-2xl relative z-10 flex flex-col h-full md:h-auto md:max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4" onClick={handleBackdropClick}>
+            <div ref={modalContentRef} className="bg-white md:rounded-xl shadow-xl w-full max-w-2xl relative z-10 flex flex-col h-full md:h-auto md:max-h-[90vh]">
                 <div className="flex items-center justify-between p-4 border-b">
                     <h2 className="text-lg font-bold text-gray-800">新規メール作成</h2>
                     <button

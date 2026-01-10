@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getMessage } from '../lib/api';
+import { useModalClose } from '../hooks/useModalClose';
 
 interface MailDetailModalProps {
     isOpen: boolean;
@@ -24,6 +25,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
     const [message, setMessage] = useState<MessageDetail | null>(null);
     const [showImages, setShowImages] = useState(false);
     const [hasBlockedImages, setHasBlockedImages] = useState(false);
+    const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
 
     // Check if HTML has external images
     const checkForImages = useMemo(() => {
@@ -120,8 +122,8 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-0 md:p-4">
-            <div className="bg-white md:rounded-lg shadow-xl w-full max-w-4xl h-full md:h-auto md:max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-0 md:p-4" onClick={handleBackdropClick}>
+            <div ref={modalContentRef} className="bg-white md:rounded-lg shadow-xl w-full max-w-4xl h-full md:h-auto md:max-h-[90vh] flex flex-col">
                 <div className="p-4 border-b border-gray-100 flex justify-between items-center">
                     <h2 className="text-xl font-semibold truncate flex-1 pr-4">{message?.subject || 'Loading...'}</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
