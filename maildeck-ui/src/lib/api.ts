@@ -132,3 +132,74 @@ export async function updateContact(id: string, name: string, email: string) {
     });
     return await response.json();
 }
+
+// ============================================================================
+// Labels API
+// ============================================================================
+
+/**
+ * Get all labels for the authenticated user
+ */
+export async function getLabels() {
+    const response = await authFetch('/labels');
+    return await response.json();
+}
+
+/**
+ * Create a new label
+ */
+export async function createLabel(name: string, color: string = '#3B82F6') {
+    const response = await authFetch('/labels', {
+        method: 'POST',
+        body: JSON.stringify({ name, color })
+    });
+    return await response.json();
+}
+
+/**
+ * Update an existing label
+ */
+export async function updateLabel(id: string, name: string, color: string) {
+    const response = await authFetch(`/labels/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name, color })
+    });
+    return await response.json();
+}
+
+/**
+ * Delete a label
+ */
+export async function deleteLabel(id: string) {
+    await authFetch(`/labels/${id}`, {
+        method: 'DELETE'
+    });
+}
+
+/**
+ * Get all labels for a specific message
+ */
+export async function getLabelsForMessage(messageId: string, serverConfigId: string) {
+    const response = await authFetch(`/labels/message/${messageId}?serverConfigId=${serverConfigId}`);
+    return await response.json();
+}
+
+/**
+ * Add a label to a message
+ */
+export async function addLabelToMessage(messageId: string, labelId: string, serverConfigId: string) {
+    const response = await authFetch('/labels/message', {
+        method: 'POST',
+        body: JSON.stringify({ messageId, labelId, serverConfigId })
+    });
+    return await response.json();
+}
+
+/**
+ * Remove a label from a message
+ */
+export async function removeLabelFromMessage(messageId: string, labelId: string, serverConfigId: string) {
+    await authFetch(`/labels/message?messageId=${messageId}&labelId=${labelId}&serverConfigId=${serverConfigId}`, {
+        method: 'DELETE'
+    });
+}
