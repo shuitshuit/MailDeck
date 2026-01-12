@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getMessage, getLabels, getLabelsForMessage, addLabelToMessage, removeLabelFromMessage, createLabel } from '../lib/api';
+import { getMessage, getLabelsForMessage, addLabelToMessage, removeLabelFromMessage, createLabel } from '../lib/api';
 import { useModalClose } from '../hooks/useModalClose';
 import type { Label } from '../types/label';
 import LabelSelector from './LabelSelector';
 import LabelModal from './LabelModal';
 import { useToast } from '../contexts/ToastContext';
+import { useLabels } from '../contexts/LabelContext';
 
 interface MailDetailModalProps {
     isOpen: boolean;
@@ -31,9 +32,9 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
     const [hasBlockedImages, setHasBlockedImages] = useState(false);
     const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
     const toast = useToast();
+    const { labels: allLabels, reloadLabels } = useLabels();
 
     // Label-related state
-    const [allLabels, setAllLabels] = useState<Label[]>([]);
     const [messageLabels, setMessageLabels] = useState<Label[]>([]);
     const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
 
@@ -105,20 +106,6 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
         }
     }, [checkForImages, showImages]);
 
-    // Fetch all labels
-    useEffect(() => {
-        if (isOpen) {
-            const fetchLabels = async () => {
-                try {
-                    const labels = await getLabels();
-                    setAllLabels(labels);
-                } catch (err) {
-                    console.error('Failed to fetch labels', err);
-                }
-            };
-            fetchLabels();
-        }
-    }, [isOpen]);
 
     // Fetch message and its labels
     useEffect(() => {
@@ -189,8 +176,11 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
     const handleCreateLabel = async (name: string, color: string) => {
         try {
             const newLabel = await createLabel(name, color);
-            setAllLabels([...allLabels, newLabel]);
-            toast.success('ラベルを作成しました');
+            await reloadLabels();
+            // 作成したラベルを自動的にメッセージに追加
+            await addLabelToMessage(messageId, newLabel.id, configId);
+            setMessageLabels([...messageLabels, newLabel]);
+            toast.success('ラベルを作成して追加しました');
         } catch (err) {
             console.error('Failed to create label', err);
             toast.error('ラベルの作成に失敗しました');

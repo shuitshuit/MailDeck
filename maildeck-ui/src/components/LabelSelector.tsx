@@ -40,14 +40,16 @@ export default function LabelSelector({
 
     const selectedLabelIds = new Set(selectedLabels.map(l => l.id));
     const filteredLabels = availableLabels.filter(label =>
-        !selectedLabelIds.has(label.id) &&
         label.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const handleSelectLabel = (labelId: string) => {
-        onAddLabel(labelId);
+    const handleToggleLabel = (labelId: string) => {
+        if (selectedLabelIds.has(labelId)) {
+            onRemoveLabel(labelId);
+        } else {
+            onAddLabel(labelId);
+        }
         setSearchQuery('');
-        setIsOpen(false);
     };
 
     return (
@@ -94,23 +96,39 @@ export default function LabelSelector({
                     {/* Label list */}
                     <div className="max-h-60 overflow-y-auto">
                         {filteredLabels.length > 0 ? (
-                            filteredLabels.map(label => (
-                                <button
-                                    key={label.id}
-                                    type="button"
-                                    onClick={() => handleSelectLabel(label.id)}
-                                    className="w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2"
-                                >
-                                    <div
-                                        className="w-3 h-3 rounded-full flex-shrink-0"
-                                        style={{ backgroundColor: label.color }}
-                                    />
-                                    <span className="text-sm text-gray-700">{label.name}</span>
-                                </button>
-                            ))
+                            filteredLabels.map(label => {
+                                const isSelected = selectedLabelIds.has(label.id);
+                                return (
+                                    <button
+                                        key={label.id}
+                                        type="button"
+                                        onClick={() => handleToggleLabel(label.id)}
+                                        className={`w-full px-3 py-2 text-left transition-colors flex items-center gap-2 ${
+                                            isSelected
+                                                ? 'bg-brand-50 hover:bg-brand-100'
+                                                : 'hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <div
+                                            className="w-3 h-3 rounded-full flex-shrink-0"
+                                            style={{ backgroundColor: label.color }}
+                                        />
+                                        <span className={`text-sm flex-1 ${
+                                            isSelected ? 'text-brand-900 font-medium' : 'text-gray-700'
+                                        }`}>
+                                            {label.name}
+                                        </span>
+                                        {isSelected && (
+                                            <svg className="w-4 h-4 text-brand-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        )}
+                                    </button>
+                                );
+                            })
                         ) : (
                             <div className="px-3 py-2 text-sm text-gray-500">
-                                {searchQuery ? 'ラベルが見つかりません' : 'すべてのラベルが適用されています'}
+                                {searchQuery ? 'ラベルが見つかりません' : 'ラベルがありません'}
                             </div>
                         )}
                     </div>
