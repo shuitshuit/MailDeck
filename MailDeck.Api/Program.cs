@@ -142,6 +142,9 @@ try
     // Channel Service for auto-labeling
     builder.Services.AddSingleton<MailDeck.Api.Services.ChannelService>();
 
+    // Auto-labeling Service
+    builder.Services.AddHostedService<MailDeck.Api.Services.AutoLabelingService>();
+
     // Web Push
     builder.Services.AddHttpClient<Lib.Net.Http.WebPush.PushServiceClient>();
     builder.Services.AddHostedService<MailDeck.Api.Services.EmailCheckBackgroundService>();
