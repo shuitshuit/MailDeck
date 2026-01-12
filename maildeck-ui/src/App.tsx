@@ -57,61 +57,71 @@ function Layout({ children }: { children: React.ReactNode }) {
       <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
         {/* Inbox section */}
         <div>
-          <Link
-            to="/"
-            className={`flex items-center px-4 py-2 rounded-md hover:bg-gray-100 font-medium ${
-              location.pathname === '/' || location.pathname.startsWith('/inbox')
-                ? 'bg-gray-100 text-brand-600'
-                : 'text-gray-700'
-            }`}
-          >
+          <div className="flex items-center px-4 py-2 text-gray-600 font-medium text-sm">
             <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
             </svg>
             Inbox
-          </Link>
+          </div>
 
-          {/* Labels subsection */}
-          {labels.length > 0 && (
-            <div className="ml-4 mt-1">
-              <button
-                onClick={() => setIsLabelsExpanded(!isLabelsExpanded)}
-                className="flex items-center w-full px-4 py-1.5 text-sm text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-50"
-              >
-                <svg
-                  className={`w-4 h-4 mr-2 transition-transform ${isLabelsExpanded ? 'rotate-90' : ''}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+          {/* All Mail option */}
+          <div className="ml-4 mt-1 space-y-0.5">
+            <Link
+              to="/inbox"
+              className={`flex items-center px-4 py-1.5 text-sm rounded-md transition-colors ${
+                !selectedLabelId && (location.pathname === '/' || location.pathname.startsWith('/inbox'))
+                  ? 'bg-gray-100 font-medium text-brand-600'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              }`}
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-1.14.76a2 2 0 01-2.22 0l-1.14-.76" />
+              </svg>
+              すべてのメール
+            </Link>
+
+            {/* Labels subsection */}
+            {labels.length > 0 && (
+              <>
+                <button
+                  onClick={() => setIsLabelsExpanded(!isLabelsExpanded)}
+                  className="flex items-center w-full px-4 py-1.5 text-sm text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-50"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-                Labels
-              </button>
+                  <svg
+                    className={`w-4 h-4 mr-2 transition-transform ${isLabelsExpanded ? 'rotate-90' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  ラベル
+                </button>
 
-              {isLabelsExpanded && (
-                <div className="ml-2 mt-1 space-y-0.5">
-                  {labels.map(label => (
-                    <Link
-                      key={label.id}
-                      to={`/inbox?label=${label.id}`}
-                      className={`flex items-center px-4 py-1.5 text-sm rounded-md transition-colors ${
-                        selectedLabelId === label.id
-                          ? 'bg-gray-100 font-medium'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                      }`}
-                    >
-                      <span
-                        className="w-3 h-3 rounded-full mr-2 flex-shrink-0"
-                        style={{ backgroundColor: label.color }}
-                      />
-                      <span className="truncate">{label.name}</span>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                {isLabelsExpanded && (
+                  <div className="ml-2 mt-1 space-y-0.5">
+                    {labels.map(label => (
+                      <Link
+                        key={label.id}
+                        to={`/inbox?label=${label.id}`}
+                        className={`flex items-center px-4 py-1.5 text-sm rounded-md transition-colors ${
+                          selectedLabelId === label.id
+                            ? 'bg-gray-100 font-medium text-brand-600'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`}
+                      >
+                        <span
+                          className="w-3 h-3 rounded-full mr-2 flex-shrink-0"
+                          style={{ backgroundColor: label.color }}
+                        />
+                        <span className="truncate">{label.name}</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
         <Link to="/contacts" className="flex items-center px-4 py-2 text-gray-700 rounded-md hover:bg-gray-100 font-medium">
