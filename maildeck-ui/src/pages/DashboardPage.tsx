@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import ComposeModal from '../components/ComposeModal';
 import MailDetailModal from '../components/MailDetailModal';
 import LabelBadge from '../components/LabelBadge';
+import SearchBar from '../components/SearchBar';
 import { getInbox, getServerConfigs, getLabels } from '../lib/api';
 import type { Label } from '../types/label';
 import { useToast } from '../contexts/ToastContext';
@@ -38,6 +39,7 @@ export default function DashboardPage() {
     const [page] = useState(1);
     const [labels, setLabels] = useState<Label[]>([]);
     const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
     const toast = useToast();
 
     const loadConfigs = async () => {
@@ -128,15 +130,34 @@ export default function DashboardPage() {
         }
     }, [loadInbox]);
 
-    // Filter mails by selected label
+    // Filter mails by selected label and search query
     const filteredMails = useMemo(() => {
-        if (!selectedLabelId) {
-            return mails;
+        let filtered = mails;
+
+        // ラベルフィルタリング
+        if (selectedLabelId) {
+            filtered = filtered.filter(mail =>
+                mail.labels?.some(label => label.id === selectedLabelId)
+            );
         }
-        return mails.filter(mail =>
-            mail.labels?.some(label => label.id === selectedLabelId)
-        );
-    }, [mails, selectedLabelId]);
+
+        // 検索クエリフィルタリング
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+            filtered = filtered.filter(mail => {
+                const from = mail.from.toLowerCase();
+                const subject = (mail.subject || '').toLowerCase();
+                return from.includes(query) || subject.includes(query);
+            });
+        }
+
+        return filtered;
+    }, [mails, selectedLabelId, searchQuery]);
+
+    // 検索ハンドラー
+    const handleSearch = (query: string) => {
+        setSearchQuery(query);
+    };
 
     const handleSendMail = async (to: string, subject: string, body: string, configId: string) => {
         if (!configId) {
@@ -196,6 +217,11 @@ export default function DashboardPage() {
                         作成
                     </button>
                 </div>
+            </div>
+
+            {/* 検索バー */}
+            <div className="mb-4">
+                <SearchBar onSearch={handleSearch} placeholder="送信者、件名で検索..." />
             </div>
 
             <div className="flex space-x-1 mb-4 border-b border-gray-200 overflow-x-auto pb-1 hide-scrollbar">
@@ -266,7 +292,11 @@ export default function DashboardPage() {
                     <div className="p-8 text-center text-gray-500">読み込み中...</div>
                 ) : filteredMails.length === 0 ? (
                     <div className="p-8 text-center text-gray-500">
-                        {selectedLabelId ? 'このラベルのメールはありません。' : 'メールはありません。'}
+                        {searchQuery.trim()
+                            ? '検索結果がありません。'
+                            : selectedLabelId
+                                ? 'このラベルのメールはありません。'
+                                : 'メールはありません。'}
                     </div>
                 ) : (
                     <>
