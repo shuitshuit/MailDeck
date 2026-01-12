@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { getSearchHistory, removeSearchHistoryItem, clearSearchHistory } from '../utils/searchHistory';
 import type { SearchHistoryItem } from '../types/search';
+import type { Label } from '../types/label';
 
 interface SearchBarProps {
     onSearch: (query: string) => void;
     placeholder?: string;
+    mails?: Array<{ from: string; to?: string; subject?: string }>;
+    labels?: Label[];
 }
 
 /**
@@ -28,9 +31,10 @@ function formatTimestamp(timestamp: number): string {
  * 検索バーコンポーネント
  * デバウンス機能付きで、入力後300msで検索を実行
  */
-export default function SearchBar({ onSearch, placeholder = 'メールを検索...' }: SearchBarProps) {
+export default function SearchBar({ onSearch, placeholder = 'メールを検索...', mails = [], labels = [] }: SearchBarProps) {
     const [searchText, setSearchText] = useState('');
     const [showDropdown, setShowDropdown] = useState(false);
+    const [showSuggestions, setShowSuggestions] = useState(false);
     const [activeTab, setActiveTab] = useState<'history' | 'operators'>('history');
     const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
     const debounceTimerRef = useRef<number | null>(null);
@@ -112,6 +116,90 @@ export default function SearchBar({ onSearch, placeholder = 'メールを検索.
         setSearchHistory([]);
     };
 
+    // 現在入力中の演算子とその値を検出
+    const currentOperator = useMemo(() => {
+        if (!searchText) return null;
+
+        // カーソル位置を想定（最後尾）
+        const cursorPos = searchText.length;
+        const beforeCursor = searchText.substring(0, cursorPos);
+
+        // 最後のスペースまたは文字列の先頭から現在のトークンを取得
+        const lastSpaceIndex = beforeCursor.lastIndexOf(' ');
+        const currentToken = beforeCursor.substring(lastSpaceIndex + 1);
+
+        // 演算子を検出
+        const operatorMatch = currentToken.match(/^(from|to|subject|label):(.*)$/i);
+        if (operatorMatch) {
+            return {
+                operator: operatorMatch[1].toLowerCase() as 'from' | 'to' | 'subject' | 'label',
+                value: operatorMatch[2],
+                startPos: lastSpaceIndex + 1
+            };
+        }
+
+        return null;
+    }, [searchText]);
+
+    // サジェストを生成
+    const suggestions = useMemo(() => {
+        if (!currentOperator) return [];
+
+        const { operator, value } = currentOperator;
+        const lowerValue = value.toLowerCase();
+
+        switch (operator) {
+            case 'from': {
+                // 送信者のユニークなリストを作成
+                const senders = Array.from(new Set(mails.map(m => m.from)))
+                    .filter(sender => sender.toLowerCase().includes(lowerValue))
+                    .slice(0, 10);
+                return senders;
+            }
+            case 'to': {
+                // 受信者のユニークなリストを作成
+                const recipients = Array.from(new Set(mails.map(m => m.to).filter(Boolean) as string[]))
+                    .filter(recipient => recipient.toLowerCase().includes(lowerValue))
+                    .slice(0, 10);
+                return recipients;
+            }
+            case 'subject': {
+                // 件名のユニークなリストを作成（部分一致）
+                const subjects = Array.from(new Set(mails.map(m => m.subject).filter(Boolean) as string[]))
+                    .filter(subject => subject.toLowerCase().includes(lowerValue))
+                    .slice(0, 10);
+                return subjects;
+            }
+            case 'label': {
+                // ラベル名のリストを作成
+                const labelNames = labels
+                    .map(l => l.name)
+                    .filter(name => name.toLowerCase().includes(lowerValue))
+                    .slice(0, 10);
+                return labelNames;
+            }
+            default:
+                return [];
+        }
+    }, [currentOperator, mails, labels]);
+
+    // サジェストの表示/非表示を制御
+    useEffect(() => {
+        setShowSuggestions(currentOperator !== null && suggestions.length > 0);
+    }, [currentOperator, suggestions]);
+
+    // サジェストをクリックして補完
+    const handleSuggestionClick = (suggestion: string) => {
+        if (!currentOperator) return;
+
+        const { operator, startPos } = currentOperator;
+        const beforeOperator = searchText.substring(0, startPos);
+        const newText = `${beforeOperator}${operator}:${suggestion} `;
+
+        setSearchText(newText);
+        setShowSuggestions(false);
+    };
+
     // 検索演算子のヒント
     const hints = [
         { operator: 'from:送信者', description: '送信者で絞り込み' },
@@ -180,8 +268,38 @@ export default function SearchBar({ onSearch, placeholder = 'メールを検索.
                 </button>
             )}
 
+            {/* サジェストドロップダウン */}
+            {showSuggestions && !showDropdown && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-[300px] overflow-y-auto">
+                    <div className="p-2 border-b border-gray-100 bg-gray-50">
+                        <div className="text-xs font-semibold text-gray-700">
+                            {currentOperator?.operator}:{' '}
+                            <span className="text-brand-600">{currentOperator?.value || '...'}</span>
+                        </div>
+                    </div>
+                    <div className="p-2">
+                        {suggestions.map((suggestion, index) => (
+                            <button
+                                key={index}
+                                onClick={() => handleSuggestionClick(suggestion)}
+                                className="w-full text-left px-3 py-2 hover:bg-brand-50 rounded-md transition-colors group"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <svg className="w-4 h-4 text-brand-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    </svg>
+                                    <div className="text-sm text-gray-900 truncate flex-1">
+                                        {suggestion}
+                                    </div>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* 検索ドロップダウン（履歴・演算子） */}
-            {showDropdown && (
+            {showDropdown && !showSuggestions && (
                 <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-[500px] overflow-hidden flex flex-col">
                     {/* タブヘッダー */}
                     <div className="flex border-b border-gray-200">

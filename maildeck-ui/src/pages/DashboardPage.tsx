@@ -297,7 +297,12 @@ export default function DashboardPage() {
 
             {/* 検索バー */}
             <div className="mb-4">
-                <SearchBar onSearch={handleSearch} placeholder="送信者、件名で検索..." />
+                <SearchBar
+                    onSearch={handleSearch}
+                    placeholder="送信者、件名で検索..."
+                    mails={mails}
+                    labels={labels}
+                />
             </div>
 
             <div className="flex space-x-1 mb-4 border-b border-gray-200 overflow-x-auto pb-1 hide-scrollbar">
