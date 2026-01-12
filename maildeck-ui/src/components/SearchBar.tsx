@@ -1,8 +1,27 @@
 import { useState, useEffect, useRef } from 'react';
+import { getSearchHistory, removeSearchHistoryItem, clearSearchHistory } from '../utils/searchHistory';
+import type { SearchHistoryItem } from '../types/search';
 
 interface SearchBarProps {
     onSearch: (query: string) => void;
     placeholder?: string;
+}
+
+/**
+ * タイムスタンプを相対時間表示にフォーマット
+ */
+function formatTimestamp(timestamp: number): string {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return 'たった今';
+    if (minutes < 60) return `${minutes}分前`;
+    if (hours < 24) return `${hours}時間前`;
+    if (days < 7) return `${days}日前`;
+    return new Date(timestamp).toLocaleDateString();
 }
 
 /**
@@ -11,7 +30,9 @@ interface SearchBarProps {
  */
 export default function SearchBar({ onSearch, placeholder = 'メールを検索...' }: SearchBarProps) {
     const [searchText, setSearchText] = useState('');
-    const [showHints, setShowHints] = useState(false);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [activeTab, setActiveTab] = useState<'history' | 'operators'>('history');
+    const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
     const debounceTimerRef = useRef<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -35,11 +56,29 @@ export default function SearchBar({ onSearch, placeholder = 'メールを検索.
         };
     }, [searchText, onSearch]);
 
-    // 外側クリックでヒントを閉じる
+    // 検索履歴を読み込む
+    useEffect(() => {
+        const loadHistory = () => {
+            const history = getSearchHistory();
+            setSearchHistory(history);
+        };
+
+        loadHistory();
+
+        // フォーカス時に履歴を再読み込み
+        const handleFocus = () => loadHistory();
+        window.addEventListener('focus', handleFocus);
+
+        return () => {
+            window.removeEventListener('focus', handleFocus);
+        };
+    }, []);
+
+    // 外側クリックでドロップダウンを閉じる
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-                setShowHints(false);
+                setShowDropdown(false);
             }
         };
 
@@ -52,6 +91,25 @@ export default function SearchBar({ onSearch, placeholder = 'メールを検索.
     // クリアボタンハンドラー
     const handleClear = () => {
         setSearchText('');
+    };
+
+    // 履歴から検索
+    const handleHistoryClick = (query: string) => {
+        setSearchText(query);
+        setShowDropdown(false);
+    };
+
+    // 履歴アイテムを削除
+    const handleRemoveHistory = (id: string, event: React.MouseEvent) => {
+        event.stopPropagation();
+        removeSearchHistoryItem(id);
+        setSearchHistory(getSearchHistory());
+    };
+
+    // 履歴を全てクリア
+    const handleClearHistory = () => {
+        clearSearchHistory();
+        setSearchHistory([]);
     };
 
     // 検索演算子のヒント
@@ -91,7 +149,10 @@ export default function SearchBar({ onSearch, placeholder = 'メールを検索.
                 type="text"
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                onFocus={() => setShowHints(true)}
+                onFocus={() => {
+                    setShowDropdown(true);
+                    setActiveTab('history');
+                }}
                 placeholder={placeholder}
                 className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-transparent transition-all"
             />
@@ -119,38 +180,122 @@ export default function SearchBar({ onSearch, placeholder = 'メールを検索.
                 </button>
             )}
 
-            {/* 検索ヒント */}
-            {showHints && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-[400px] overflow-y-auto">
-                    <div className="p-3 border-b border-gray-100">
-                        <div className="text-xs font-semibold text-gray-700 mb-1">検索演算子</div>
-                        <div className="text-xs text-gray-500">高度な検索を実行するには、以下の演算子を使用してください</div>
+            {/* 検索ドロップダウン（履歴・演算子） */}
+            {showDropdown && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-[500px] overflow-hidden flex flex-col">
+                    {/* タブヘッダー */}
+                    <div className="flex border-b border-gray-200">
+                        <button
+                            onClick={() => setActiveTab('history')}
+                            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                                activeTab === 'history'
+                                    ? 'text-brand-600 border-b-2 border-brand-600'
+                                    : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            履歴
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('operators')}
+                            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                                activeTab === 'operators'
+                                    ? 'text-brand-600 border-b-2 border-brand-600'
+                                    : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            演算子
+                        </button>
                     </div>
-                    <div className="p-2">
-                        {hints.map((hint, index) => (
-                            <button
-                                key={index}
-                                onClick={() => {
-                                    setSearchText(searchText + (searchText ? ' ' : '') + hint.operator);
-                                    setShowHints(false);
-                                }}
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded-md transition-colors flex items-center justify-between group"
-                            >
-                                <div className="flex-1">
-                                    <div className="text-sm font-mono text-brand-600 group-hover:text-brand-700">
-                                        {hint.operator}
+
+                    {/* タブコンテンツ */}
+                    <div className="overflow-y-auto max-h-[400px]">
+                        {/* 履歴タブ */}
+                        {activeTab === 'history' && (
+                            <div className="p-2">
+                                {searchHistory.length === 0 ? (
+                                    <div className="p-8 text-center text-gray-500 text-sm">
+                                        検索履歴がありません
                                     </div>
-                                    <div className="text-xs text-gray-500 mt-0.5">
-                                        {hint.description}
-                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center justify-between px-3 py-2 mb-1">
+                                            <div className="text-xs font-semibold text-gray-700">最近の検索</div>
+                                            <button
+                                                onClick={handleClearHistory}
+                                                className="text-xs text-red-600 hover:text-red-700 font-medium"
+                                            >
+                                                すべて削除
+                                            </button>
+                                        </div>
+                                        {searchHistory.map((item) => (
+                                            <button
+                                                key={item.id}
+                                                onClick={() => handleHistoryClick(item.query)}
+                                                className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded-md transition-colors flex items-center justify-between group"
+                                            >
+                                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-sm text-gray-900 truncate">
+                                                            {item.query}
+                                                        </div>
+                                                        <div className="text-xs text-gray-500">
+                                                            {formatTimestamp(item.timestamp)}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={(e) => handleRemoveHistory(item.id, e)}
+                                                    className="text-gray-400 hover:text-red-600 transition-colors ml-2 flex-shrink-0"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                </button>
+                                            </button>
+                                        ))}
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* 演算子タブ */}
+                        {activeTab === 'operators' && (
+                            <div>
+                                <div className="p-3 border-b border-gray-100">
+                                    <div className="text-xs font-semibold text-gray-700 mb-1">検索演算子</div>
+                                    <div className="text-xs text-gray-500">高度な検索を実行するには、以下の演算子を使用してください</div>
                                 </div>
-                                <div className="text-gray-400 group-hover:text-gray-600">
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                    </svg>
+                                <div className="p-2">
+                                    {hints.map((hint, index) => (
+                                        <button
+                                            key={index}
+                                            onClick={() => {
+                                                setSearchText(searchText + (searchText ? ' ' : '') + hint.operator);
+                                                setShowDropdown(false);
+                                            }}
+                                            className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded-md transition-colors flex items-center justify-between group"
+                                        >
+                                            <div className="flex-1">
+                                                <div className="text-sm font-mono text-brand-600 group-hover:text-brand-700">
+                                                    {hint.operator}
+                                                </div>
+                                                <div className="text-xs text-gray-500 mt-0.5">
+                                                    {hint.description}
+                                                </div>
+                                            </div>
+                                            <div className="text-gray-400 group-hover:text-gray-600">
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                </svg>
+                                            </div>
+                                        </button>
+                                    ))}
                                 </div>
-                            </button>
-                        ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

@@ -10,6 +10,7 @@ import { getInbox, getServerConfigs, getLabels } from '../lib/api';
 import type { Label } from '../types/label';
 import { useToast } from '../contexts/ToastContext';
 import { parseSearchQuery } from '../utils/searchParser';
+import { addSearchHistory } from '../utils/searchHistory';
 import type { SearchQuery } from '../types/search';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -227,6 +228,11 @@ export default function DashboardPage() {
         setSearchQueryString(queryString);
         const parsed = parseSearchQuery(queryString);
         setParsedSearchQuery(parsed);
+
+        // 検索履歴に保存（空でない場合のみ）
+        if (queryString.trim()) {
+            addSearchHistory(queryString);
+        }
     };
 
     const handleSendMail = async (to: string, subject: string, body: string, configId: string) => {
