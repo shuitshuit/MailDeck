@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getContacts } from '../lib/api';
 import { useModalClose } from '../hooks/useModalClose';
+import { useToast } from '../contexts/ToastContext';
 
 export interface Account {
     id: string;
@@ -24,6 +25,7 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
     const [isSending, setIsSending] = useState(false);
     const [contacts, setContacts] = useState<{ name: string, email: string }[]>([]);
     const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
+    const toast = useToast();
 
     useEffect(() => {
         getContacts().then(setContacts).catch(console.error);
@@ -47,7 +49,7 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (configId === undefined) {
-            alert('アカウントを選択してください');
+            toast.warning('アカウントを選択してください');
             return;
         }
         setIsSending(true);
@@ -60,7 +62,7 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
             onClose();
         } catch (error) {
             console.error('Failed to send:', error);
-            alert('送信に失敗しました。');
+            toast.error('送信に失敗しました。');
         } finally {
             setIsSending(false);
         }

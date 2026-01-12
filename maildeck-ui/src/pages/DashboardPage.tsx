@@ -7,6 +7,7 @@ import MailDetailModal from '../components/MailDetailModal';
 import LabelBadge from '../components/LabelBadge';
 import { getInbox, getServerConfigs, getLabels } from '../lib/api';
 import type { Label } from '../types/label';
+import { useToast } from '../contexts/ToastContext';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -37,6 +38,7 @@ export default function DashboardPage() {
     const [page] = useState(1);
     const [labels, setLabels] = useState<Label[]>([]);
     const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
+    const toast = useToast();
 
     const loadConfigs = async () => {
         try {
@@ -138,7 +140,7 @@ export default function DashboardPage() {
 
     const handleSendMail = async (to: string, subject: string, body: string, configId: string) => {
         if (!configId) {
-            alert('アカウントを選択してください');
+            toast.warning('アカウントを選択してください');
             return;
         }
 
@@ -146,7 +148,7 @@ export default function DashboardPage() {
         const token = session.tokens?.idToken?.toString();
 
         if (!token) {
-            alert('認証エラー: ログインし直してください。');
+            toast.error('認証エラー: ログインし直してください。');
             return;
         }
 
@@ -162,11 +164,11 @@ export default function DashboardPage() {
                 }
             });
 
-            alert('メールを送信しました！');
+            toast.success('メールを送信しました！');
             setIsComposeOpen(false);
         } catch (error) {
             console.error(error);
-            alert('送信失敗');
+            toast.error('送信失敗');
         }
     };
 

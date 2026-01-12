@@ -3,12 +3,14 @@ import type { Label } from '../types/label';
 import { getLabels, createLabel, updateLabel, deleteLabel } from '../lib/api';
 import LabelModal from './LabelModal';
 import LabelBadge from './LabelBadge';
+import { useToast } from '../contexts/ToastContext';
 
 export default function LabelManager() {
     const [labels, setLabels] = useState<Label[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingLabel, setEditingLabel] = useState<Label | null>(null);
+    const toast = useToast();
 
     useEffect(() => {
         loadLabels();
@@ -21,7 +23,7 @@ export default function LabelManager() {
             setLabels(data);
         } catch (error) {
             console.error('Failed to load labels:', error);
-            alert('ラベルの読み込みに失敗しました。');
+            toast.error('ラベルの読み込みに失敗しました。');
         } finally {
             setIsLoading(false);
         }
@@ -61,9 +63,10 @@ export default function LabelManager() {
         try {
             await deleteLabel(labelId);
             await loadLabels();
+            toast.success('ラベルを削除しました');
         } catch (error) {
             console.error('Failed to delete label:', error);
-            alert('ラベルの削除に失敗しました。');
+            toast.error('ラベルの削除に失敗しました。');
         }
     };
 

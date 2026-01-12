@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { addServerConfig, deleteServerConfig, getServerConfigs, updateServerConfig } from '../lib/api';
 import ServerConfigModal from '../components/ServerConfigModal';
 import LabelManager from '../components/LabelManager';
+import { useToast } from '../contexts/ToastContext';
 
 interface ServerConfig {
     id?: string;
@@ -26,6 +27,7 @@ export default function SettingsPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingAccount, setEditingAccount] = useState<ServerConfig | null>(null);
     const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
+    const toast = useToast();
 
     const loadAccounts = async () => {
         try {
@@ -58,10 +60,10 @@ export default function SettingsPage() {
         try {
             if (modalMode === 'edit' && editingAccount?.id) {
                 await updateServerConfig(editingAccount.id, config);
-                alert('アカウントを更新しました');
+                toast.success('アカウントを更新しました');
             } else {
                 await addServerConfig(config);
-                alert('アカウントを追加しました');
+                toast.success('アカウントを追加しました');
             }
             await loadAccounts();
             setIsModalOpen(false);
@@ -77,10 +79,10 @@ export default function SettingsPage() {
         try {
             await deleteServerConfig(id);
             setAccounts(prev => prev.filter(a => a.id !== id));
-            alert('アカウントを削除しました');
+            toast.success('アカウントを削除しました');
         } catch (err) {
             console.error(err);
-            alert('削除に失敗しました');
+            toast.error('削除に失敗しました');
         }
     };
 
@@ -233,17 +235,17 @@ export default function SettingsPage() {
                                 <button
                                     onClick={async () => {
                                         if (!('serviceWorker' in navigator)) {
-                                            alert('このブラウザはService Workerに対応していません。');
+                                            toast.error('このブラウザはService Workerに対応していません。');
                                             return;
                                         }
                                         try {
                                             const { registerServiceWorker, subscribeToPush } = await import('../lib/webpush');
                                             await registerServiceWorker();
                                             await subscribeToPush();
-                                            alert('通知を有効化しました！');
+                                            toast.success('通知を有効化しました！');
                                         } catch (err) {
                                             console.error(err);
-                                            alert('通知の有効化に失敗しました。コンソールを確認してください。');
+                                            toast.error('通知の有効化に失敗しました。コンソールを確認してください。');
                                         }
                                     }}
                                     className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium transition-colors"

@@ -6,6 +6,8 @@ import SettingsPage from './pages/SettingsPage';
 
 import { useEffect, useState } from 'react';
 import { syncUser } from './lib/api';
+import { ToastProvider } from './contexts/ToastContext';
+import { ConfirmProvider } from './contexts/ConfirmContext';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { authStatus } = useAuthenticator(context => [context.authStatus]);
@@ -121,7 +123,9 @@ import ContactsPage from './pages/ContactsPage';
 
 function App() {
   return (
-    <Routes>
+    <ToastProvider>
+      <ConfirmProvider>
+        <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={
         <ProtectedRoute>
@@ -158,7 +162,9 @@ function App() {
           </Layout>
         </ProtectedRoute>
       } />
-    </Routes>
+        </Routes>
+      </ConfirmProvider>
+    </ToastProvider>
   );
 }
 

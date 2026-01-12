@@ -4,6 +4,7 @@ import { useModalClose } from '../hooks/useModalClose';
 import type { Label } from '../types/label';
 import LabelSelector from './LabelSelector';
 import LabelModal from './LabelModal';
+import { useToast } from '../contexts/ToastContext';
 
 interface MailDetailModalProps {
     isOpen: boolean;
@@ -29,6 +30,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
     const [showImages, setShowImages] = useState(false);
     const [hasBlockedImages, setHasBlockedImages] = useState(false);
     const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
+    const toast = useToast();
 
     // Label-related state
     const [allLabels, setAllLabels] = useState<Label[]>([]);
@@ -135,7 +137,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
                 setMessage(data);
             } catch (err) {
                 console.error('Failed to fetch message', err);
-                alert('メッセージの取得に失敗しました');
+                toast.error('メッセージの取得に失敗しました');
             } finally {
                 setLoading(false);
             }
@@ -163,9 +165,10 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
             if (newLabel) {
                 setMessageLabels([...messageLabels, newLabel]);
             }
+            toast.success('ラベルを追加しました');
         } catch (err) {
             console.error('Failed to add label', err);
-            alert('ラベルの追加に失敗しました');
+            toast.error('ラベルの追加に失敗しました');
         }
     };
 
@@ -175,9 +178,10 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
             await removeLabelFromMessage(messageId, labelId, configId);
             // Update local state
             setMessageLabels(messageLabels.filter(l => l.id !== labelId));
+            toast.success('ラベルを削除しました');
         } catch (err) {
             console.error('Failed to remove label', err);
-            alert('ラベルの削除に失敗しました');
+            toast.error('ラベルの削除に失敗しました');
         }
     };
 
@@ -186,9 +190,10 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
         try {
             const newLabel = await createLabel(name, color);
             setAllLabels([...allLabels, newLabel]);
+            toast.success('ラベルを作成しました');
         } catch (err) {
             console.error('Failed to create label', err);
-            alert('ラベルの作成に失敗しました');
+            toast.error('ラベルの作成に失敗しました');
         }
     };
 
