@@ -195,7 +195,7 @@ public class LabelsController : ControllerBase
     /// Get all labels for a specific message
     /// </summary>
     [HttpGet("message/{messageId}")]
-    public async Task<IActionResult> GetLabelsForMessage(string messageId, [FromQuery] string serverConfigId)
+    public async Task<IActionResult> GetLabelsForMessage(int messageId, [FromQuery] string serverConfigId)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
 
@@ -259,7 +259,7 @@ public class LabelsController : ControllerBase
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
 
-        if (string.IsNullOrWhiteSpace(request.MessageId) || string.IsNullOrWhiteSpace(request.LabelId) || string.IsNullOrWhiteSpace(request.ServerConfigId))
+        if (string.IsNullOrWhiteSpace(request.LabelId) || string.IsNullOrWhiteSpace(request.ServerConfigId))
         {
             return BadRequest("MessageId, LabelId, and ServerConfigId are required.");
         }
@@ -323,11 +323,11 @@ public class LabelsController : ControllerBase
     /// Remove a label from a message
     /// </summary>
     [HttpDelete("message")]
-    public async Task<IActionResult> RemoveLabelFromMessage([FromQuery] string messageId, [FromQuery] string labelId, [FromQuery] string serverConfigId)
+    public async Task<IActionResult> RemoveLabelFromMessage([FromQuery] int messageId, [FromQuery] string labelId, [FromQuery] string serverConfigId)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
 
-        if (string.IsNullOrWhiteSpace(messageId) || string.IsNullOrWhiteSpace(labelId) || string.IsNullOrWhiteSpace(serverConfigId))
+        if (string.IsNullOrWhiteSpace(labelId) || string.IsNullOrWhiteSpace(serverConfigId))
         {
             return BadRequest("messageId, labelId, and serverConfigId are required.");
         }
@@ -379,7 +379,7 @@ public class LabelsController : ControllerBase
 /// </summary>
 public class AddLabelRequest
 {
-    public string MessageId { get; set; } = string.Empty;
+    public int MessageId { get; set; }
     public string LabelId { get; set; } = string.Empty;
     public string ServerConfigId { get; set; } = string.Empty;
 }

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Label } from '../types/label';
+import type { Label } from '../types/label';
 import LabelBadge from './LabelBadge';
 
 interface LabelSelectorProps {

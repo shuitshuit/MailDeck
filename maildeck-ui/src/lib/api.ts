@@ -67,7 +67,7 @@ export async function getInbox(configId: string, page = 1) {
 /**
  * Get single message details
  */
-export async function getMessage(configId: string, messageId: string) {
+export async function getMessage(configId: string, messageId: number) {
     const response = await authFetch(`/mail/message/${messageId}?configId=${configId}`);
     return await response.json();
 }
@@ -179,7 +179,7 @@ export async function deleteLabel(id: string) {
 /**
  * Get all labels for a specific message
  */
-export async function getLabelsForMessage(messageId: string, serverConfigId: string) {
+export async function getLabelsForMessage(messageId: number, serverConfigId: string) {
     const response = await authFetch(`/labels/message/${messageId}?serverConfigId=${serverConfigId}`);
     return await response.json();
 }
@@ -187,7 +187,7 @@ export async function getLabelsForMessage(messageId: string, serverConfigId: str
 /**
  * Add a label to a message
  */
-export async function addLabelToMessage(messageId: string, labelId: string, serverConfigId: string) {
+export async function addLabelToMessage(messageId: number, labelId: string, serverConfigId: string) {
     const response = await authFetch('/labels/message', {
         method: 'POST',
         body: JSON.stringify({ messageId, labelId, serverConfigId })
@@ -198,7 +198,7 @@ export async function addLabelToMessage(messageId: string, labelId: string, serv
 /**
  * Remove a label from a message
  */
-export async function removeLabelFromMessage(messageId: string, labelId: string, serverConfigId: string) {
+export async function removeLabelFromMessage(messageId: number, labelId: string, serverConfigId: string) {
     await authFetch(`/labels/message?messageId=${messageId}&labelId=${labelId}&serverConfigId=${serverConfigId}`, {
         method: 'DELETE'
     });

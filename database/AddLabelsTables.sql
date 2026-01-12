@@ -21,7 +21,7 @@ CREATE INDEX idx_labels_user_id ON labels(user_id);
 CREATE TABLE IF NOT EXISTS mail_labels (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    message_id VARCHAR(500) NOT NULL, -- IMAP Message-ID header (RFC 5322)
+    message_id int NOT NULL, -- IMAP Message-ID header (RFC 5322)
     label_id UUID NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
     server_config_id UUID NOT NULL REFERENCES user_server_configs(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

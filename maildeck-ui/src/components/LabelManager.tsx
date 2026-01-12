@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Label } from '../types/label';
+import type { Label } from '../types/label';
 import { getLabels, createLabel, updateLabel, deleteLabel } from '../lib/api';
 import LabelModal from './LabelModal';
 import LabelBadge from './LabelBadge';

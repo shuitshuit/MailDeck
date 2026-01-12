@@ -1,10 +1,12 @@
 import { fetchAuthSession } from 'aws-amplify/auth';
 import axios from 'axios';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import ComposeModal from '../components/ComposeModal';
 import MailDetailModal from '../components/MailDetailModal';
-import { getInbox, getServerConfigs } from '../lib/api';
+import LabelBadge from '../components/LabelBadge';
+import { getInbox, getServerConfigs, getLabels } from '../lib/api';
+import type { Label } from '../types/label';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -20,6 +22,7 @@ interface Email {
     date: string;
     isRead: boolean;
     configId: string; // For identifying which account the email belongs to
+    labels?: Label[]; // Labels attached to this email
 }
 
 export default function DashboardPage() {
@@ -32,6 +35,8 @@ export default function DashboardPage() {
     const [activeTab, setActiveTab] = useState<string | null>(null);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [page] = useState(1);
+    const [labels, setLabels] = useState<Label[]>([]);
+    const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
 
     const loadConfigs = async () => {
         try {
@@ -103,13 +108,33 @@ export default function DashboardPage() {
 
     useEffect(() => {
         loadConfigs();
+        loadLabels();
     }, []);
+
+    const loadLabels = async () => {
+        try {
+            const labelList = await getLabels();
+            setLabels(labelList);
+        } catch (error) {
+            console.error('Failed to load labels', error);
+        }
+    };
 
     useEffect(() => {
         if (activeTab !== null) {
             loadInbox();
         }
     }, [loadInbox]);
+
+    // Filter mails by selected label
+    const filteredMails = useMemo(() => {
+        if (!selectedLabelId) {
+            return mails;
+        }
+        return mails.filter(mail =>
+            mail.labels?.some(label => label.id === selectedLabelId)
+        );
+    }, [mails, selectedLabelId]);
 
     const handleSendMail = async (to: string, subject: string, body: string, configId: string) => {
         if (!configId) {
@@ -200,16 +225,52 @@ export default function DashboardPage() {
                 ))}
             </div>
 
+            {/* Label filter */}
+            {labels.length > 0 && (
+                <div className="mb-4 flex items-center gap-2 flex-wrap">
+                    <span className="text-sm text-gray-600 font-medium">ラベルで絞り込み:</span>
+                    <button
+                        onClick={() => setSelectedLabelId(null)}
+                        className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                            selectedLabelId === null
+                                ? 'bg-brand-600 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                    >
+                        すべて
+                    </button>
+                    {labels.map(label => (
+                        <button
+                            key={label.id}
+                            onClick={() => setSelectedLabelId(label.id)}
+                            className={`px-3 py-1 text-sm rounded-full transition-all flex items-center gap-1 ${
+                                selectedLabelId === label.id
+                                    ? 'ring-2 ring-offset-1 ring-gray-800'
+                                    : 'hover:opacity-80'
+                            }`}
+                            style={{
+                                backgroundColor: label.color,
+                                color: getContrastColor(label.color)
+                            }}
+                        >
+                            {label.name}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[400px]">
                 {loading ? (
                     <div className="p-8 text-center text-gray-500">読み込み中...</div>
-                ) : mails.length === 0 ? (
-                    <div className="p-8 text-center text-gray-500">メールはありません。</div>
+                ) : filteredMails.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">
+                        {selectedLabelId ? 'このラベルのメールはありません。' : 'メールはありません。'}
+                    </div>
                 ) : (
                     <>
                         {/* Mobile View (Cards) */}
                         <div className="block md:hidden divide-y divide-gray-100">
-                            {mails.map(mail => (
+                            {filteredMails.map(mail => (
                                 <div
                                     key={`mobile-${mail.configId}-${mail.id}`}
                                     onClick={() => setSelectedMail(mail)}
@@ -222,6 +283,13 @@ export default function DashboardPage() {
                                         </div>
                                     </div>
                                     <div className="text-sm text-gray-800 mb-1 truncate">{mail.subject || '(件名なし)'}</div>
+                                    {mail.labels && mail.labels.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 mt-2">
+                                            {mail.labels.map(label => (
+                                                <LabelBadge key={label.id} label={label} />
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -236,15 +304,24 @@ export default function DashboardPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                {mails.map(mail => (
+                                {filteredMails.map(mail => (
                                     <tr
                                         key={`${mail.configId}-${mail.id}`}
                                         onClick={() => setSelectedMail(mail)}
                                         className={`hover:bg-gray-50 cursor-pointer transition-colors ${!mail.isRead ? 'font-semibold bg-blue-50/30' : ''}`}
                                     >
                                         <td className="p-4 text-gray-900 truncate" title={mail.from}>{mail.from}</td>
-                                        <td className="p-4 truncate">
-                                            <span className="text-gray-900">{mail.subject || '(件名なし)'}</span>
+                                        <td className="p-4">
+                                            <div className="flex flex-col gap-1">
+                                                <span className="text-gray-900 truncate">{mail.subject || '(件名なし)'}</span>
+                                                {mail.labels && mail.labels.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {mail.labels.map(label => (
+                                                            <LabelBadge key={label.id} label={label} />
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="p-4 text-right text-gray-500 text-sm whitespace-nowrap">
                                             {new Date(mail.date).toLocaleString()}
@@ -269,9 +346,22 @@ export default function DashboardPage() {
                     isOpen={!!selectedMail}
                     onClose={() => setSelectedMail(null)}
                     configId={selectedMail.configId}
-                    messageId={selectedMail.id}
+                    messageId={parseInt(selectedMail.id)}
                 />
             )}
         </div>
     );
+}
+
+/**
+ * Calculate contrasting text color (white or black) based on background color
+ */
+function getContrastColor(hexColor: string): string {
+    const r = parseInt(hexColor.slice(1, 3), 16);
+    const g = parseInt(hexColor.slice(3, 5), 16);
+    const b = parseInt(hexColor.slice(5, 7), 16);
+
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+    return luminance > 0.5 ? '#000000' : '#FFFFFF';
 }

@@ -1,4 +1,4 @@
-import { Label } from '../types/label';
+import type { Label } from '../types/label';
 
 interface LabelBadgeProps {
     label: Label;

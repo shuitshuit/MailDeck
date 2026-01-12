@@ -13,7 +13,7 @@ public class MailLabel
     public string UserId { get; set; } = string.Empty;
 
     [Name("message_id")]
-    public string MessageId { get; set; } = string.Empty;
+    public int MessageId { get; set; }
 
     [Name("label_id")]
     public Guid LabelId { get; set; }
