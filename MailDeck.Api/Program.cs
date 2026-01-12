@@ -139,6 +139,9 @@ try
     // Operation Performance Logger
     builder.Services.AddScoped<MailDeck.Api.Services.IOperationPerformanceLogger, MailDeck.Api.Services.OperationPerformanceLogger>();
 
+    // Channel Service for auto-labeling
+    builder.Services.AddSingleton<MailDeck.Api.Services.ChannelService>();
+
     // Web Push
     builder.Services.AddHttpClient<Lib.Net.Http.WebPush.PushServiceClient>();
     builder.Services.AddHostedService<MailDeck.Api.Services.EmailCheckBackgroundService>();
