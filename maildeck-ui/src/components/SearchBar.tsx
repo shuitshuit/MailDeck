@@ -29,7 +29,7 @@ function formatTimestamp(timestamp: number): string {
 
 /**
  * 検索バーコンポーネント
- * デバウンス機能付きで、入力後300msで検索を実行
+ * Enterキーまたは検索ボタンで検索を実行
  */
 export default function SearchBar({ onSearch, placeholder = 'メールを検索...', mails = [], labels = [] }: SearchBarProps) {
     const [searchText, setSearchText] = useState('');
@@ -37,28 +37,21 @@ export default function SearchBar({ onSearch, placeholder = 'メールを検索.
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [activeTab, setActiveTab] = useState<'history' | 'operators'>('history');
     const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
-    const debounceTimerRef = useRef<number | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // デバウンス処理: 300ms後に検索実行
-    useEffect(() => {
-        // 既存のタイマーをクリア
-        if (debounceTimerRef.current) {
-            clearTimeout(debounceTimerRef.current);
+    // 検索実行
+    const executeSearch = () => {
+        onSearch(searchText);
+        setShowDropdown(false);
+        setShowSuggestions(false);
+    };
+
+    // Enterキーで検索実行
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            executeSearch();
         }
-
-        // 新しいタイマーをセット
-        debounceTimerRef.current = window.setTimeout(() => {
-            onSearch(searchText);
-        }, 300);
-
-        // クリーンアップ
-        return () => {
-            if (debounceTimerRef.current) {
-                clearTimeout(debounceTimerRef.current);
-            }
-        };
-    }, [searchText, onSearch]);
+    };
 
     // 検索履歴を読み込む
     useEffect(() => {
@@ -101,6 +94,8 @@ export default function SearchBar({ onSearch, placeholder = 'メールを検索.
     const handleHistoryClick = (query: string) => {
         setSearchText(query);
         setShowDropdown(false);
+        // 履歴から選択した場合は即座に検索実行
+        onSearch(query);
     };
 
     // 履歴アイテムを削除
@@ -215,10 +210,14 @@ export default function SearchBar({ onSearch, placeholder = 'メールを検索.
 
     return (
         <div ref={containerRef} className="relative w-full">
-            {/* 検索アイコン */}
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+            {/* 検索ボタン */}
+            <button
+                onClick={executeSearch}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-600 transition-colors"
+                aria-label="検索"
+            >
                 <svg
-                    className="w-5 h-5 text-gray-400"
+                    className="w-5 h-5"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -230,13 +229,14 @@ export default function SearchBar({ onSearch, placeholder = 'メールを検索.
                         d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                     />
                 </svg>
-            </div>
+            </button>
 
             {/* 検索入力フィールド */}
             <input
                 type="text"
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
+                onKeyDown={handleKeyDown}
                 onFocus={() => {
                     setShowDropdown(true);
                     setActiveTab('history');
