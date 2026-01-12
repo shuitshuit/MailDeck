@@ -4,6 +4,7 @@ import { getLabels, createLabel, updateLabel, deleteLabel } from '../lib/api';
 import LabelModal from './LabelModal';
 import LabelBadge from './LabelBadge';
 import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 export default function LabelManager() {
     const [labels, setLabels] = useState<Label[]>([]);
@@ -11,6 +12,7 @@ export default function LabelManager() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingLabel, setEditingLabel] = useState<Label | null>(null);
     const toast = useToast();
+    const { confirm } = useConfirm();
 
     useEffect(() => {
         loadLabels();
@@ -56,7 +58,15 @@ export default function LabelManager() {
     };
 
     const handleDeleteLabel = async (labelId: string) => {
-        if (!confirm('このラベルを削除してもよろしいですか？\nラベルが付与されたメールからも削除されます。')) {
+        const confirmed = await confirm({
+            title: 'ラベルを削除',
+            message: 'このラベルを削除してもよろしいですか？\nラベルが付与されたメールからも削除されます。',
+            type: 'danger',
+            confirmText: '削除',
+            cancelText: 'キャンセル'
+        });
+
+        if (!confirmed) {
             return;
         }
 
