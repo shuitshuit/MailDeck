@@ -5,10 +5,10 @@ import LoginPage from './pages/LoginPage';
 import SettingsPage from './pages/SettingsPage';
 
 import { useEffect, useState } from 'react';
-import { syncUser, getLabels } from './lib/api';
+import { syncUser } from './lib/api';
 import { ToastProvider } from './contexts/ToastContext';
 import { ConfirmProvider } from './contexts/ConfirmContext';
-import type { Label } from './types/label';
+import { LabelProvider, useLabels } from './contexts/LabelContext';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { authStatus } = useAuthenticator(context => [context.authStatus]);
@@ -33,24 +33,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function Layout({ children }: { children: React.ReactNode }) {
   const { signOut, user } = useAuthenticator(context => [context.user]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [labels, setLabels] = useState<Label[]>([]);
+  const { labels } = useLabels();
   const [isLabelsExpanded, setIsLabelsExpanded] = useState(true);
   const location = useLocation();
   const [searchParams] = useSearchParams();
-
-  // Load labels
-  useEffect(() => {
-    const loadLabels = async () => {
-      try {
-        const labelList = await getLabels();
-        setLabels(labelList);
-      } catch (error) {
-        console.error('Failed to load labels', error);
-      }
-    };
-
-    loadLabels();
-  }, []);
 
   // Close mobile menu when route changes
   useEffect(() => {
@@ -209,7 +195,8 @@ function App() {
   return (
     <ToastProvider>
       <ConfirmProvider>
-        <Routes>
+        <LabelProvider>
+          <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={
         <ProtectedRoute>
@@ -246,7 +233,8 @@ function App() {
           </Layout>
         </ProtectedRoute>
       } />
-        </Routes>
+          </Routes>
+        </LabelProvider>
       </ConfirmProvider>
     </ToastProvider>
   );

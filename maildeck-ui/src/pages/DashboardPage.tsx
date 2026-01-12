@@ -6,9 +6,10 @@ import ComposeModal from '../components/ComposeModal';
 import MailDetailModal from '../components/MailDetailModal';
 import LabelBadge from '../components/LabelBadge';
 import SearchBar from '../components/SearchBar';
-import { getInbox, getServerConfigs, getLabels } from '../lib/api';
+import { getInbox, getServerConfigs } from '../lib/api';
 import type { Label } from '../types/label';
 import { useToast } from '../contexts/ToastContext';
+import { useLabels } from '../contexts/LabelContext';
 import { parseSearchQuery } from '../utils/searchParser';
 import { addSearchHistory } from '../utils/searchHistory';
 import type { SearchQuery } from '../types/search';
@@ -43,7 +44,7 @@ export default function DashboardPage() {
     const [activeTab, setActiveTab] = useState<string | null>(null);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [page] = useState(1);
-    const [labels, setLabels] = useState<Label[]>([]);
+    const { labels } = useLabels();
     const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
     const [searchQueryString, setSearchQueryString] = useState('');
     const [parsedSearchQuery, setParsedSearchQuery] = useState<SearchQuery>({ keywords: [] });
@@ -139,17 +140,7 @@ export default function DashboardPage() {
 
     useEffect(() => {
         loadConfigs();
-        loadLabels();
     }, []);
-
-    const loadLabels = async () => {
-        try {
-            const labelList = await getLabels();
-            setLabels(labelList);
-        } catch (error) {
-            console.error('Failed to load labels', error);
-        }
-    };
 
     useEffect(() => {
         if (activeTab !== null) {

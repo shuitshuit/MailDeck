@@ -1,35 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { Label } from '../types/label';
-import { getLabels, createLabel, updateLabel, deleteLabel } from '../lib/api';
+import { createLabel, updateLabel, deleteLabel } from '../lib/api';
 import LabelModal from './LabelModal';
 import LabelBadge from './LabelBadge';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { useLabels } from '../contexts/LabelContext';
 
 export default function LabelManager() {
-    const [labels, setLabels] = useState<Label[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const { labels, isLoading, reloadLabels } = useLabels();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingLabel, setEditingLabel] = useState<Label | null>(null);
     const toast = useToast();
     const { confirm } = useConfirm();
-
-    useEffect(() => {
-        loadLabels();
-    }, []);
-
-    const loadLabels = async () => {
-        setIsLoading(true);
-        try {
-            const data = await getLabels();
-            setLabels(data);
-        } catch (error) {
-            console.error('Failed to load labels:', error);
-            toast.error('ラベルの読み込みに失敗しました。');
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     const handleCreateLabel = () => {
         setEditingLabel(null);
@@ -50,7 +33,7 @@ export default function LabelManager() {
                 // Create new label
                 await createLabel(name, color);
             }
-            await loadLabels();
+            await reloadLabels();
         } catch (error) {
             console.error('Failed to save label:', error);
             throw error; // Let modal handle the error
@@ -72,7 +55,7 @@ export default function LabelManager() {
 
         try {
             await deleteLabel(labelId);
-            await loadLabels();
+            await reloadLabels();
             toast.success('ラベルを削除しました');
         } catch (error) {
             console.error('Failed to delete label:', error);
