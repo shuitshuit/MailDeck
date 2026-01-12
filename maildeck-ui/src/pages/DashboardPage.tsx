@@ -261,17 +261,6 @@ export default function DashboardPage() {
         setSearchParams(newParams);
     };
 
-    // ラベルフィルタ変更ハンドラー
-    const handleLabelFilterChange = (labelId: string | null) => {
-        const newParams = new URLSearchParams(searchParams);
-        if (labelId) {
-            newParams.set('label', labelId);
-        } else {
-            newParams.delete('label');
-        }
-        setSearchParams(newParams);
-    };
-
     const handleSendMail = async (to: string, subject: string, body: string, configId: string) => {
         if (!configId) {
             toast.warning('アカウントを選択してください');
@@ -372,40 +361,6 @@ export default function DashboardPage() {
                 ))}
             </div>
 
-            {/* Label filter */}
-            {labels.length > 0 && (
-                <div className="mb-4 flex items-center gap-2 flex-wrap">
-                    <span className="text-sm text-gray-600 font-medium">ラベルで絞り込み:</span>
-                    <button
-                        onClick={() => handleLabelFilterChange(null)}
-                        className={`px-3 py-1 text-sm rounded-full transition-colors ${
-                            selectedLabelId === null
-                                ? 'bg-brand-600 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                    >
-                        すべて
-                    </button>
-                    {labels.map(label => (
-                        <button
-                            key={label.id}
-                            onClick={() => handleLabelFilterChange(label.id)}
-                            className={`px-3 py-1 text-sm rounded-full transition-all flex items-center gap-1 ${
-                                selectedLabelId === label.id
-                                    ? 'ring-2 ring-offset-1 ring-gray-800'
-                                    : 'hover:opacity-80'
-                            }`}
-                            style={{
-                                backgroundColor: label.color,
-                                color: getContrastColor(label.color)
-                            }}
-                        >
-                            {label.name}
-                        </button>
-                    ))}
-                </div>
-            )}
-
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[400px]">
                 {loading ? (
                     <div className="p-8 text-center text-gray-500">読み込み中...</div>
@@ -502,17 +457,4 @@ export default function DashboardPage() {
             )}
         </div>
     );
-}
-
-/**
- * Calculate contrasting text color (white or black) based on background color
- */
-function getContrastColor(hexColor: string): string {
-    const r = parseInt(hexColor.slice(1, 3), 16);
-    const g = parseInt(hexColor.slice(3, 5), 16);
-    const b = parseInt(hexColor.slice(5, 7), 16);
-
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-
-    return luminance > 0.5 ? '#000000' : '#FFFFFF';
 }
