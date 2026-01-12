@@ -8,6 +8,7 @@ interface SearchBarProps {
     placeholder?: string;
     mails?: Array<{ from: string; to?: string; subject?: string }>;
     labels?: Label[];
+    initialValue?: string;
 }
 
 /**
@@ -31,13 +32,18 @@ function formatTimestamp(timestamp: number): string {
  * 検索バーコンポーネント
  * Enterキーまたは検索ボタンで検索を実行
  */
-export default function SearchBar({ onSearch, placeholder = 'メールを検索...', mails = [], labels = [] }: SearchBarProps) {
-    const [searchText, setSearchText] = useState('');
+export default function SearchBar({ onSearch, placeholder = 'メールを検索...', mails = [], labels = [], initialValue = '' }: SearchBarProps) {
+    const [searchText, setSearchText] = useState(initialValue);
     const [showDropdown, setShowDropdown] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [activeTab, setActiveTab] = useState<'history' | 'operators'>('history');
     const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
     const containerRef = useRef<HTMLDivElement>(null);
+
+    // initialValueが変更されたら検索テキストを更新
+    useEffect(() => {
+        setSearchText(initialValue);
+    }, [initialValue]);
 
     // 検索実行
     const executeSearch = () => {

@@ -1,7 +1,7 @@
 import { fetchAuthSession } from 'aws-amplify/auth';
 import axios from 'axios';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ComposeModal from '../components/ComposeModal';
 import MailDetailModal from '../components/MailDetailModal';
 import LabelBadge from '../components/LabelBadge';
@@ -35,6 +35,7 @@ interface Email {
 export default function DashboardPage() {
     const { accountId } = useParams();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [selectedMail, setSelectedMail] = useState<Email | null>(null);
     const [mails, setMails] = useState<Email[]>([]);
     const [loading, setLoading] = useState(false);
@@ -47,6 +48,26 @@ export default function DashboardPage() {
     const [searchQueryString, setSearchQueryString] = useState('');
     const [parsedSearchQuery, setParsedSearchQuery] = useState<SearchQuery>({ keywords: [] });
     const toast = useToast();
+
+    // URLから検索条件とラベルフィルタを読み込む
+    useEffect(() => {
+        const searchFromUrl = searchParams.get('search') || '';
+        const labelFromUrl = searchParams.get('label') || '';
+
+        if (searchFromUrl) {
+            setSearchQueryString(searchFromUrl);
+            setParsedSearchQuery(parseSearchQuery(searchFromUrl));
+        } else {
+            setSearchQueryString('');
+            setParsedSearchQuery({ keywords: [] });
+        }
+
+        if (labelFromUrl) {
+            setSelectedLabelId(labelFromUrl);
+        } else {
+            setSelectedLabelId(null);
+        }
+    }, [searchParams]);
 
     const loadConfigs = async () => {
         try {
@@ -225,14 +246,30 @@ export default function DashboardPage() {
 
     // 検索ハンドラー
     const handleSearch = (queryString: string) => {
-        setSearchQueryString(queryString);
-        const parsed = parseSearchQuery(queryString);
-        setParsedSearchQuery(parsed);
-
         // 検索履歴に保存（空でない場合のみ）
         if (queryString.trim()) {
             addSearchHistory(queryString);
         }
+
+        // URLパラメータを更新
+        const newParams = new URLSearchParams(searchParams);
+        if (queryString.trim()) {
+            newParams.set('search', queryString);
+        } else {
+            newParams.delete('search');
+        }
+        setSearchParams(newParams);
+    };
+
+    // ラベルフィルタ変更ハンドラー
+    const handleLabelFilterChange = (labelId: string | null) => {
+        const newParams = new URLSearchParams(searchParams);
+        if (labelId) {
+            newParams.set('label', labelId);
+        } else {
+            newParams.delete('label');
+        }
+        setSearchParams(newParams);
     };
 
     const handleSendMail = async (to: string, subject: string, body: string, configId: string) => {
@@ -302,6 +339,7 @@ export default function DashboardPage() {
                     placeholder="送信者、件名で検索..."
                     mails={mails}
                     labels={labels}
+                    initialValue={searchQueryString}
                 />
             </div>
 
@@ -339,7 +377,7 @@ export default function DashboardPage() {
                 <div className="mb-4 flex items-center gap-2 flex-wrap">
                     <span className="text-sm text-gray-600 font-medium">ラベルで絞り込み:</span>
                     <button
-                        onClick={() => setSelectedLabelId(null)}
+                        onClick={() => handleLabelFilterChange(null)}
                         className={`px-3 py-1 text-sm rounded-full transition-colors ${
                             selectedLabelId === null
                                 ? 'bg-brand-600 text-white'
@@ -351,7 +389,7 @@ export default function DashboardPage() {
                     {labels.map(label => (
                         <button
                             key={label.id}
-                            onClick={() => setSelectedLabelId(label.id)}
+                            onClick={() => handleLabelFilterChange(label.id)}
                             className={`px-3 py-1 text-sm rounded-full transition-all flex items-center gap-1 ${
                                 selectedLabelId === label.id
                                     ? 'ring-2 ring-offset-1 ring-gray-800'
