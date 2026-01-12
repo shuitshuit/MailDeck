@@ -9,6 +9,8 @@ import SearchBar from '../components/SearchBar';
 import { getInbox, getServerConfigs, getLabels } from '../lib/api';
 import type { Label } from '../types/label';
 import { useToast } from '../contexts/ToastContext';
+import { parseSearchQuery } from '../utils/searchParser';
+import type { SearchQuery } from '../types/search';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -20,9 +22,11 @@ interface Account {
 interface Email {
     id: string;
     from: string;
+    to?: string;
     subject: string;
     date: string;
     isRead: boolean;
+    hasAttachment?: boolean;
     configId: string; // For identifying which account the email belongs to
     labels?: Label[]; // Labels attached to this email
 }
@@ -39,7 +43,8 @@ export default function DashboardPage() {
     const [page] = useState(1);
     const [labels, setLabels] = useState<Label[]>([]);
     const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchQueryString, setSearchQueryString] = useState('');
+    const [parsedSearchQuery, setParsedSearchQuery] = useState<SearchQuery>({ keywords: [] });
     const toast = useToast();
 
     const loadConfigs = async () => {
@@ -142,21 +147,86 @@ export default function DashboardPage() {
         }
 
         // 検索クエリフィルタリング
-        if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase();
+        const query = parsedSearchQuery;
+
+        // from: 演算子
+        if (query.from && query.from.length > 0) {
+            filtered = filtered.filter(mail =>
+                query.from!.some(f => mail.from.toLowerCase().includes(f.toLowerCase()))
+            );
+        }
+
+        // to: 演算子
+        if (query.to && query.to.length > 0) {
+            filtered = filtered.filter(mail =>
+                mail.to && query.to!.some(t => mail.to!.toLowerCase().includes(t.toLowerCase()))
+            );
+        }
+
+        // subject: 演算子
+        if (query.subject && query.subject.length > 0) {
+            filtered = filtered.filter(mail =>
+                query.subject!.some(s => (mail.subject || '').toLowerCase().includes(s.toLowerCase()))
+            );
+        }
+
+        // label: 演算子
+        if (query.labels && query.labels.length > 0) {
+            filtered = filtered.filter(mail =>
+                mail.labels && query.labels!.some(labelName =>
+                    mail.labels!.some(mailLabel =>
+                        mailLabel.name.toLowerCase() === labelName.toLowerCase()
+                    )
+                )
+            );
+        }
+
+        // is:unread / is:read 演算子
+        if (query.isUnread !== undefined) {
+            filtered = filtered.filter(mail => !mail.isRead === query.isUnread);
+        }
+
+        // has:attachment 演算子
+        if (query.hasAttachment) {
+            filtered = filtered.filter(mail => mail.hasAttachment === true);
+        }
+
+        // exclude.from 演算子
+        if (query.exclude?.from && query.exclude.from.length > 0) {
+            filtered = filtered.filter(mail =>
+                !query.exclude!.from!.some(f => mail.from.toLowerCase().includes(f.toLowerCase()))
+            );
+        }
+
+        // exclude.subject 演算子
+        if (query.exclude?.subject && query.exclude.subject.length > 0) {
+            filtered = filtered.filter(mail =>
+                !query.exclude!.subject!.some(s => (mail.subject || '').toLowerCase().includes(s.toLowerCase()))
+            );
+        }
+
+        // 一般キーワード
+        if (query.keywords.length > 0) {
             filtered = filtered.filter(mail => {
                 const from = mail.from.toLowerCase();
+                const to = (mail.to || '').toLowerCase();
                 const subject = (mail.subject || '').toLowerCase();
-                return from.includes(query) || subject.includes(query);
+                const searchText = `${from} ${to} ${subject}`;
+
+                return query.keywords.some(keyword =>
+                    searchText.includes(keyword.toLowerCase())
+                );
             });
         }
 
         return filtered;
-    }, [mails, selectedLabelId, searchQuery]);
+    }, [mails, selectedLabelId, parsedSearchQuery]);
 
     // 検索ハンドラー
-    const handleSearch = (query: string) => {
-        setSearchQuery(query);
+    const handleSearch = (queryString: string) => {
+        setSearchQueryString(queryString);
+        const parsed = parseSearchQuery(queryString);
+        setParsedSearchQuery(parsed);
     };
 
     const handleSendMail = async (to: string, subject: string, body: string, configId: string) => {
@@ -292,7 +362,7 @@ export default function DashboardPage() {
                     <div className="p-8 text-center text-gray-500">読み込み中...</div>
                 ) : filteredMails.length === 0 ? (
                     <div className="p-8 text-center text-gray-500">
-                        {searchQuery.trim()
+                        {searchQueryString.trim()
                             ? '検索結果がありません。'
                             : selectedLabelId
                                 ? 'このラベルのメールはありません。'
