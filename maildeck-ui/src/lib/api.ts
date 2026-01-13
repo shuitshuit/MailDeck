@@ -203,3 +203,67 @@ export async function removeLabelFromMessage(messageId: number, labelId: string,
         method: 'DELETE'
     });
 }
+
+// ============================================================================
+// Auto-Labeling Rules API
+// ============================================================================
+
+/**
+ * Get all auto-labeling rules for the authenticated user
+ */
+export async function getAutoLabelingRules() {
+    const response = await authFetch('/auto-labeling-rules');
+    return await response.json();
+}
+
+/**
+ * Create a new auto-labeling rule
+ */
+export async function createAutoLabelingRule(rule: {
+    ruleName: string;
+    labelId: string;
+    priority: number;
+    conditions: string;
+}) {
+    const response = await authFetch('/auto-labeling-rules', {
+        method: 'POST',
+        body: JSON.stringify(rule)
+    });
+    return await response.json();
+}
+
+/**
+ * Update an existing auto-labeling rule
+ */
+export async function updateAutoLabelingRule(id: string, rule: {
+    ruleName: string;
+    labelId: string;
+    priority: number;
+    isEnabled: boolean;
+    conditions: string;
+}) {
+    const response = await authFetch(`/auto-labeling-rules/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(rule)
+    });
+    return await response.json();
+}
+
+/**
+ * Delete an auto-labeling rule
+ */
+export async function deleteAutoLabelingRule(id: string) {
+    await authFetch(`/auto-labeling-rules/${id}`, {
+        method: 'DELETE'
+    });
+}
+
+/**
+ * Toggle enabled/disabled state of an auto-labeling rule
+ */
+export async function toggleAutoLabelingRule(id: string) {
+    const response = await authFetch(`/auto-labeling-rules/${id}/toggle`, {
+        method: 'POST'
+    });
+    return await response.json();
+}

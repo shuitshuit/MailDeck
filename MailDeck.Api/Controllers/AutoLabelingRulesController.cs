@@ -341,4 +341,44 @@ public class AutoLabelingRulesController : ControllerBase
             _db.Close();
         }
     }
+
+    /// <summary>
+    /// Toggle the enabled/disabled state of an auto-labeling rule
+    /// </summary>
+    [HttpPost("{id}/toggle")]
+    public async Task<IActionResult> ToggleRule(string id)
+    {
+        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+
+        try
+        {
+            await _db.OpenAsync();
+
+            // Check if rule exists and belongs to user
+            var rule = _db.AsQueryable<AutoLabelingRule>()
+                .Where(r => r.Id == id && r.UserId == userId)
+                .FirstOrDefault();
+
+            if (rule == null)
+            {
+                return NotFound("Rule not found or does not belong to user.");
+            }
+
+            // Toggle the enabled state
+            rule.IsEnabled = !rule.IsEnabled;
+            rule.UpdatedAt = DateTime.UtcNow;
+
+            var result = await _db.UpdateAsync(rule);
+            return result > 0 ? Ok(rule) : StatusCode(500, "Toggle failed");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to toggle auto-labeling rule {RuleId} for user {UserId}", id, userId);
+            return StatusCode(500, "Database error");
+        }
+        finally
+        {
+            _db.Close();
+        }
+    }
 }
