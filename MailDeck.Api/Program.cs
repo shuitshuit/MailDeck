@@ -155,15 +155,12 @@ try
     // Log Compression
     builder.Services.AddHostedService<MailDeck.Api.Services.LogCompressionBackgroundService>();
 
-<<<<<<< HEAD
     // エラーハンドリングの設定
     DatabaseErrorHelper.Configure(
         builder.Environment
     );
-=======
     // systemd との連携を有効化
     builder.Host.UseSystemd();
->>>>>>> aaf1bc0 (feat: Add Microsoft.Extensions.Hosting.Systemd package and enable systemd integration)
 
     var app = builder.Build();
 

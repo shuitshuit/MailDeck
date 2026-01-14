@@ -31,7 +31,6 @@ export default function AutoLabelingRuleModal({
     const [priority, setPriority] = useState(0);
     const [isEnabled, setIsEnabled] = useState(true);
     const [conditions, setConditions] = useState<RuleConditions>({
-        operator: 'AND',
         rules: [{ field: 'from', operator: 'contains', value: '' }]
     });
     const [isSaving, setIsSaving] = useState(false);
