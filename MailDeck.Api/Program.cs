@@ -5,6 +5,8 @@ using Serilog;
 using Serilog.Enrichers.Span;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
+using ShuitNet.ORM;
+using ShuitNet.ORM.PostgreSQL;
 using System.Text;
 
 // Register CodePages encoding provider for legacy encodings (ISO-2022-JP, Shift_JIS, etc.)
@@ -13,6 +15,7 @@ Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
 // Configure Npgsql to handle DateTime with UTC properly
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+PostgreSqlConnect.NamingCase = NamingCase.SnakeCase;
 
 dotenv.net.DotEnv.Load();
 
@@ -151,6 +154,11 @@ try
 
     // Log Compression
     builder.Services.AddHostedService<MailDeck.Api.Services.LogCompressionBackgroundService>();
+
+    // エラーハンドリングの設定
+    DatabaseErrorHelper.Configure(
+        builder.Environment
+    );
 
     var app = builder.Build();
 

@@ -5,7 +5,7 @@ export interface AutoLabelingRule {
   ruleName: string;
   priority: number;
   isEnabled: boolean;
-  conditions: string; // JSON string of RuleConditions
+  conditions: RuleConditions; // Deserialized by backend [Jsonb] attribute
   createdAt: string;
   updatedAt: string;
 }
@@ -14,10 +14,10 @@ export interface RuleCondition {
   field: 'from' | 'subject' | 'body';
   operator: 'contains' | 'equals' | 'startswith' | 'endswith' | 'notcontains' | 'notequals';
   value: string;
+  nextOperator?: 'AND' | 'OR'; // Operator to use with the next condition
 }
 
 export interface RuleConditions {
-  operator: 'AND' | 'OR';
   rules: RuleCondition[];
 }
 

@@ -1,5 +1,6 @@
 using System.Threading.Channels;
 using MailDeck.Api.Models;
+using MailDeck.Api.Extensions;
 
 namespace MailDeck.Api.Services;
 
@@ -58,7 +59,7 @@ public class ChannelService
         }
         catch (ChannelClosedException ex)
         {
-            _logger.LogError(ex, "Failed to enqueue notification: Channel is closed");
+            _logger.LogErrorWithSql(ex, "Failed to enqueue notification: Channel is closed");
             return false;
         }
         catch (OperationCanceledException)
@@ -68,7 +69,7 @@ public class ChannelService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error while enqueuing notification");
+            _logger.LogErrorWithSql(ex, "Unexpected error while enqueuing notification");
             return false;
         }
     }

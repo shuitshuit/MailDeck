@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MailDeck.Api.Models;
+using MailDeck.Api.Extensions;
 using ShuitNet.ORM.PostgreSQL;
 using System.Security.Claims;
 using System.Text.Json;
@@ -31,15 +32,22 @@ public class AutoLabelingRulesController : ControllerBase
         try
         {
             await _db.OpenAsync();
-            var rules = _db.AsQueryable<AutoLabelingRule>()
-                .Where(r => r.UserId == userId)
-                .OrderByDescending(r => r.Priority)
-                .ToList();
-            return Ok(rules);
+            var rules = await _db.GetMultipleAsync<AutoLabelingRule>(new { user_id = userId });
+
+            // Sort by priority descending in C#
+            var sortedRules = rules.OrderByDescending(r => r.Priority).ToList();
+
+            // Return empty array if no rules found (204 would have no body)
+            return Ok(sortedRules);
+        }
+        catch (InvalidOperationException)
+        {
+            // Return empty array instead of 204
+            return Ok(new List<AutoLabelingRule>());
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to fetch auto-labeling rules for user {UserId}", userId);
+            _logger.LogErrorWithSql(ex, "Failed to fetch auto-labeling rules for user {UserId}", userId);
             return StatusCode(500, "Database error");
         }
         finally
@@ -62,64 +70,48 @@ public class AutoLabelingRulesController : ControllerBase
             return BadRequest("Rule name is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(rule.LabelId))
+        // Validate conditions format
+        if (rule.Conditions == null || rule.Conditions.Rules == null || rule.Conditions.Rules.Count == 0)
         {
-            return BadRequest("Label ID is required.");
+            return BadRequest("Conditions must contain at least one rule.");
         }
 
-        if (string.IsNullOrWhiteSpace(rule.Conditions))
+        // Validate each condition
+        for (int i = 0; i < rule.Conditions.Rules.Count; i++)
         {
-            return BadRequest("Conditions are required.");
-        }
+            var condition = rule.Conditions.Rules[i];
 
-        // Validate conditions JSON format
-        try
-        {
-            var conditions = JsonSerializer.Deserialize<RuleConditions>(rule.Conditions);
-            if (conditions == null || conditions.Rules == null || conditions.Rules.Count == 0)
+            if (string.IsNullOrWhiteSpace(condition.Field))
             {
-                return BadRequest("Conditions must contain at least one rule.");
+                return BadRequest("Each condition must have a field.");
             }
 
-            // Validate each condition
-            foreach (var condition in conditions.Rules)
+            var validFields = new[] { "from", "subject", "body" };
+            if (!validFields.Contains(condition.Field.ToLowerInvariant()))
             {
-                if (string.IsNullOrWhiteSpace(condition.Field))
-                {
-                    return BadRequest("Each condition must have a field.");
-                }
-
-                var validFields = new[] { "from", "subject", "body" };
-                if (!validFields.Contains(condition.Field.ToLowerInvariant()))
-                {
-                    return BadRequest($"Invalid field '{condition.Field}'. Must be one of: from, subject, body.");
-                }
-
-                if (string.IsNullOrWhiteSpace(condition.Operator))
-                {
-                    return BadRequest("Each condition must have an operator.");
-                }
-
-                var validOperators = new[] { "contains", "equals", "startswith", "endswith", "notcontains", "notequals" };
-                if (!validOperators.Contains(condition.Operator.ToLowerInvariant()))
-                {
-                    return BadRequest($"Invalid operator '{condition.Operator}'.");
-                }
+                return BadRequest($"Invalid field '{condition.Field}'. Must be one of: from, subject, body.");
             }
 
-            // Validate logical operator
-            if (!string.IsNullOrWhiteSpace(conditions.Operator))
+            if (string.IsNullOrWhiteSpace(condition.Operator))
+            {
+                return BadRequest("Each condition must have an operator.");
+            }
+
+            var validOperators = new[] { "contains", "equals", "startswith", "endswith", "notcontains", "notequals" };
+            if (!validOperators.Contains(condition.Operator.ToLowerInvariant()))
+            {
+                return BadRequest($"Invalid operator '{condition.Operator}'.");
+            }
+
+            // Validate nextOperator (only for conditions that are not the last one)
+            if (i < rule.Conditions.Rules.Count - 1 && !string.IsNullOrWhiteSpace(condition.NextOperator))
             {
                 var validLogicalOps = new[] { "AND", "OR" };
-                if (!validLogicalOps.Contains(conditions.Operator.ToUpperInvariant()))
+                if (!validLogicalOps.Contains(condition.NextOperator.ToUpperInvariant()))
                 {
-                    return BadRequest("Logical operator must be 'AND' or 'OR'.");
+                    return BadRequest($"Invalid nextOperator '{condition.NextOperator}'. Must be 'AND' or 'OR'.");
                 }
             }
-        }
-        catch (JsonException)
-        {
-            return BadRequest("Invalid conditions JSON format.");
         }
 
         // Verify label exists and belongs to user
@@ -127,20 +119,17 @@ public class AutoLabelingRulesController : ControllerBase
         {
             await _db.OpenAsync();
 
-            var labelGuid = Guid.Parse(rule.LabelId);
-            var label = _db.AsQueryable<Label>()
-                .Where(l => l.Id == labelGuid && l.UserId == userId)
-                .FirstOrDefault();
+            var labelGuid = rule.LabelId;
+            var label = await _db.GetAsync<Label>(labelGuid);
 
-            if (label == null)
+            if (label == null || label.UserId != userId)
             {
                 return NotFound("Label not found or does not belong to user.");
             }
 
             // Check for duplicate rule name
-            var existingRules = _db.AsQueryable<AutoLabelingRule>()
-                .Where(r => r.UserId == userId && r.RuleName == rule.RuleName)
-                .ToList();
+            var allUserRules = await _db.GetMultipleAsync<AutoLabelingRule>(new { user_id = userId });
+            var existingRules = allUserRules.Where(r => r.RuleName == rule.RuleName).ToList();
 
             if (existingRules.Any())
             {
@@ -148,7 +137,7 @@ public class AutoLabelingRulesController : ControllerBase
             }
 
             // Set properties
-            rule.Id = Guid.NewGuid().ToString();
+            rule.Id = Guid.NewGuid();
             rule.UserId = userId;
             rule.CreatedAt = DateTime.UtcNow;
             rule.UpdatedAt = DateTime.UtcNow;
@@ -162,7 +151,7 @@ public class AutoLabelingRulesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create auto-labeling rule for user {UserId}", userId);
+            _logger.LogErrorWithSql(ex, "Failed to create auto-labeling rule for user {UserId}", userId);
             return StatusCode(500, "Database error");
         }
         finally
@@ -175,7 +164,7 @@ public class AutoLabelingRulesController : ControllerBase
     /// Update an existing auto-labeling rule
     /// </summary>
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateRule(string id, [FromBody] AutoLabelingRule rule)
+    public async Task<IActionResult> UpdateRule(Guid id, [FromBody] AutoLabelingRule rule)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
 
@@ -185,64 +174,48 @@ public class AutoLabelingRulesController : ControllerBase
             return BadRequest("Rule name is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(rule.LabelId))
+        // Validate conditions format
+        if (rule.Conditions == null || rule.Conditions.Rules == null || rule.Conditions.Rules.Count == 0)
         {
-            return BadRequest("Label ID is required.");
+            return BadRequest("Conditions must contain at least one rule.");
         }
 
-        if (string.IsNullOrWhiteSpace(rule.Conditions))
+        // Validate each condition (same as in CreateRule)
+        for (int i = 0; i < rule.Conditions.Rules.Count; i++)
         {
-            return BadRequest("Conditions are required.");
-        }
+            var condition = rule.Conditions.Rules[i];
 
-        // Validate conditions JSON format
-        try
-        {
-            var conditions = JsonSerializer.Deserialize<RuleConditions>(rule.Conditions);
-            if (conditions == null || conditions.Rules == null || conditions.Rules.Count == 0)
+            if (string.IsNullOrWhiteSpace(condition.Field))
             {
-                return BadRequest("Conditions must contain at least one rule.");
+                return BadRequest("Each condition must have a field.");
             }
 
-            // Validate each condition (same as in CreateRule)
-            foreach (var condition in conditions.Rules)
+            var validFields = new[] { "from", "subject", "body" };
+            if (!validFields.Contains(condition.Field.ToLowerInvariant()))
             {
-                if (string.IsNullOrWhiteSpace(condition.Field))
-                {
-                    return BadRequest("Each condition must have a field.");
-                }
-
-                var validFields = new[] { "from", "subject", "body" };
-                if (!validFields.Contains(condition.Field.ToLowerInvariant()))
-                {
-                    return BadRequest($"Invalid field '{condition.Field}'. Must be one of: from, subject, body.");
-                }
-
-                if (string.IsNullOrWhiteSpace(condition.Operator))
-                {
-                    return BadRequest("Each condition must have an operator.");
-                }
-
-                var validOperators = new[] { "contains", "equals", "startswith", "endswith", "notcontains", "notequals" };
-                if (!validOperators.Contains(condition.Operator.ToLowerInvariant()))
-                {
-                    return BadRequest($"Invalid operator '{condition.Operator}'.");
-                }
+                return BadRequest($"Invalid field '{condition.Field}'. Must be one of: from, subject, body.");
             }
 
-            // Validate logical operator
-            if (!string.IsNullOrWhiteSpace(conditions.Operator))
+            if (string.IsNullOrWhiteSpace(condition.Operator))
+            {
+                return BadRequest("Each condition must have an operator.");
+            }
+
+            var validOperators = new[] { "contains", "equals", "startswith", "endswith", "notcontains", "notequals" };
+            if (!validOperators.Contains(condition.Operator.ToLowerInvariant()))
+            {
+                return BadRequest($"Invalid operator '{condition.Operator}'.");
+            }
+
+            // Validate nextOperator (only for conditions that are not the last one)
+            if (i < rule.Conditions.Rules.Count - 1 && !string.IsNullOrWhiteSpace(condition.NextOperator))
             {
                 var validLogicalOps = new[] { "AND", "OR" };
-                if (!validLogicalOps.Contains(conditions.Operator.ToUpperInvariant()))
+                if (!validLogicalOps.Contains(condition.NextOperator.ToUpperInvariant()))
                 {
-                    return BadRequest("Logical operator must be 'AND' or 'OR'.");
+                    return BadRequest($"Invalid nextOperator '{condition.NextOperator}'. Must be 'AND' or 'OR'.");
                 }
             }
-        }
-        catch (JsonException)
-        {
-            return BadRequest("Invalid conditions JSON format.");
         }
 
         try
@@ -250,30 +223,25 @@ public class AutoLabelingRulesController : ControllerBase
             await _db.OpenAsync();
 
             // Check if rule exists and belongs to user
-            var existingRule = _db.AsQueryable<AutoLabelingRule>()
-                .Where(r => r.Id == id && r.UserId == userId)
-                .FirstOrDefault();
+            var existingRule = await _db.GetAsync<AutoLabelingRule>(id);
 
-            if (existingRule == null)
+            if (existingRule == null || existingRule.UserId != userId)
             {
                 return NotFound("Rule not found or does not belong to user.");
             }
 
             // Verify label exists and belongs to user
-            var labelGuid = Guid.Parse(rule.LabelId);
-            var label = _db.AsQueryable<Label>()
-                .Where(l => l.Id == labelGuid && l.UserId == userId)
-                .FirstOrDefault();
+            var labelGuid = rule.LabelId;
+            var label = await _db.GetAsync<Label>(labelGuid);
 
-            if (label == null)
+            if (label == null || label.UserId != userId)
             {
                 return NotFound("Label not found or does not belong to user.");
             }
 
             // Check for duplicate rule name (excluding current rule)
-            var duplicateRules = _db.AsQueryable<AutoLabelingRule>()
-                .Where(r => r.UserId == userId && r.RuleName == rule.RuleName && r.Id != id)
-                .ToList();
+            var allUserRules = await _db.GetMultipleAsync<AutoLabelingRule>(new { user_id = userId });
+            var duplicateRules = allUserRules.Where(r => r.RuleName == rule.RuleName && r.Id != id).ToList();
 
             if (duplicateRules.Any())
             {
@@ -297,7 +265,7 @@ public class AutoLabelingRulesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to update auto-labeling rule {RuleId} for user {UserId}", id, userId);
+            _logger.LogErrorWithSql(ex, "Failed to update auto-labeling rule {RuleId} for user {UserId}", id, userId);
             return StatusCode(500, "Database error");
         }
         finally
@@ -310,7 +278,7 @@ public class AutoLabelingRulesController : ControllerBase
     /// Delete an auto-labeling rule
     /// </summary>
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteRule(string id)
+    public async Task<IActionResult> DeleteRule(Guid id)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
 
@@ -319,11 +287,9 @@ public class AutoLabelingRulesController : ControllerBase
             await _db.OpenAsync();
 
             // Check if rule exists and belongs to user
-            var rule = _db.AsQueryable<AutoLabelingRule>()
-                .Where(r => r.Id == id && r.UserId == userId)
-                .FirstOrDefault();
+            var rule = await _db.GetAsync<AutoLabelingRule>(id);
 
-            if (rule == null)
+            if (rule == null || rule.UserId != userId)
             {
                 return NotFound("Rule not found or does not belong to user.");
             }
@@ -333,7 +299,7 @@ public class AutoLabelingRulesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to delete auto-labeling rule {RuleId} for user {UserId}", id, userId);
+            _logger.LogErrorWithSql(ex, "Failed to delete auto-labeling rule {RuleId} for user {UserId}", id, userId);
             return StatusCode(500, "Database error");
         }
         finally
@@ -346,7 +312,7 @@ public class AutoLabelingRulesController : ControllerBase
     /// Toggle the enabled/disabled state of an auto-labeling rule
     /// </summary>
     [HttpPost("{id}/toggle")]
-    public async Task<IActionResult> ToggleRule(string id)
+    public async Task<IActionResult> ToggleRule(Guid id)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
 
@@ -355,11 +321,9 @@ public class AutoLabelingRulesController : ControllerBase
             await _db.OpenAsync();
 
             // Check if rule exists and belongs to user
-            var rule = _db.AsQueryable<AutoLabelingRule>()
-                .Where(r => r.Id == id && r.UserId == userId)
-                .FirstOrDefault();
+            var rule = await _db.GetAsync<AutoLabelingRule>(id);
 
-            if (rule == null)
+            if (rule == null || rule.UserId != userId)
             {
                 return NotFound("Rule not found or does not belong to user.");
             }
@@ -373,7 +337,7 @@ public class AutoLabelingRulesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to toggle auto-labeling rule {RuleId} for user {UserId}", id, userId);
+            _logger.LogErrorWithSql(ex, "Failed to toggle auto-labeling rule {RuleId} for user {UserId}", id, userId);
             return StatusCode(500, "Database error");
         }
         finally

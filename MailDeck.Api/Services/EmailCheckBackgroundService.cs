@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using MailDeck.Api.Models;
+using MailDeck.Api.Extensions;
 using ShuitNet.ORM.PostgreSQL;
 
 namespace MailDeck.Api.Services;
@@ -48,7 +49,7 @@ public class EmailCheckBackgroundService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred during email check cycle.");
+                _logger.LogErrorWithSql(ex, "Error occurred during email check cycle.");
             }
             // Wait for the next interval
             await Task.Delay(TimeSpan.FromMinutes(_intervalMinutes), stoppingToken);
@@ -151,7 +152,7 @@ public class EmailCheckBackgroundService : BackgroundService
                                         }
                                         catch (Exception ex)
                                         {
-                                            _logger.LogError(ex,
+                                            _logger.LogErrorWithSql(ex,
                                                 "Failed to enqueue message {Uid} for auto-labeling",
                                                 msg.UniqueId.Id
                                             );
@@ -178,7 +179,7 @@ public class EmailCheckBackgroundService : BackgroundService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, $"Error checking email for config {config.Id} (User: {config.UserId})");
+                    _logger.LogErrorWithSql(ex, $"Error checking email for config {config.Id} (User: {config.UserId})");
                 }
             }
         }
@@ -230,7 +231,7 @@ public class EmailCheckBackgroundService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Failed to send push to subscription {sub.Id}");
+                _logger.LogErrorWithSql(ex, $"Failed to send push to subscription {sub.Id}");
                 // Handle 410 Gone (remove subscription)
             }
         }

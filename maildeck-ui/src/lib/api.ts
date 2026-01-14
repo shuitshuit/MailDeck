@@ -1,4 +1,5 @@
 import { fetchAuthSession } from 'aws-amplify/auth';
+import type { RuleConditions } from '../types/autoLabeling';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -223,7 +224,7 @@ export async function createAutoLabelingRule(rule: {
     ruleName: string;
     labelId: string;
     priority: number;
-    conditions: string;
+    conditions: RuleConditions;
 }) {
     const response = await authFetch('/auto-labeling-rules', {
         method: 'POST',
@@ -240,7 +241,7 @@ export async function updateAutoLabelingRule(id: string, rule: {
     labelId: string;
     priority: number;
     isEnabled: boolean;
-    conditions: string;
+    conditions: RuleConditions;
 }) {
     const response = await authFetch(`/auto-labeling-rules/${id}`, {
         method: 'PUT',

@@ -4,6 +4,7 @@ using MailKit.Net.Imap;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
+using MailDeck.Api.Extensions;
 
 using MailKit;
 
@@ -131,7 +132,7 @@ public class MailController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to fetch inbox");
+            _logger.LogErrorWithSql(ex, "Failed to fetch inbox");
             return StatusCode(500, "Failed to fetch inbox: " + ex.Message);
         }
     }
@@ -205,7 +206,7 @@ public class MailController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to fetch message");
+            _logger.LogErrorWithSql(ex, "Failed to fetch message");
             return StatusCode(500, "Failed to fetch message: " + ex.Message);
         }
     }
@@ -267,7 +268,7 @@ public class MailController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send email");
+            _logger.LogErrorWithSql(ex, "Failed to send email");
             return StatusCode(500, "Failed to send email: " + ex.Message);
         }
     }

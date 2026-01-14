@@ -45,23 +45,25 @@ export default function AutoLabelingRuleModal({
                 setLabelId(initialData.labelId);
                 setPriority(initialData.priority);
                 setIsEnabled(initialData.isEnabled);
-                try {
-                    const parsedConditions = JSON.parse(initialData.conditions);
-                    setConditions(parsedConditions);
-                } catch (error) {
-                    console.error('Failed to parse conditions:', error);
-                    setConditions({
-                        operator: 'AND',
-                        rules: [{ field: 'from', operator: 'contains', value: '' }]
-                    });
+
+                // Migrate old format to new format if needed
+                const migratedConditions = { ...initialData.conditions };
+                if (migratedConditions.rules && migratedConditions.rules.length > 1) {
+                    // Ensure each condition (except the last) has a nextOperator
+                    for (let i = 0; i < migratedConditions.rules.length - 1; i++) {
+                        if (!migratedConditions.rules[i].nextOperator) {
+                            // Use the old global operator if available, otherwise default to AND
+                            migratedConditions.rules[i].nextOperator = (initialData.conditions as any).operator || 'AND';
+                        }
+                    }
                 }
+                setConditions(migratedConditions);
             } else {
                 setRuleName('');
                 setLabelId(labels.length > 0 ? labels[0].id : '');
                 setPriority(0);
                 setIsEnabled(true);
                 setConditions({
-                    operator: 'AND',
                     rules: [{ field: 'from', operator: 'contains', value: '' }]
                 });
             }

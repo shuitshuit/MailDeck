@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MailDeck.Api.Models;
+using MailDeck.Api.Extensions;
 using ShuitNet.ORM.PostgreSQL;
 using System.Security.Claims;
 
@@ -69,7 +70,7 @@ public class UsersController : ControllerBase
             return Ok(new { message = "User synced successfully" });
         }
         catch (InvalidOperationException)
-        { // ƒ†[ƒU[‚ª‘¶İ‚µ‚È‚¢ê‡‚Ìˆ—
+        { // ï¿½ï¿½ï¿½[ï¿½Uï¿½[ï¿½ï¿½ï¿½ï¿½ï¿½İ‚ï¿½ï¿½È‚ï¿½ï¿½ê‡ï¿½Ìï¿½ï¿½ï¿½
             var newUser = new User
             {
                 Id = userId,
@@ -83,7 +84,7 @@ public class UsersController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error syncing user {UserId}", userId);
+            _logger.LogErrorWithSql(ex, "Error syncing user {UserId}", userId);
             return StatusCode(500, "Internal server error");
         }
     }

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MailDeck.Api.Models;
+using MailDeck.Api.Extensions;
 using Npgsql;
 
 namespace MailDeck.Api.Services;
@@ -38,7 +39,7 @@ public class AutoLabelingService : BackgroundService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex,
+                    _logger.LogErrorWithSql(ex,
                         "Failed to process auto-labeling for message {MessageId} in config {ConfigId}",
                         notification.MessageId, notification.ConfigId);
                 }
@@ -50,7 +51,7 @@ public class AutoLabelingService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "AutoLabelingService encountered an unexpected error");
+            _logger.LogErrorWithSql(ex, "AutoLabelingService encountered an unexpected error");
         }
     }
 
@@ -64,8 +65,9 @@ public class AutoLabelingService : BackgroundService
             await db.OpenAsync();
 
             // 1. Get user's enabled rules sorted by priority
-            var rules = db.AsQueryable<AutoLabelingRule>()
-                .Where(r => r.UserId == notification.UserId && r.IsEnabled)
+            var allRules = await db.GetMultipleAsync<AutoLabelingRule>(new { user_id = notification.UserId });
+            var rules = allRules
+                .Where(r => r.IsEnabled)
                 .OrderByDescending(r => r.Priority)
                 .ToList();
 
@@ -107,7 +109,7 @@ public class AutoLabelingService : BackgroundService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex,
+                    _logger.LogErrorWithSql(ex,
                         "Failed to evaluate or apply rule '{RuleName}' for message {MessageId}",
                         rule.RuleName, notification.MessageId);
                 }
@@ -132,34 +134,53 @@ public class AutoLabelingService : BackgroundService
     /// </summary>
     private bool EvaluateRule(AutoLabelingRule rule, NewEmailNotification notification)
     {
-        try
+        if (rule.Conditions == null || rule.Conditions.Rules == null || rule.Conditions.Rules.Count == 0)
         {
-            var conditions = JsonSerializer.Deserialize<RuleConditions>(rule.Conditions);
-            if (conditions == null || conditions.Rules == null || conditions.Rules.Count == 0)
-            {
-                _logger.LogWarning("Rule '{RuleName}' has invalid or empty conditions", rule.RuleName);
-                return false;
-            }
-
-            return EvaluateConditions(conditions, notification);
-        }
-        catch (JsonException ex)
-        {
-            _logger.LogError(ex, "Failed to deserialize conditions for rule '{RuleName}'", rule.RuleName);
+            _logger.LogWarning("Rule '{RuleName}' has invalid or empty conditions", rule.RuleName);
             return false;
         }
+
+        return EvaluateConditions(rule.Conditions, notification);
     }
 
     /// <summary>
-    /// Evaluate rule conditions with AND/OR logic
+    /// Evaluate rule conditions with individual AND/OR logic between each condition
     /// </summary>
     private bool EvaluateConditions(RuleConditions conditions, NewEmailNotification notification)
     {
-        var results = conditions.Rules.Select(r => EvaluateSingleCondition(r, notification)).ToList();
+        if (conditions.Rules.Count == 0)
+        {
+            return false;
+        }
 
-        return conditions.Operator?.ToUpperInvariant() == "OR"
-            ? results.Any(r => r)
-            : results.All(r => r);
+        if (conditions.Rules.Count == 1)
+        {
+            return EvaluateSingleCondition(conditions.Rules[0], notification);
+        }
+
+        // Start with the first condition's result
+        bool result = EvaluateSingleCondition(conditions.Rules[0], notification);
+
+        // Process each subsequent condition with its previous condition's nextOperator
+        for (int i = 1; i < conditions.Rules.Count; i++)
+        {
+            var previousCondition = conditions.Rules[i - 1];
+            var currentResult = EvaluateSingleCondition(conditions.Rules[i], notification);
+
+            // Use the previous condition's nextOperator (defaults to AND if not specified)
+            var nextOp = previousCondition.NextOperator?.ToUpperInvariant() ?? "AND";
+
+            if (nextOp == "OR")
+            {
+                result = result || currentResult;
+            }
+            else // AND
+            {
+                result = result && currentResult;
+            }
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -194,21 +215,20 @@ public class AutoLabelingService : BackgroundService
     /// <summary>
     /// Add label to message in database
     /// </summary>
-    private async Task AddLabelToMessageAsync(int messageId, string labelId, string configId, string userId, ShuitNet.ORM.PostgreSQL.PostgreSqlConnect db, CancellationToken ct)
+    private async Task AddLabelToMessageAsync(int messageId, Guid labelId, string configId, string userId, ShuitNet.ORM.PostgreSQL.PostgreSqlConnect db, CancellationToken ct)
     {
-        // Convert string IDs to Guid
-        var labelGuid = Guid.Parse(labelId);
         var configGuid = Guid.Parse(configId);
 
         // Check if label already exists using database query
-        var existingLabel = db.AsQueryable<MailLabel>()
-            .Where(ml => ml.UserId == userId &&
-                        ml.MessageId == messageId &&
-                        ml.LabelId == labelGuid &&
-                        ml.ServerConfigId == configGuid)
-            .FirstOrDefault();
+        var existingLabels = await db.GetMultipleAsync<MailLabel>(new
+        {
+            user_id = userId,
+            message_id = messageId,
+            label_id = labelId,
+            server_config_id = configGuid
+        });
 
-        if (existingLabel != null)
+        if (existingLabels.Any())
         {
             _logger.LogDebug("Label {LabelId} already exists for message {MessageId}", labelId, messageId);
             return;
@@ -220,7 +240,7 @@ public class AutoLabelingService : BackgroundService
             Id = Guid.NewGuid(),
             UserId = userId,
             MessageId = messageId,
-            LabelId = labelGuid,
+            LabelId = labelId,
             ServerConfigId = configGuid,
             CreatedAt = DateTime.UtcNow
         };

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MailDeck.Api.Models;
+using MailDeck.Api.Extensions;
 using ShuitNet.ORM.PostgreSQL;
 using System.Security.Claims;
 
@@ -35,7 +36,7 @@ public class LabelsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to fetch labels for user {UserId}", userId);
+            _logger.LogErrorWithSql(ex, "Failed to fetch labels for user {UserId}", userId);
             return StatusCode(500, "Database error");
         }
         finally
@@ -84,7 +85,7 @@ public class LabelsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create label for user {UserId}", userId);
+            _logger.LogErrorWithSql(ex, "Failed to create label for user {UserId}", userId);
             return StatusCode(500, "Database error");
         }
         finally
@@ -145,7 +146,7 @@ public class LabelsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to update label {LabelId} for user {UserId}", id, userId);
+            _logger.LogErrorWithSql(ex, "Failed to update label {LabelId} for user {UserId}", id, userId);
             return StatusCode(500, "Database error");
         }
         finally
@@ -182,7 +183,7 @@ public class LabelsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to delete label {LabelId} for user {UserId}", id, userId);
+            _logger.LogErrorWithSql(ex, "Failed to delete label {LabelId} for user {UserId}", id, userId);
             return StatusCode(500, "Database error");
         }
         finally
@@ -242,7 +243,7 @@ public class LabelsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to fetch labels for message {MessageId}", messageId);
+            _logger.LogErrorWithSql(ex, "Failed to fetch labels for message {MessageId}", messageId);
             return StatusCode(500, "Database error");
         }
         finally
@@ -310,7 +311,7 @@ public class LabelsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to add label to message {MessageId}", request.MessageId);
+            _logger.LogErrorWithSql(ex, "Failed to add label to message {MessageId}", request.MessageId);
             return StatusCode(500, "Database error");
         }
         finally
@@ -364,7 +365,7 @@ public class LabelsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to remove label from message {MessageId}", messageId);
+            _logger.LogErrorWithSql(ex, "Failed to remove label from message {MessageId}", messageId);
             return StatusCode(500, "Database error");
         }
         finally

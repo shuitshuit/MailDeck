@@ -30,6 +30,9 @@ export default function AutoLabelingPage() {
                 getLabels()
             ]);
 
+            if (!Array.isArray(rulesData) || !Array.isArray(labelsData)) {
+                throw new Error('Invalid data format received from server');
+            }
             // Join rules with labels to get label name and color
             const rulesWithLabels: AutoLabelingRuleWithLabel[] = rulesData.map((rule: AutoLabelingRule) => {
                 const label = labelsData.find((l: Label) => l.id === rule.labelId);
@@ -62,13 +65,11 @@ export default function AutoLabelingPage() {
         conditions: RuleConditions;
     }) => {
         try {
-            const conditionsJson = JSON.stringify(ruleData.conditions);
-
             if (editingRule) {
                 // Update existing rule
                 await updateAutoLabelingRule(editingRule.id, {
                     ...ruleData,
-                    conditions: conditionsJson
+                    conditions: ruleData.conditions
                 });
                 toast.success('ルールを更新しました。');
             } else {
@@ -77,7 +78,7 @@ export default function AutoLabelingPage() {
                     ruleName: ruleData.ruleName,
                     labelId: ruleData.labelId,
                     priority: ruleData.priority,
-                    conditions: conditionsJson
+                    conditions: ruleData.conditions
                 });
                 toast.success('ルールを作成しました。');
             }

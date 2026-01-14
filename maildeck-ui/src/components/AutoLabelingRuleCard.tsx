@@ -8,7 +8,7 @@ interface AutoLabelingRuleCardProps {
 }
 
 export default function AutoLabelingRuleCard({ rule, onEdit, onDelete, onToggle }: AutoLabelingRuleCardProps) {
-    const conditions: RuleConditions = JSON.parse(rule.conditions);
+    const conditions: RuleConditions = rule.conditions;
 
     const getFieldLabel = (field: string) => {
         const labels: Record<string, string> = {
@@ -65,18 +65,30 @@ export default function AutoLabelingRuleCard({ rule, onEdit, onDelete, onToggle 
                     )}
 
                     {/* Conditions */}
-                    <div className="space-y-1 text-sm text-gray-600">
-                        <div className="font-medium text-gray-700">
-                            条件 ({conditions.operator === 'AND' ? 'すべて一致' : 'いずれか一致'}):
-                        </div>
+                    <div className="space-y-2 text-sm text-gray-600">
+                        <div className="font-medium text-gray-700 mb-2">条件:</div>
                         {conditions.rules.map((condition, index) => (
-                            <div key={index} className="flex items-center space-x-2 pl-4">
-                                <span className="text-gray-400">•</span>
-                                <span className="font-medium">{getFieldLabel(condition.field)}</span>
-                                <span className="text-gray-500">{getOperatorLabel(condition.operator)}</span>
-                                <span className="font-mono bg-gray-100 px-2 py-0.5 rounded">
-                                    "{condition.value}"
-                                </span>
+                            <div key={index}>
+                                <div className="flex items-center space-x-2 pl-4">
+                                    <span className="text-gray-400">•</span>
+                                    <span className="font-medium">{getFieldLabel(condition.field)}</span>
+                                    <span className="text-gray-500">{getOperatorLabel(condition.operator)}</span>
+                                    <span className="font-mono bg-gray-100 px-2 py-0.5 rounded">
+                                        "{condition.value}"
+                                    </span>
+                                </div>
+                                {/* Show logical operator between conditions */}
+                                {index < conditions.rules.length - 1 && (
+                                    <div className="flex justify-center py-0.5 pl-4">
+                                        <span className={`px-3 py-0.5 rounded-full text-xs font-bold ${
+                                            (condition.nextOperator || 'AND') === 'AND'
+                                                ? 'bg-blue-100 text-blue-700'
+                                                : 'bg-amber-100 text-amber-700'
+                                        }`}>
+                                            {(condition.nextOperator || 'AND') === 'AND' ? 'AND' : 'OR'}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>

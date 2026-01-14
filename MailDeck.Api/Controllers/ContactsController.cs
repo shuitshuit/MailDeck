@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MailDeck.Api.Models;
+using MailDeck.Api.Extensions;
 using ShuitNet.ORM.PostgreSQL;
 using System.Security.Claims;
 
@@ -32,7 +33,7 @@ public class ContactsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to fetch contacts");
+            _logger.LogErrorWithSql(ex, "Failed to fetch contacts");
             return StatusCode(500, "Database error");
         }
         finally
@@ -62,7 +63,7 @@ public class ContactsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to add contact");
+            _logger.LogErrorWithSql(ex, "Failed to add contact");
             return StatusCode(500, "Database error");
         }
         finally
@@ -89,7 +90,7 @@ public class ContactsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to delete contact");
+            _logger.LogErrorWithSql(ex, "Failed to delete contact");
             return StatusCode(500, "Database error");
         }
         finally
@@ -119,7 +120,7 @@ public class ContactsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to update contact");
+            _logger.LogErrorWithSql(ex, "Failed to update contact");
             return StatusCode(500, "Database error");
         }
         finally
