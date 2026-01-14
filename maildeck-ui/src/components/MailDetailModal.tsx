@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getMessage, getLabelsForMessage, addLabelToMessage, removeLabelFromMessage, createLabel } from '../lib/api';
+import { getMessage, getLabelsForMessage, addLabelToMessage, removeLabelFromMessage, createLabel, getCustomActionPatterns } from '../lib/api';
 import { useModalClose } from '../hooks/useModalClose';
 import type { Label } from '../types/label';
+import type { CustomActionPattern } from '../types/customAction';
 import LabelSelector from './LabelSelector';
 import LabelModal from './LabelModal';
+import EnhancedMailContent from './EnhancedMailContent';
 import { useToast } from '../contexts/ToastContext';
 import { useLabels } from '../contexts/LabelContext';
 
@@ -37,6 +39,9 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
     // Label-related state
     const [messageLabels, setMessageLabels] = useState<Label[]>([]);
     const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
+
+    // Custom action patterns state
+    const [patterns, setPatterns] = useState<CustomActionPattern[]>([]);
 
     // Check if HTML has external images
     const checkForImages = useMemo(() => {
@@ -139,8 +144,20 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
             }
         };
 
+        const fetchPatterns = async () => {
+            try {
+                const data = await getCustomActionPatterns();
+                // Only use enabled patterns
+                setPatterns(data.filter((p: CustomActionPattern) => p.isEnabled));
+            } catch (err) {
+                console.error('Failed to fetch custom action patterns', err);
+                // Silently fail - custom actions are optional
+            }
+        };
+
         fetchMessage();
         fetchMessageLabels();
+        fetchPatterns();
     }, [isOpen, configId, messageId]);
 
     // Handle add label
@@ -258,16 +275,12 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
                                     </div>
                                 )}
 
-                                {message.bodyHtml ? (
-                                    <div
-                                        dangerouslySetInnerHTML={{ __html: processedHtml }}
-                                        className="mail-content"
-                                    />
-                                ) : (
-                                    <pre className="whitespace-pre-wrap font-sans text-gray-800">
-                                        {message.bodyText}
-                                    </pre>
-                                )}
+                                <EnhancedMailContent
+                                    content={message.bodyHtml || message.bodyText}
+                                    isHtml={!!message.bodyHtml}
+                                    patterns={patterns}
+                                    onCopy={(value) => toast.success(`コピーしました: ${value}`)}
+                                />
                             </div>
                         </div>
                     ) : (

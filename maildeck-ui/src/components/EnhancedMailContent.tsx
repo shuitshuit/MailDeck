@@ -22,13 +22,17 @@ interface EnhancedMailContentProps {
 
   /** Optional CSS class name */
   className?: string;
+
+  /** Optional callback when a value is copied */
+  onCopy?: (value: string) => void;
 }
 
 export default function EnhancedMailContent({
   content,
   isHtml = false,
   patterns,
-  className = ''
+  className = '',
+  onCopy
 }: EnhancedMailContentProps) {
   // Find pattern matches in the content
   const matches = useMemo(() => {
@@ -54,7 +58,7 @@ export default function EnhancedMailContent({
 
     // For plain text, insert copy buttons
     if (!isHtml) {
-      return renderEnhancedPlainText(content, matches);
+      return renderEnhancedPlainText(content, matches, onCopy);
     }
 
     // For HTML, we need more complex processing
@@ -73,7 +77,7 @@ export default function EnhancedMailContent({
                   <span className="text-sm text-blue-700 font-mono bg-white px-2 py-1 rounded border border-blue-200">
                     {match.value}
                   </span>
-                  <CopyButton value={match.value} />
+                  <CopyButton value={match.value} onCopy={() => onCopy?.(match.value)} />
                   <span className="text-xs text-blue-600">
                     ({match.pattern.patternName})
                   </span>
@@ -84,7 +88,7 @@ export default function EnhancedMailContent({
         )}
       </>
     );
-  }, [content, isHtml, matches]);
+  }, [content, isHtml, matches, onCopy]);
 
   return <div className={className}>{enhancedContent}</div>;
 }
@@ -92,7 +96,11 @@ export default function EnhancedMailContent({
 /**
  * Render plain text content with inline copy buttons
  */
-function renderEnhancedPlainText(content: string, matches: PatternMatch[]) {
+function renderEnhancedPlainText(
+  content: string,
+  matches: PatternMatch[],
+  onCopy?: (value: string) => void
+) {
   const segments: Array<{ type: 'text' | 'match'; content: string; match?: PatternMatch }> = [];
   let lastIndex = 0;
 
@@ -137,7 +145,7 @@ function renderEnhancedPlainText(content: string, matches: PatternMatch[]) {
               {segment.content}
             </span>
             <span className="ml-1">
-              <CopyButton value={segment.content} />
+              <CopyButton value={segment.content} onCopy={() => onCopy?.(segment.content)} />
             </span>
           </span>
         );
