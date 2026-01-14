@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using MailDeck.Api.Models;
+using MailDeck.Api.Extensions;
 using ShuitNet.ORM.PostgreSQL;
 
 namespace MailDeck.Api.Services;
@@ -17,6 +18,7 @@ public class EmailCheckBackgroundService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly PushServiceClient _pushClient;
     private readonly IConfiguration _configuration;
+    private readonly ChannelService _channelService;
     private readonly int _intervalMinutes;
 
     public EmailCheckBackgroundService(
@@ -24,12 +26,14 @@ public class EmailCheckBackgroundService : BackgroundService
         IServiceScopeFactory scopeFactory,
         PushServiceClient pushClient,
         IConfiguration configuration,
+        ChannelService channelService,
         IHostEnvironment environment)
     {
         _logger = logger;
         _scopeFactory = scopeFactory;
         _pushClient = pushClient;
         _configuration = configuration;
+        _channelService = channelService;
         _intervalMinutes = environment.IsDevelopment() ? 1 : 10; // 1 minute for dev, 10 for prod
     }
 
@@ -45,7 +49,7 @@ public class EmailCheckBackgroundService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred during email check cycle.");
+                _logger.LogErrorWithSql(ex, "Error occurred during email check cycle.");
             }
             // Wait for the next interval
             await Task.Delay(TimeSpan.FromMinutes(_intervalMinutes), stoppingToken);
@@ -118,9 +122,43 @@ public class EmailCheckBackgroundService : BackgroundService
                                 // Fetch summaries for these UIDs
                                 // Note: UIDs that don't exist (deleted) will be ignored by MailKit or result in partial results
                                 var newMessages = await inbox.FetchAsync(uidsToFetch, MessageSummaryItems.Envelope | MessageSummaryItems.UniqueId, stoppingToken);
-                                 
+
                                 if (newMessages.Count > 0)
                                 {
+                                    // Send each new message to Channel for auto-labeling
+                                    foreach (var msg in newMessages)
+                                    {
+                                        try
+                                        {
+                                            // Fetch body text for this message
+                                            var fullMessage = await inbox.GetMessageAsync(msg.UniqueId, stoppingToken);
+                                            var bodyText = fullMessage.TextBody ?? fullMessage.HtmlBody ?? "";
+
+                                            var notification = new NewEmailNotification(
+                                                UserId: config.UserId,
+                                                ConfigId: config.Id.ToString(),
+                                                MessageId: (int)msg.UniqueId.Id,
+                                                From: msg.Envelope.From.ToString(),
+                                                Subject: msg.Envelope.Subject ?? "",
+                                                BodyText: bodyText
+                                            );
+
+                                            await _channelService.EnqueueAsync(notification, stoppingToken);
+
+                                            _logger.LogDebug(
+                                                "Enqueued new email for auto-labeling: UID={Uid}, From={From}, Subject={Subject}",
+                                                msg.UniqueId.Id, msg.Envelope.From, msg.Envelope.Subject
+                                            );
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            _logger.LogErrorWithSql(ex,
+                                                "Failed to enqueue message {Uid} for auto-labeling",
+                                                msg.UniqueId.Id
+                                            );
+                                        }
+                                    }
+
                                     // Sort by UID to get the last one
                                     var lastMsg = newMessages.OrderByDescending(m => m.UniqueId).FirstOrDefault();
                                     if (lastMsg != null)
@@ -141,7 +179,7 @@ public class EmailCheckBackgroundService : BackgroundService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, $"Error checking email for config {config.Id} (User: {config.UserId})");
+                    _logger.LogErrorWithSql(ex, $"Error checking email for config {config.Id} (User: {config.UserId})");
                 }
             }
         }
@@ -193,7 +231,7 @@ public class EmailCheckBackgroundService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Failed to send push to subscription {sub.Id}");
+                _logger.LogErrorWithSql(ex, $"Failed to send push to subscription {sub.Id}");
                 // Handle 410 Gone (remove subscription)
             }
         }

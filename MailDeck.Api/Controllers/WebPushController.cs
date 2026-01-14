@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MailDeck.Api.Extensions;
 using Lib.Net.Http.WebPush;
 
 namespace MailDeck.Api.Controllers;
@@ -61,7 +62,7 @@ public class WebPushController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to save subscription");
+            _logger.LogErrorWithSql(ex, "Failed to save subscription");
             return StatusCode(500, "Failed to save subscription");
         }
     }

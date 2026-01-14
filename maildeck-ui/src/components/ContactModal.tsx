@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useModalClose } from '../hooks/useModalClose';
+import { useToast } from '../contexts/ToastContext';
 
 interface ContactModalProps {
     isOpen: boolean;
@@ -13,6 +14,7 @@ export default function ContactModal({ isOpen, onClose, onSave, initialData }: C
     const [email, setEmail] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
+    const toast = useToast();
 
     useEffect(() => {
         if (isOpen) {
@@ -38,7 +40,7 @@ export default function ContactModal({ isOpen, onClose, onSave, initialData }: C
             onClose();
         } catch (error) {
             console.error('Failed to save contact:', error);
-            alert('保存に失敗しました。');
+            toast.error('保存に失敗しました。');
         } finally {
             setIsSaving(false);
         }

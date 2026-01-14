@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useModalClose } from '../hooks/useModalClose';
+import { useToast } from '../contexts/ToastContext';
 
 interface ServerConfig {
     id?: string;
@@ -42,7 +42,7 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
     const [email, setEmail] = useState('');
     const [isAutoConfiguring, setIsAutoConfiguring] = useState(false);
     const [showManualConfig, setShowManualConfig] = useState(false);
-    const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
+    const toast = useToast();
 
     useEffect(() => {
         if (isOpen && initialData) {
@@ -91,7 +91,7 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
             onClose();
         } catch (error) {
             console.error('Failed to save:', error);
-            alert('保存に失敗しました。');
+            toast.error('保存に失敗しました。');
         } finally {
             setIsSaving(false);
         }
@@ -103,7 +103,7 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
 
     const handleAutoConfig = async () => {
         if (!email || !email.includes('@')) {
-            alert('有効なメールアドレスを入力してください');
+            toast.warning('有効なメールアドレスを入力してください');
             return;
         }
 
@@ -123,7 +123,7 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
                 const parserError = xmlDoc.querySelector('parsererror');
                 if (parserError) {
                     console.error('XML parsing error:', parserError.textContent);
-                    alert('設定の解析に失敗しました。手動で設定を入力してください。');
+                    toast.error('設定の解析に失敗しました。手動で設定を入力してください。');
                     setShowManualConfig(true);
                     return;
                 }
@@ -182,22 +182,17 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
                     handleChange('smtpUsername', smtpUsername);
                 }
 
-                // Set account name based on username pattern
-                // If username is local part only, use that as account name, otherwise use domain
-                const accountName = usernamePattern.includes('%EMAILLOCALPART%') && !usernamePattern.includes('%EMAILDOMAIN%')
-                    ? email.split('@')[0]  // Use local part
-                    : email.split('@')[1]; // Use domain
-                handleChange('accountName', accountName);
+                handleChange('accountName', email);
 
                 setShowManualConfig(true);
-                alert('サーバー設定を自動検出しました！');
+                toast.success('サーバー設定を自動検出しました！');
             } else {
-                alert('自動設定が見つかりませんでした。手動で設定を入力してください。');
+                toast.warning('自動設定が見つかりませんでした。手動で設定を入力してください。');
                 setShowManualConfig(true);
             }
         } catch (error) {
             console.error('Auto config failed:', error);
-            alert('自動設定に失敗しました。手動で設定を入力してください。');
+            toast.error('自動設定に失敗しました。手動で設定を入力してください。');
             setShowManualConfig(true);
         } finally {
             setIsAutoConfiguring(false);
@@ -205,8 +200,8 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4" onClick={handleBackdropClick}>
-            <div ref={modalContentRef} className="bg-white md:rounded-xl shadow-xl w-full max-w-3xl relative z-10 flex flex-col h-full md:h-auto md:max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4">
+            <div className="bg-white md:rounded-xl shadow-xl w-full max-w-3xl relative z-10 flex flex-col h-full md:h-auto md:max-h-[90vh]">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 md:p-6 border-b border-gray-200">
                     <div>

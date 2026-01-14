@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MailDeck.Api.Models;
+using MailDeck.Api.Extensions;
 using ShuitNet.ORM.PostgreSQL; // Ensure ORM methods are available
 // using ShuitNet.ORM; // Placeholder
 
@@ -46,7 +47,7 @@ public class ServerConfigController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to get configs");
+            _logger.LogErrorWithSql(ex, "Failed to get configs");
             return StatusCode(500, "Internal server error");
         }
     }
@@ -89,7 +90,7 @@ public class ServerConfigController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to add server config");
+            _logger.LogErrorWithSql(ex, "Failed to add server config");
             return StatusCode(500, "Internal server error: " + ex.Message);
         }
     }
@@ -230,7 +231,7 @@ public class ServerConfigController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to update config");
+            _logger.LogErrorWithSql(ex, "Failed to update config");
             return StatusCode(500, "Internal server error");
         }
     }
@@ -257,7 +258,7 @@ public class ServerConfigController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to delete config");
+            _logger.LogErrorWithSql(ex, "Failed to delete config");
             return StatusCode(500, "Internal server error");
         }
     }

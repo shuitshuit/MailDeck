@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import ComposeModal, { type Account } from '../components/ComposeModal';
 import ContactModal from '../components/ContactModal';
 import { getServerConfigs, updateContact } from '../lib/api';
+import { useToast } from '../contexts/ToastContext';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -21,6 +22,7 @@ export default function ContactsPage() {
     const [isComposeOpen, setIsComposeOpen] = useState(false);
     const [composeTo, setComposeTo] = useState('');
     const [accounts, setAccounts] = useState<Account[]>([]);
+    const toast = useToast();
 
     const fetchContacts = async () => {
         try {
@@ -48,22 +50,28 @@ export default function ContactsPage() {
         if (editingContact) {
             try {
                 await updateContact(editingContact.id, name, email);
-                alert('連絡先を更新しました');
+                toast.success('連絡先を更新しました');
                 setEditingContact(null);
                 await fetchContacts();
             } catch (err) {
                 console.error(err);
-                alert('更新失敗');
+                toast.error('更新失敗');
             }
         } else {
-            const session = await fetchAuthSession();
-            const token = session.tokens?.accessToken?.toString();
+            try {
+                const session = await fetchAuthSession();
+                const token = session.tokens?.accessToken?.toString();
 
-            await axios.post(`${API_BASE}/contacts`, { name, email }, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+                await axios.post(`${API_BASE}/contacts`, { name, email }, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
 
-            await fetchContacts();
+                toast.success('連絡先を追加しました');
+                await fetchContacts();
+            } catch (err) {
+                console.error(err);
+                toast.error('追加失敗');
+            }
         }
     };
 
@@ -88,8 +96,9 @@ export default function ContactsPage() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setContacts(contacts.filter(c => c.id !== id));
+            toast.success('連絡先を削除しました');
         } catch (err) {
-            alert('削除に失敗しました');
+            toast.error('削除に失敗しました');
         }
     };
 
@@ -98,7 +107,7 @@ export default function ContactsPage() {
         const token = session.tokens?.idToken?.toString();
 
         if (!token) {
-            alert('認証エラー: ログインし直してください。');
+            toast.error('認証エラー: ログインし直してください。');
             return;
         }
 
@@ -114,11 +123,11 @@ export default function ContactsPage() {
                 }
             });
 
-            alert('メールを送信しました！');
+            toast.success('メールを送信しました！');
             setIsComposeOpen(false);
         } catch (error) {
             console.error(error);
-            alert('送信失敗');
+            toast.error('送信失敗');
         }
     };
 

@@ -4,6 +4,7 @@ using MailKit.Net.Imap;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
+using MailDeck.Api.Extensions;
 
 using MailKit;
 
@@ -85,13 +86,44 @@ public class MailController : ControllerBase
                     summaries = await inbox.FetchAsync(start, end, MessageSummaryItems.Envelope | MessageSummaryItems.InternalDate | MessageSummaryItems.UniqueId);
                 }
 
-                var messages = summaries.Select(s => new {
-                    Id = s.UniqueId.Id,
-                    Subject = s.Envelope.Subject,
-                    From = s.Envelope.From.ToString(),
-                    Date = s.InternalDate ?? s.Date.DateTime,
-                    IsRead = s.Flags?.HasFlag(MessageFlags.Seen) ?? false
-                }).OrderByDescending(m => m.Date).ToList();
+                var messages = new List<object>();
+
+                foreach (var s in summaries)
+                {
+                    var messageId = ((int)s.UniqueId.Id);
+
+                    // Get labels for this message
+                    var mailLabels = await _db.GetMultipleAsync<Models.MailLabel>(new
+                    {
+                        user_id = userId,
+                        message_id = messageId,
+                        server_config_id = configId
+                    });
+
+                    var labelIds = mailLabels.Select(ml => ml.LabelId).ToList();
+                    var labels = new List<Models.Label>();
+
+                    foreach (var labelId in labelIds)
+                    {
+                        var label = await _db.GetAsync<Models.Label>(labelId);
+                        if (label != null)
+                        {
+                            labels.Add(label);
+                        }
+                    }
+
+                    messages.Add(new
+                    {
+                        Id = s.UniqueId.Id,
+                        Subject = s.Envelope.Subject,
+                        From = s.Envelope.From.ToString(),
+                        Date = s.InternalDate ?? s.Date.DateTime,
+                        IsRead = s.Flags?.HasFlag(MessageFlags.Seen) ?? false,
+                        Labels = labels
+                    });
+                }
+
+                messages = messages.OrderByDescending(m => ((dynamic)m).Date).ToList();
 
                 await client.DisconnectAsync(true);
 
@@ -100,7 +132,7 @@ public class MailController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to fetch inbox");
+            _logger.LogErrorWithSql(ex, "Failed to fetch inbox");
             return StatusCode(500, "Failed to fetch inbox: " + ex.Message);
         }
     }
@@ -174,7 +206,7 @@ public class MailController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to fetch message");
+            _logger.LogErrorWithSql(ex, "Failed to fetch message");
             return StatusCode(500, "Failed to fetch message: " + ex.Message);
         }
     }
@@ -236,7 +268,7 @@ public class MailController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send email");
+            _logger.LogErrorWithSql(ex, "Failed to send email");
             return StatusCode(500, "Failed to send email: " + ex.Message);
         }
     }

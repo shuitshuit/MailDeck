@@ -1,10 +1,18 @@
 import { fetchAuthSession } from 'aws-amplify/auth';
 import axios from 'axios';
-import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ComposeModal from '../components/ComposeModal';
 import MailDetailModal from '../components/MailDetailModal';
+import LabelBadge from '../components/LabelBadge';
+import SearchBar from '../components/SearchBar';
 import { getInbox, getServerConfigs } from '../lib/api';
+import type { Label } from '../types/label';
+import { useToast } from '../contexts/ToastContext';
+import { useLabels } from '../contexts/LabelContext';
+import { parseSearchQuery } from '../utils/searchParser';
+import { addSearchHistory } from '../utils/searchHistory';
+import type { SearchQuery } from '../types/search';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -16,15 +24,19 @@ interface Account {
 interface Email {
     id: string;
     from: string;
+    to?: string;
     subject: string;
     date: string;
     isRead: boolean;
+    hasAttachment?: boolean;
     configId: string; // For identifying which account the email belongs to
+    labels?: Label[]; // Labels attached to this email
 }
 
 export default function DashboardPage() {
     const { accountId } = useParams();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [selectedMail, setSelectedMail] = useState<Email | null>(null);
     const [mails, setMails] = useState<Email[]>([]);
     const [loading, setLoading] = useState(false);
@@ -32,6 +44,31 @@ export default function DashboardPage() {
     const [activeTab, setActiveTab] = useState<string | null>(null);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [page] = useState(1);
+    const { labels } = useLabels();
+    const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
+    const [searchQueryString, setSearchQueryString] = useState('');
+    const [parsedSearchQuery, setParsedSearchQuery] = useState<SearchQuery>({ keywords: [] });
+    const toast = useToast();
+
+    // URLから検索条件とラベルフィルタを読み込む
+    useEffect(() => {
+        const searchFromUrl = searchParams.get('search') || '';
+        const labelFromUrl = searchParams.get('label') || '';
+
+        if (searchFromUrl) {
+            setSearchQueryString(searchFromUrl);
+            setParsedSearchQuery(parseSearchQuery(searchFromUrl));
+        } else {
+            setSearchQueryString('');
+            setParsedSearchQuery({ keywords: [] });
+        }
+
+        if (labelFromUrl) {
+            setSelectedLabelId(labelFromUrl);
+        } else {
+            setSelectedLabelId(null);
+        }
+    }, [searchParams]);
 
     const loadConfigs = async () => {
         try {
@@ -111,9 +148,113 @@ export default function DashboardPage() {
         }
     }, [loadInbox]);
 
+    // Filter mails by selected label and search query
+    const filteredMails = useMemo(() => {
+        let filtered = mails;
+
+        // ラベルフィルタリング
+        if (selectedLabelId) {
+            filtered = filtered.filter(mail =>
+                mail.labels?.some(label => label.id === selectedLabelId)
+            );
+        }
+
+        // 検索クエリフィルタリング
+        const query = parsedSearchQuery;
+
+        // from: 演算子
+        if (query.from && query.from.length > 0) {
+            filtered = filtered.filter(mail =>
+                query.from!.some(f => mail.from.toLowerCase().includes(f.toLowerCase()))
+            );
+        }
+
+        // to: 演算子
+        if (query.to && query.to.length > 0) {
+            filtered = filtered.filter(mail =>
+                mail.to && query.to!.some(t => mail.to!.toLowerCase().includes(t.toLowerCase()))
+            );
+        }
+
+        // subject: 演算子
+        if (query.subject && query.subject.length > 0) {
+            filtered = filtered.filter(mail =>
+                query.subject!.some(s => (mail.subject || '').toLowerCase().includes(s.toLowerCase()))
+            );
+        }
+
+        // label: 演算子
+        if (query.labels && query.labels.length > 0) {
+            filtered = filtered.filter(mail =>
+                mail.labels && query.labels!.some(labelName =>
+                    mail.labels!.some(mailLabel =>
+                        mailLabel.name.toLowerCase() === labelName.toLowerCase()
+                    )
+                )
+            );
+        }
+
+        // is:unread / is:read 演算子
+        if (query.isUnread !== undefined) {
+            filtered = filtered.filter(mail => !mail.isRead === query.isUnread);
+        }
+
+        // has:attachment 演算子
+        if (query.hasAttachment) {
+            filtered = filtered.filter(mail => mail.hasAttachment === true);
+        }
+
+        // exclude.from 演算子
+        if (query.exclude?.from && query.exclude.from.length > 0) {
+            filtered = filtered.filter(mail =>
+                !query.exclude!.from!.some(f => mail.from.toLowerCase().includes(f.toLowerCase()))
+            );
+        }
+
+        // exclude.subject 演算子
+        if (query.exclude?.subject && query.exclude.subject.length > 0) {
+            filtered = filtered.filter(mail =>
+                !query.exclude!.subject!.some(s => (mail.subject || '').toLowerCase().includes(s.toLowerCase()))
+            );
+        }
+
+        // 一般キーワード
+        if (query.keywords.length > 0) {
+            filtered = filtered.filter(mail => {
+                const from = mail.from.toLowerCase();
+                const to = (mail.to || '').toLowerCase();
+                const subject = (mail.subject || '').toLowerCase();
+                const searchText = `${from} ${to} ${subject}`;
+
+                return query.keywords.some(keyword =>
+                    searchText.includes(keyword.toLowerCase())
+                );
+            });
+        }
+
+        return filtered;
+    }, [mails, selectedLabelId, parsedSearchQuery]);
+
+    // 検索ハンドラー
+    const handleSearch = (queryString: string) => {
+        // 検索履歴に保存（空でない場合のみ）
+        if (queryString.trim()) {
+            addSearchHistory(queryString);
+        }
+
+        // URLパラメータを更新
+        const newParams = new URLSearchParams(searchParams);
+        if (queryString.trim()) {
+            newParams.set('search', queryString);
+        } else {
+            newParams.delete('search');
+        }
+        setSearchParams(newParams);
+    };
+
     const handleSendMail = async (to: string, subject: string, body: string, configId: string) => {
         if (!configId) {
-            alert('アカウントを選択してください');
+            toast.warning('アカウントを選択してください');
             return;
         }
 
@@ -121,7 +262,7 @@ export default function DashboardPage() {
         const token = session.tokens?.idToken?.toString();
 
         if (!token) {
-            alert('認証エラー: ログインし直してください。');
+            toast.error('認証エラー: ログインし直してください。');
             return;
         }
 
@@ -137,11 +278,11 @@ export default function DashboardPage() {
                 }
             });
 
-            alert('メールを送信しました！');
+            toast.success('メールを送信しました！');
             setIsComposeOpen(false);
         } catch (error) {
             console.error(error);
-            alert('送信失敗');
+            toast.error('送信失敗');
         }
     };
 
@@ -169,6 +310,17 @@ export default function DashboardPage() {
                         作成
                     </button>
                 </div>
+            </div>
+
+            {/* 検索バー */}
+            <div className="mb-4">
+                <SearchBar
+                    onSearch={handleSearch}
+                    placeholder="送信者、件名で検索..."
+                    mails={mails}
+                    labels={labels}
+                    initialValue={searchQueryString}
+                />
             </div>
 
             <div className="flex space-x-1 mb-4 border-b border-gray-200 overflow-x-auto pb-1 hide-scrollbar">
@@ -203,13 +355,19 @@ export default function DashboardPage() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[400px]">
                 {loading ? (
                     <div className="p-8 text-center text-gray-500">読み込み中...</div>
-                ) : mails.length === 0 ? (
-                    <div className="p-8 text-center text-gray-500">メールはありません。</div>
+                ) : filteredMails.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">
+                        {searchQueryString.trim()
+                            ? '検索結果がありません。'
+                            : selectedLabelId
+                                ? 'このラベルのメールはありません。'
+                                : 'メールはありません。'}
+                    </div>
                 ) : (
                     <>
                         {/* Mobile View (Cards) */}
                         <div className="block md:hidden divide-y divide-gray-100">
-                            {mails.map(mail => (
+                            {filteredMails.map(mail => (
                                 <div
                                     key={`mobile-${mail.configId}-${mail.id}`}
                                     onClick={() => setSelectedMail(mail)}
@@ -222,6 +380,13 @@ export default function DashboardPage() {
                                         </div>
                                     </div>
                                     <div className="text-sm text-gray-800 mb-1 truncate">{mail.subject || '(件名なし)'}</div>
+                                    {mail.labels && mail.labels.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 mt-2">
+                                            {mail.labels.map(label => (
+                                                <LabelBadge key={label.id} label={label} />
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -236,15 +401,24 @@ export default function DashboardPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                {mails.map(mail => (
+                                {filteredMails.map(mail => (
                                     <tr
                                         key={`${mail.configId}-${mail.id}`}
                                         onClick={() => setSelectedMail(mail)}
                                         className={`hover:bg-gray-50 cursor-pointer transition-colors ${!mail.isRead ? 'font-semibold bg-blue-50/30' : ''}`}
                                     >
                                         <td className="p-4 text-gray-900 truncate" title={mail.from}>{mail.from}</td>
-                                        <td className="p-4 truncate">
-                                            <span className="text-gray-900">{mail.subject || '(件名なし)'}</span>
+                                        <td className="p-4">
+                                            <div className="flex flex-col gap-1">
+                                                <span className="text-gray-900 truncate">{mail.subject || '(件名なし)'}</span>
+                                                {mail.labels && mail.labels.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {mail.labels.map(label => (
+                                                            <LabelBadge key={label.id} label={label} />
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="p-4 text-right text-gray-500 text-sm whitespace-nowrap">
                                             {new Date(mail.date).toLocaleString()}
@@ -269,7 +443,7 @@ export default function DashboardPage() {
                     isOpen={!!selectedMail}
                     onClose={() => setSelectedMail(null)}
                     configId={selectedMail.configId}
-                    messageId={selectedMail.id}
+                    messageId={parseInt(selectedMail.id)}
                 />
             )}
         </div>

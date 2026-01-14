@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using MailDeck.Api.Extensions;
 
 namespace MailDeck.Api.Services;
 
@@ -42,7 +43,7 @@ public class LogCompressionBackgroundService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while compressing log files");
+                _logger.LogErrorWithSql(ex, "Error occurred while compressing log files");
             }
 
             await Task.Delay(_checkInterval, stoppingToken);
@@ -84,7 +85,7 @@ public class LogCompressionBackgroundService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error compressing file: {FileName}", logFile);
+                _logger.LogErrorWithSql(ex, "Error compressing file: {FileName}", logFile);
             }
         }
 
