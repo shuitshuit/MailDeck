@@ -142,6 +142,9 @@ try
     // Operation Performance Logger
     builder.Services.AddScoped<MailDeck.Api.Services.IOperationPerformanceLogger, MailDeck.Api.Services.OperationPerformanceLogger>();
 
+    // Pattern Matching Service for custom actions
+    builder.Services.AddScoped<MailDeck.Api.Services.PatternMatchingService>();
+
     // Channel Service for auto-labeling
     builder.Services.AddSingleton<MailDeck.Api.Services.ChannelService>();
 

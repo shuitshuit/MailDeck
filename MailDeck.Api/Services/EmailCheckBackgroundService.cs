@@ -63,6 +63,7 @@ public class EmailCheckBackgroundService : BackgroundService
         {
             var db = scope.ServiceProvider.GetRequiredService<PostgreSqlConnect>();
             var encryptionService = scope.ServiceProvider.GetRequiredService<IEncryptionService>();
+            var patternMatchingService = scope.ServiceProvider.GetRequiredService<PatternMatchingService>();
 
             await db.OpenAsync();
 
@@ -145,6 +146,26 @@ public class EmailCheckBackgroundService : BackgroundService
 
                                             await _channelService.EnqueueAsync(notification, stoppingToken);
 
+                                            // Process custom action patterns
+                                            try
+                                            {
+                                                await patternMatchingService.ProcessEmailAsync(
+                                                    config.UserId,
+                                                    config.Id,
+                                                    (int)msg.UniqueId.Id,
+                                                    bodyText,
+                                                    msg.Envelope.From.ToString(),
+                                                    msg.Envelope.Subject ?? ""
+                                                );
+                                            }
+                                            catch (Exception patternEx)
+                                            {
+                                                _logger.LogErrorWithSql(patternEx,
+                                                    "Failed to process patterns for message {Uid}",
+                                                    msg.UniqueId.Id
+                                                );
+                                            }
+
                                             _logger.LogDebug(
                                                 "Enqueued new email for auto-labeling: UID={Uid}, From={From}, Subject={Subject}",
                                                 msg.UniqueId.Id, msg.Envelope.From, msg.Envelope.Subject
@@ -181,6 +202,16 @@ public class EmailCheckBackgroundService : BackgroundService
                 {
                     _logger.LogErrorWithSql(ex, $"Error checking email for config {config.Id} (User: {config.UserId})");
                 }
+            }
+
+            // Cleanup expired OTP codes
+            try
+            {
+                await patternMatchingService.CleanupExpiredCodesAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogErrorWithSql(ex, "Failed to cleanup expired OTP codes");
             }
         }
     }

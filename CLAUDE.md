@@ -314,3 +314,6 @@ await db.DeleteAsync<UserServerConfig>(config.Id);
 | `/api/custom-action-patterns/{id}` | PUT | カスタムアクションパターン更新 |
 | `/api/custom-action-patterns/{id}` | DELETE | カスタムアクションパターン削除 |
 | `/api/custom-action-patterns/{id}/toggle` | POST | カスタムアクションパターン有効/無効切り替え |
+| `/api/custom-actions/recent-codes` | GET | 最近検出されたOTPコード一覧 (30分間有効) |
+| `/api/custom-actions/recent-codes/{id}` | DELETE | 特定のOTPコード削除 |
+| `/api/custom-actions/recent-codes` | DELETE | すべてのOTPコード削除 |
