@@ -268,3 +268,71 @@ export async function toggleAutoLabelingRule(id: string) {
     });
     return await response.json();
 }
+
+// ============================================================================
+// Custom Action Patterns API
+// ============================================================================
+
+/**
+ * Get all custom action patterns for the authenticated user
+ */
+export async function getCustomActionPatterns() {
+    const response = await authFetch('/custom-action-patterns');
+    return await response.json();
+}
+
+/**
+ * Create a new custom action pattern
+ */
+export async function createCustomActionPattern(pattern: {
+    patternName: string;
+    patternType: string;
+    regexPattern: string;
+    actionType: string;
+    priority: number;
+    description?: string;
+}) {
+    const response = await authFetch('/custom-action-patterns', {
+        method: 'POST',
+        body: JSON.stringify(pattern)
+    });
+    return await response.json();
+}
+
+/**
+ * Update an existing custom action pattern
+ */
+export async function updateCustomActionPattern(id: string, pattern: {
+    patternName: string;
+    patternType: string;
+    regexPattern: string;
+    actionType: string;
+    priority: number;
+    isEnabled: boolean;
+    description?: string;
+}) {
+    const response = await authFetch(`/custom-action-patterns/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(pattern)
+    });
+    return await response.json();
+}
+
+/**
+ * Delete a custom action pattern
+ */
+export async function deleteCustomActionPattern(id: string) {
+    await authFetch(`/custom-action-patterns/${id}`, {
+        method: 'DELETE'
+    });
+}
+
+/**
+ * Toggle enabled/disabled state of a custom action pattern
+ */
+export async function toggleCustomActionPattern(id: string) {
+    const response = await authFetch(`/custom-action-patterns/${id}/toggle`, {
+        method: 'POST'
+    });
+    return await response.json();
+}
