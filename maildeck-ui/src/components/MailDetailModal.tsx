@@ -276,7 +276,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
                                 )}
 
                                 <EnhancedMailContent
-                                    content={message.bodyHtml || message.bodyText}
+                                    content={message.bodyHtml ? processedHtml : message.bodyText}
                                     isHtml={!!message.bodyHtml}
                                     patterns={patterns}
                                     onCopy={(value) => toast.success(`コピーしました: ${value}`)}

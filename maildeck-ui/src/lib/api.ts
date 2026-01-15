@@ -291,6 +291,7 @@ export async function createCustomActionPattern(pattern: {
     actionType: string;
     priority: number;
     description?: string;
+    linkTemplate?: string;
 }) {
     const response = await authFetch('/custom-action-patterns', {
         method: 'POST',
@@ -310,6 +311,7 @@ export async function updateCustomActionPattern(id: string, pattern: {
     priority: number;
     isEnabled: boolean;
     description?: string;
+    linkTemplate?: string;
 }) {
     const response = await authFetch(`/custom-action-patterns/${id}`, {
         method: 'PUT',
@@ -334,5 +336,80 @@ export async function toggleCustomActionPattern(id: string) {
     const response = await authFetch(`/custom-action-patterns/${id}/toggle`, {
         method: 'POST'
     });
+    return await response.json();
+}
+
+// ============================================================================
+// System Preset Patterns API
+// ============================================================================
+
+/**
+ * Get all system preset patterns
+ */
+export async function getSystemPresetPatterns(category?: string) {
+    const url = category
+        ? `/system-preset-patterns?category=${encodeURIComponent(category)}`
+        : '/system-preset-patterns';
+    const response = await authFetch(url);
+    return await response.json();
+}
+
+/**
+ * Get all preset categories
+ */
+export async function getPresetCategories() {
+    const response = await authFetch('/system-preset-patterns/categories');
+    return await response.json();
+}
+
+/**
+ * Import a single preset pattern
+ */
+export async function importPresetPattern(presetId: string) {
+    const response = await authFetch(`/system-preset-patterns/${presetId}/import`, {
+        method: 'POST'
+    });
+    return await response.json();
+}
+
+/**
+ * Import multiple preset patterns at once
+ */
+export async function importMultiplePresetPatterns(presetIds: string[]) {
+    const response = await authFetch('/system-preset-patterns/import-multiple', {
+        method: 'POST',
+        body: JSON.stringify(presetIds)
+    });
+    return await response.json();
+}
+
+// ============================================================================
+// Pattern Usage Statistics API
+// ============================================================================
+
+/**
+ * Record a pattern usage event
+ */
+export async function recordPatternUsage(patternId: string, actionType: string, matchedValue?: string) {
+    const response = await authFetch('/pattern-usage-stats', {
+        method: 'POST',
+        body: JSON.stringify({ patternId, actionType, matchedValue })
+    });
+    return await response.json();
+}
+
+/**
+ * Get pattern usage statistics
+ */
+export async function getPatternUsageStats(days: number = 30) {
+    const response = await authFetch(`/pattern-usage-stats?days=${days}`);
+    return await response.json();
+}
+
+/**
+ * Get stats for a specific pattern
+ */
+export async function getPatternStats(patternId: string, days: number = 30) {
+    const response = await authFetch(`/pattern-usage-stats/${patternId}?days=${days}`);
     return await response.json();
 }

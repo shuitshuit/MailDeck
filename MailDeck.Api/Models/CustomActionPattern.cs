@@ -1,4 +1,5 @@
 using ShuitNet.ORM.Attribute;
+using System.Text.Json.Serialization;
 
 namespace MailDeck.Api.Models;
 
@@ -65,6 +66,23 @@ public class CustomActionPattern
     public string? Description { get; set; }
 
     /// <summary>
+    /// URL template for 'link' action type.
+    /// Use {value} as placeholder for the matched value.
+    /// Example: https://track.example.com/{value}
+    /// </summary>
+    [Name("link_template")]
+    public string? LinkTemplate { get; set; }
+
+    /// <summary>
+    /// Conditions for when this pattern should apply.
+    /// Empty rules array means apply to all emails.
+    /// Uses same structure as auto-labeling rules.
+    /// </summary>
+    [Name("conditions")]
+    [Jsonb]
+    public PatternConditions Conditions { get; set; } = new();
+
+    /// <summary>
     /// Timestamp when the pattern was created
     /// </summary>
     [Name("created_at")]
@@ -75,4 +93,47 @@ public class CustomActionPattern
     /// </summary>
     [Name("updated_at")]
     public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Represents the complete conditions structure for a pattern
+/// </summary>
+public class PatternConditions
+{
+    /// <summary>
+    /// List of individual pattern conditions
+    /// </summary>
+    [JsonPropertyName("rules")]
+    public List<PatternCondition> Rules { get; set; } = new();
+}
+
+/// <summary>
+/// Represents a single condition within a pattern
+/// </summary>
+public class PatternCondition
+{
+    /// <summary>
+    /// Email field to evaluate (from, subject, body)
+    /// </summary>
+    [JsonPropertyName("field")]
+    public string Field { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Comparison operator (contains, equals, startsWith, endsWith, notcontains, notequals)
+    /// </summary>
+    [JsonPropertyName("operator")]
+    public string Operator { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Value to compare against
+    /// </summary>
+    [JsonPropertyName("value")]
+    public string Value { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Logical operator to use with the NEXT condition (AND or OR)
+    /// If this is the last condition, this field is ignored
+    /// </summary>
+    [JsonPropertyName("nextOperator")]
+    public string? NextOperator { get; set; }
 }

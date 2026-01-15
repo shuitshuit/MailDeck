@@ -107,6 +107,38 @@ public class CustomActionPatternsController : ControllerBase
             return BadRequest("Priority must be between 0 and 999.");
         }
 
+        // Validate link template for 'link' action type
+        if (pattern.ActionType.ToLowerInvariant() == "link")
+        {
+            if (string.IsNullOrWhiteSpace(pattern.LinkTemplate))
+            {
+                return BadRequest("Link template is required for 'link' action type.");
+            }
+
+            // Validate link template contains {value} placeholder
+            if (!pattern.LinkTemplate.Contains("{value}"))
+            {
+                return BadRequest("Link template must contain {value} placeholder.");
+            }
+
+            // Basic URL validation
+            if (!pattern.LinkTemplate.StartsWith("http://") && !pattern.LinkTemplate.StartsWith("https://"))
+            {
+                return BadRequest("Link template must start with http:// or https://.");
+            }
+
+            // Validate link template length
+            if (pattern.LinkTemplate.Length > 2048)
+            {
+                return BadRequest("Link template must be 2048 characters or less.");
+            }
+        }
+        else
+        {
+            // Clear link template for non-link action types
+            pattern.LinkTemplate = null;
+        }
+
         try
         {
             await _db.OpenAsync();
@@ -201,6 +233,34 @@ public class CustomActionPatternsController : ControllerBase
             return BadRequest("Priority must be between 0 and 999.");
         }
 
+        // Validate link template for 'link' action type
+        if (updatedPattern.ActionType.ToLowerInvariant() == "link")
+        {
+            if (string.IsNullOrWhiteSpace(updatedPattern.LinkTemplate))
+            {
+                return BadRequest("Link template is required for 'link' action type.");
+            }
+
+            if (!updatedPattern.LinkTemplate.Contains("{value}"))
+            {
+                return BadRequest("Link template must contain {value} placeholder.");
+            }
+
+            if (!updatedPattern.LinkTemplate.StartsWith("http://") && !updatedPattern.LinkTemplate.StartsWith("https://"))
+            {
+                return BadRequest("Link template must start with http:// or https://.");
+            }
+
+            if (updatedPattern.LinkTemplate.Length > 2048)
+            {
+                return BadRequest("Link template must be 2048 characters or less.");
+            }
+        }
+        else
+        {
+            updatedPattern.LinkTemplate = null;
+        }
+
         try
         {
             await _db.OpenAsync();
@@ -243,6 +303,7 @@ public class CustomActionPatternsController : ControllerBase
             existingPattern.PatternType = updatedPattern.PatternType;
             existingPattern.RegexPattern = updatedPattern.RegexPattern;
             existingPattern.ActionType = updatedPattern.ActionType;
+            existingPattern.LinkTemplate = updatedPattern.LinkTemplate;
             existingPattern.Priority = updatedPattern.Priority;
             existingPattern.IsEnabled = updatedPattern.IsEnabled;
             existingPattern.Description = updatedPattern.Description;

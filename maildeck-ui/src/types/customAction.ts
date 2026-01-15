@@ -9,6 +9,38 @@ export type PatternType = 'otp' | 'tracking' | 'token' | 'custom';
 export type ActionType = 'copy' | 'link' | 'highlight';
 
 /**
+ * Condition field types (same as auto-labeling)
+ */
+export type ConditionField = 'from' | 'subject' | 'body';
+
+/**
+ * Condition operator types (same as auto-labeling)
+ */
+export type ConditionOperator = 'contains' | 'equals' | 'startswith' | 'endswith' | 'notcontains' | 'notequals';
+
+/**
+ * Logical operator for combining conditions
+ */
+export type LogicalOperator = 'AND' | 'OR';
+
+/**
+ * Single condition for pattern matching
+ */
+export interface PatternCondition {
+  field: ConditionField;
+  operator: ConditionOperator;
+  value: string;
+  nextOperator?: LogicalOperator;
+}
+
+/**
+ * Conditions structure for pattern matching
+ */
+export interface PatternConditions {
+  rules: PatternCondition[];
+}
+
+/**
  * Represents a custom action pattern stored in the database
  */
 export interface CustomActionPattern {
@@ -21,6 +53,17 @@ export interface CustomActionPattern {
   priority: number; // 0-999
   isEnabled: boolean;
   description?: string;
+  /**
+   * URL template for 'link' action type.
+   * Use {value} as placeholder for the matched value.
+   * Example: https://track.example.com/{value}
+   */
+  linkTemplate?: string;
+  /**
+   * Conditions for when this pattern should apply.
+   * Empty rules array means apply to all emails.
+   */
+  conditions?: PatternConditions;
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
 }
@@ -35,6 +78,8 @@ export interface CreatePatternRequest {
   actionType: ActionType;
   priority: number;
   description?: string;
+  linkTemplate?: string;
+  conditions?: PatternConditions;
 }
 
 /**
@@ -48,6 +93,62 @@ export interface UpdatePatternRequest {
   priority: number;
   isEnabled: boolean;
   description?: string;
+  linkTemplate?: string;
+  conditions?: PatternConditions;
+}
+
+/**
+ * System preset pattern (read-only)
+ */
+export interface SystemPresetPattern {
+  id: string;
+  patternName: string;
+  patternType: PatternType;
+  regexPattern: string;
+  actionType: ActionType;
+  linkTemplate?: string;
+  priority: number;
+  description?: string;
+  category?: string;
+  isRecommended: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Pattern usage statistics
+ */
+export interface PatternUsageStats {
+  period: number;
+  totalUsage: number;
+  patternStats: Array<{
+    patternId: string;
+    patternName: string;
+    patternType: string;
+    totalUsage: number;
+    copyCount: number;
+    linkClickCount: number;
+    lastUsed: string;
+  }>;
+  actionStats: {
+    copy: number;
+    linkClick: number;
+    highlightCopy: number;
+  };
+  dailyTrend: Array<{
+    date: string;
+    count: number;
+  }>;
+}
+
+/**
+ * Result of importing multiple presets
+ */
+export interface ImportPresetsResult {
+  imported: CustomActionPattern[];
+  skipped: string[];
+  importedCount: number;
+  skippedCount: number;
 }
 
 /**
@@ -79,4 +180,16 @@ export interface PatternMatcherConfig {
 
   /** Whether to cache compiled regex patterns (default: true) */
   cacheRegex?: boolean;
+}
+
+/**
+ * Email context for condition evaluation
+ */
+export interface EmailContext {
+  /** Sender email address */
+  from: string;
+  /** Email subject */
+  subject: string;
+  /** Email body content */
+  body: string;
 }

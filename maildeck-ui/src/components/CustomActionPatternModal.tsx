@@ -15,6 +15,7 @@ interface CustomActionPatternModalProps {
         priority: number;
         isEnabled: boolean;
         description?: string;
+        linkTemplate?: string;
     }) => Promise<void>;
     initialData?: CustomActionPattern | null;
 }
@@ -29,6 +30,7 @@ export default function CustomActionPatternModal({
     const [patternType, setPatternType] = useState<string>('otp');
     const [regexPattern, setRegexPattern] = useState('');
     const [actionType, setActionType] = useState<string>('copy');
+    const [linkTemplate, setLinkTemplate] = useState('');
     const [priority, setPriority] = useState(0);
     const [isEnabled, setIsEnabled] = useState(true);
     const [description, setDescription] = useState('');
@@ -38,6 +40,7 @@ export default function CustomActionPatternModal({
     const [testText, setTestText] = useState('');
     const [testResults, setTestResults] = useState<string[]>([]);
     const [regexError, setRegexError] = useState<string | null>(null);
+    const [linkTemplateError, setLinkTemplateError] = useState<string | null>(null);
 
     const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
     const toast = useToast();
@@ -49,6 +52,7 @@ export default function CustomActionPatternModal({
                 setPatternType(initialData.patternType);
                 setRegexPattern(initialData.regexPattern);
                 setActionType(initialData.actionType);
+                setLinkTemplate(initialData.linkTemplate || '');
                 setPriority(initialData.priority);
                 setIsEnabled(initialData.isEnabled);
                 setDescription(initialData.description || '');
@@ -57,6 +61,7 @@ export default function CustomActionPatternModal({
                 setPatternType('otp');
                 setRegexPattern('');
                 setActionType('copy');
+                setLinkTemplate('');
                 setPriority(0);
                 setIsEnabled(true);
                 setDescription('');
@@ -64,6 +69,7 @@ export default function CustomActionPatternModal({
             setTestText('');
             setTestResults([]);
             setRegexError(null);
+            setLinkTemplateError(null);
         }
     }, [isOpen, initialData]);
 
@@ -76,6 +82,25 @@ export default function CustomActionPatternModal({
             setRegexError(null);
         }
     }, [regexPattern]);
+
+    // Validate link template on change
+    useEffect(() => {
+        if (actionType === 'link') {
+            if (!linkTemplate.trim()) {
+                setLinkTemplateError('リンクアクションにはURLテンプレートが必要です。');
+            } else if (!linkTemplate.includes('{value}')) {
+                setLinkTemplateError('URLテンプレートには {value} プレースホルダーが必要です。');
+            } else if (!linkTemplate.startsWith('http://') && !linkTemplate.startsWith('https://')) {
+                setLinkTemplateError('URLテンプレートは http:// または https:// で始まる必要があります。');
+            } else if (linkTemplate.length > 2048) {
+                setLinkTemplateError('URLテンプレートは2048文字以内にしてください。');
+            } else {
+                setLinkTemplateError(null);
+            }
+        } else {
+            setLinkTemplateError(null);
+        }
+    }, [actionType, linkTemplate]);
 
     // Run test when test text or regex pattern changes
     useEffect(() => {
@@ -108,6 +133,11 @@ export default function CustomActionPatternModal({
             return;
         }
 
+        if (linkTemplateError) {
+            toast.error(linkTemplateError);
+            return;
+        }
+
         setIsSaving(true);
         try {
             await onSave({
@@ -117,7 +147,8 @@ export default function CustomActionPatternModal({
                 actionType,
                 priority,
                 isEnabled,
-                description: description.trim() || undefined
+                description: description.trim() || undefined,
+                linkTemplate: actionType === 'link' ? linkTemplate.trim() : undefined
             });
             onClose();
         } catch (error) {
@@ -191,13 +222,49 @@ export default function CustomActionPatternModal({
                                 required
                             >
                                 <option value="copy">コピー</option>
+                                <option value="link">リンク</option>
                                 <option value="highlight">ハイライト</option>
                             </select>
                             <p className="text-xs text-gray-500 mt-1">
-                                ※ セキュリティのため、クライアント側では「コピー」のみ有効です
+                                コピー: コピーボタン表示、リンク: 外部リンクを開く、ハイライト: 強調表示のみ
                             </p>
                         </div>
                     </div>
+
+                    {/* Link Template (only for link action) */}
+                    {actionType === 'link' && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                URLテンプレート <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                value={linkTemplate}
+                                onChange={(e) => setLinkTemplate(e.target.value)}
+                                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all font-mono text-sm ${
+                                    linkTemplateError ? 'border-red-500' : ''
+                                }`}
+                                placeholder="例: https://track.example.com/{value}"
+                                required
+                            />
+                            {linkTemplateError && (
+                                <p className="text-sm text-red-600 mt-1">{linkTemplateError}</p>
+                            )}
+                            <p className="text-xs text-gray-500 mt-1">
+                                {'{value}'} プレースホルダーがマッチした値に置き換えられます。
+                                例: 追跡番号 123456 → https://track.example.com/123456
+                            </p>
+                            {/* Link preview */}
+                            {testResults.length > 0 && linkTemplate && !linkTemplateError && (
+                                <div className="mt-2 p-2 bg-indigo-50 rounded border border-indigo-200">
+                                    <div className="text-xs font-medium text-indigo-700 mb-1">生成されるURL例:</div>
+                                    <div className="text-xs font-mono text-indigo-600 break-all">
+                                        {linkTemplate.replace(/\{value\}/g, encodeURIComponent(testResults[0]))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Regex Pattern */}
                     <div>
@@ -315,7 +382,7 @@ export default function CustomActionPatternModal({
                         </button>
                         <button
                             type="submit"
-                            disabled={isSaving || !!regexError}
+                            disabled={isSaving || !!regexError || !!linkTemplateError}
                             className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isSaving ? '保存中...' : initialData ? '更新' : '作成'}

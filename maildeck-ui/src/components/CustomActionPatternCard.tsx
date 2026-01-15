@@ -98,6 +98,16 @@ export default function CustomActionPatternCard({ pattern, onEdit, onDelete, onT
                         </code>
                     </div>
 
+                    {/* Link Template (for link action type) */}
+                    {pattern.actionType === 'link' && pattern.linkTemplate && (
+                        <div className="mb-3">
+                            <div className="text-xs text-gray-500 mb-1">URLテンプレート:</div>
+                            <code className="text-sm font-mono bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded border border-indigo-200 block overflow-x-auto">
+                                {pattern.linkTemplate}
+                            </code>
+                        </div>
+                    )}
+
                     {/* Description */}
                     {pattern.description && (
                         <div className="text-sm text-gray-600 mb-2">
