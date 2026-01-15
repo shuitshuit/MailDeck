@@ -304,3 +304,16 @@ await db.DeleteAsync<UserServerConfig>(config.Id);
 | `/api/contacts` | GET/POST | 連絡先一覧/追加 |
 | `/api/contacts/{id}` | PUT | 連絡先更新 |
 | `/api/webpush/subscribe` | POST | Web Push登録 |
+| `/api/auto-labeling-rules` | GET | 自動ラベリングルール一覧 |
+| `/api/auto-labeling-rules` | POST | 自動ラベリングルール作成 |
+| `/api/auto-labeling-rules/{id}` | PUT | 自動ラベリングルール更新 |
+| `/api/auto-labeling-rules/{id}` | DELETE | 自動ラベリングルール削除 |
+| `/api/auto-labeling-rules/{id}/toggle` | POST | 自動ラベリングルール有効/無効切り替え |
+| `/api/custom-action-patterns` | GET | カスタムアクションパターン一覧 |
+| `/api/custom-action-patterns` | POST | カスタムアクションパターン作成 |
+| `/api/custom-action-patterns/{id}` | PUT | カスタムアクションパターン更新 |
+| `/api/custom-action-patterns/{id}` | DELETE | カスタムアクションパターン削除 |
+| `/api/custom-action-patterns/{id}/toggle` | POST | カスタムアクションパターン有効/無効切り替え |
+| `/api/custom-actions/recent-codes` | GET | 最近検出されたOTPコード一覧 (30分間有効) |
+| `/api/custom-actions/recent-codes/{id}` | DELETE | 特定のOTPコード削除 |
+| `/api/custom-actions/recent-codes` | DELETE | すべてのOTPコード削除 |

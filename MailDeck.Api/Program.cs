@@ -1,4 +1,7 @@
+using Amazon.KeyManagementService;
+using Lib.Net.Http.WebPush;
 using MailDeck.Api.Middleware;
+using MailDeck.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
@@ -131,29 +134,29 @@ try
     });
 
     // Configure ShuitNet.ORM
-    builder.Services.AddScoped<ShuitNet.ORM.PostgreSQL.PostgreSqlConnect>(sp => 
-        new ShuitNet.ORM.PostgreSQL.PostgreSqlConnect(builder.Configuration["DefaultConnection"]!));
+    builder.Services.AddScoped<PostgreSqlConnect>(sp => 
+        new PostgreSqlConnect(builder.Configuration["DefaultConnection"]!));
 
     // Register AWS Service
     builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
-    builder.Services.AddAWSService<Amazon.KeyManagementService.IAmazonKeyManagementService>();
-    builder.Services.AddSingleton<MailDeck.Api.Services.IEncryptionService, MailDeck.Api.Services.KmsEncryptionService>();
+    builder.Services.AddAWSService<IAmazonKeyManagementService>();
+    builder.Services.AddSingleton<IEncryptionService, KmsEncryptionService>();
 
     // Operation Performance Logger
-    builder.Services.AddScoped<MailDeck.Api.Services.IOperationPerformanceLogger, MailDeck.Api.Services.OperationPerformanceLogger>();
+    builder.Services.AddScoped<IOperationPerformanceLogger, OperationPerformanceLogger>();
 
     // Channel Service for auto-labeling
-    builder.Services.AddSingleton<MailDeck.Api.Services.ChannelService>();
+    builder.Services.AddSingleton<ChannelService>();
 
     // Auto-labeling Service
-    builder.Services.AddHostedService<MailDeck.Api.Services.AutoLabelingService>();
+    builder.Services.AddHostedService<AutoLabelingService>();
 
     // Web Push
-    builder.Services.AddHttpClient<Lib.Net.Http.WebPush.PushServiceClient>();
-    builder.Services.AddHostedService<MailDeck.Api.Services.EmailCheckBackgroundService>();
+    builder.Services.AddHttpClient<PushServiceClient>();
+    builder.Services.AddHostedService<EmailCheckBackgroundService>();
 
     // Log Compression
-    builder.Services.AddHostedService<MailDeck.Api.Services.LogCompressionBackgroundService>();
+    builder.Services.AddHostedService<LogCompressionBackgroundService>();
 
     // エラーハンドリングの設定
     DatabaseErrorHelper.Configure(
