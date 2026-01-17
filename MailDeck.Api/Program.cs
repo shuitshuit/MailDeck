@@ -1,5 +1,7 @@
 using Amazon.KeyManagementService;
-using Lib.Net.Http.WebPush;
+using FirebaseAdmin;
+using FirebaseAdmin.Messaging;
+using Google.Apis.Auth.OAuth2;
 using MailDeck.Api.Middleware;
 using MailDeck.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -151,12 +153,19 @@ try
     // Auto-labeling Service
     builder.Services.AddHostedService<AutoLabelingService>();
 
-    // Web Push
-    builder.Services.AddHttpClient<PushServiceClient>();
     builder.Services.AddHostedService<EmailCheckBackgroundService>();
 
     // Log Compression
     builder.Services.AddHostedService<LogCompressionBackgroundService>();
+
+    // Firebase Messaging
+    FirebaseApp.Create(new AppOptions()
+    {
+        Credential = GoogleCredential.FromFile(
+            builder.Configuration["Firebase:ServiceAccountKeyPath"]!
+        ),
+    });
+    builder.Services.AddSingleton<FirebaseMessaging>(FirebaseMessaging.DefaultInstance);
 
     // エラーハンドリングの設定
     DatabaseErrorHelper.Configure(

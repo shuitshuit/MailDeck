@@ -1,7 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MailDeck.Api.Extensions;
-using Lib.Net.Http.WebPush;
+using MailDeck.Api.Models;
+using ShuitNet.ORM.PostgreSQL.LinqToSql;
 
 namespace MailDeck.Api.Controllers;
 
@@ -33,7 +34,7 @@ public class WebPushController : ControllerBase
     }
 
     [HttpPost("subscribe")]
-    public async Task<IActionResult> Subscribe([FromBody] Models.WebPushSubscription subscription)
+    public async Task<IActionResult> Subscribe([FromBody] WebPushSubscription subscription)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
             ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
@@ -43,14 +44,23 @@ public class WebPushController : ControllerBase
         try
         {
             await _db.OpenAsync();
-            
-            // Check if subscription already exists (by endpoint) to avoid duplicates
-            // We'll trust the client generated ID or endpoint uniqueness. 
-            // Better to delete existing for same endpoint and re-insert or upsert.
-            
-            // For now, let's just insert. If the user sends a new subscription, it might have a new endpoint.
-            // A cleanup job might be needed for old subscriptions in the future.
-            
+
+            try
+            {
+                var existingSubscription = await _db.AsQueryable<WebPushSubscription>()
+                    .Where(s => s.UserId == userId && s.Token == subscription.Token)
+                    .FirstOrDefaultAsync();
+                existingSubscription!.UpdatedAt = DateTime.UtcNow;
+                _ = _db.UpdateAsync(existingSubscription); // Upsert to update the timestamp
+
+                if (existingSubscription != null)
+                    return Ok(new { success = true });
+            }
+            catch (InvalidOperationException)
+            {
+                // No existing subscription found, proceed to insert
+            }
+
             subscription.UserId = userId;
             subscription.Id = Guid.NewGuid(); // Generate new UUID
             subscription.CreatedAt = DateTime.UtcNow;
