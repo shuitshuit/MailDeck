@@ -240,21 +240,20 @@ public class EmailCheckBackgroundService : BackgroundService
             messageBody += summary.Body.ToString()[..Math.Min(20, summary.Body.ToString().Length)];
         }
         // Create message
-        var message = new Message()
-        {
-            Notification = new Notification
-            {
-                Title = summary.Envelope.From.ToString(),
-                Body = count == 1 ?
-                    messageBody :
-                    $"You have received {count} new emails. Latest: {envelope.Subject}"
-            },
-            Token = "",
-        };
         List<Message> messages = [];
         foreach (var token in tokens)
         {
-            message.Token = token;
+            var message = new Message()
+            {
+                Notification = new Notification
+                {
+                    Title = summary.Envelope.From.ToString(),
+                    Body = count == 1 ?
+                        messageBody :
+                        $"You have received {count} new emails. Latest: {envelope.Subject}"
+                },
+                Token = token,
+            };
             messages.Add(message);
         }
         var response = await messaging.SendEachAsync(messages, stoppingToken);
