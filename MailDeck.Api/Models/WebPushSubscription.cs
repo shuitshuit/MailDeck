@@ -12,17 +12,8 @@ public class WebPushSubscription
     [Name("user_id")]
     public string UserId { get; set; } = string.Empty;
 
-    [Name("endpoint")]
-    public string Endpoint { get; set; } = string.Empty;
-
-    [Name("p256dh")]
-    public string P256dh { get; set; } = string.Empty;
-
-    [Name("auth")]
-    public string Auth { get; set; } = string.Empty;
-
-    [Name("user_agent")]
-    public string UserAgent { get; set; } = string.Empty;
+    [Name("token")]
+    public string Token { get; set; } = string.Empty;
 
     [Name("created_at")]
     public DateTime CreatedAt { get; set; }
