@@ -50,11 +50,12 @@ public class WebPushController : ControllerBase
                 var existingSubscription = await _db.AsQueryable<WebPushSubscription>()
                     .Where(s => s.UserId == userId && s.Token == subscription.Token)
                     .FirstOrDefaultAsync();
-                existingSubscription!.UpdatedAt = DateTime.UtcNow;
-                _ = _db.UpdateAsync(existingSubscription); // Upsert to update the timestamp
-
                 if (existingSubscription != null)
+                {
+                    existingSubscription!.UpdatedAt = DateTime.UtcNow;
+                    _ = _db.UpdateAsync(existingSubscription); // Upsert to update the timestamp
                     return Ok(new { success = true });
+                }
             }
             catch (InvalidOperationException)
             {
