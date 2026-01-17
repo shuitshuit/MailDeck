@@ -53,7 +53,7 @@ public class WebPushController : ControllerBase
                 if (existingSubscription != null)
                 {
                     existingSubscription!.UpdatedAt = DateTime.UtcNow;
-                    _ = _db.UpdateAsync(existingSubscription); // Upsert to update the timestamp
+                    await _db.UpdateAsync(existingSubscription); // Upsert to update the timestamp
                     return Ok(new { success = true });
                 }
             }

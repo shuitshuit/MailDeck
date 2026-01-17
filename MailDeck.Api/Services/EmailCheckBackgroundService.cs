@@ -226,7 +226,12 @@ public class EmailCheckBackgroundService : BackgroundService
         var subscriptions = await db.AsQueryable<WebPushSubscription>()
         .Where(s => s.UserId == userId)
         .ToListAsync();
-        var tokens = subscriptions.Select(s => s.Token).ToList();
+        var tokens = subscriptions.Select(s => s.Token).Distinct().ToList();
+
+        if (subscriptions.Count != tokens.Count)
+        {
+            _logger.LogWarning("Found {DuplicateCount} duplicate tokens for user {UserId}", subscriptions.Count - tokens.Count, userId);
+        }
 
         var envelope = summary.Envelope;
         var messageBody = envelope.Subject ?? "(No Subject)";
@@ -256,6 +261,13 @@ public class EmailCheckBackgroundService : BackgroundService
             };
             messages.Add(message);
         }
+        
+        if (messages.Count == 0)
+        {
+            _logger.LogInformation("No valid tokens found for user {UserId}", userId);
+            return;
+        }
+
         var response = await messaging.SendEachAsync(messages, stoppingToken);
         _logger.LogInformation("Sent push notifications to user {UserId}: {SuccessCount} successful, {FailureCount} failed.",
             userId,
