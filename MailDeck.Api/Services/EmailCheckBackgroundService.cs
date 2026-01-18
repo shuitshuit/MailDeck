@@ -244,8 +244,6 @@ public class EmailCheckBackgroundService : BackgroundService
         {
             messageBody += summary.Body.ToString()[..Math.Min(20, summary.Body.ToString().Length)];
         }
-        // Create message
-        List<Message> messages = [];
         foreach (var token in tokens)
         {
             var message = new Message()
@@ -259,20 +257,8 @@ public class EmailCheckBackgroundService : BackgroundService
                 },
                 Token = token,
             };
-            messages.Add(message);
+            await messaging.SendAsync(message, stoppingToken);
         }
-        
-        if (messages.Count == 0)
-        {
-            _logger.LogInformation("No valid tokens found for user {UserId}", userId);
-            return;
-        }
-
-        var response = await messaging.SendEachAsync(messages, stoppingToken);
-        _logger.LogInformation("Sent push notifications to user {UserId}: {SuccessCount} successful, {FailureCount} failed.",
-            userId,
-            response.SuccessCount,
-            response.FailureCount);
     }
 }
 
