@@ -11,21 +11,20 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
-public class ContactsController : ControllerBase
+public class ContactsController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
-    private readonly ILogger<ContactsController> _logger;
 
     public ContactsController(PostgreSqlConnect db, ILogger<ContactsController> logger)
+        : base(logger)
     {
         _db = db;
-        _logger = logger;
     }
 
     [HttpGet]
     public async Task<IActionResult> GetContacts()
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
         try
         {
             await _db.OpenAsync();
@@ -47,7 +46,7 @@ public class ContactsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> AddContact([FromBody] ContactRequest request)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Email))
         {
@@ -84,7 +83,7 @@ public class ContactsController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteContact(string id)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         try
         {
@@ -110,7 +109,7 @@ public class ContactsController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateContact(string id, [FromBody] ContactRequest request)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         try
         {

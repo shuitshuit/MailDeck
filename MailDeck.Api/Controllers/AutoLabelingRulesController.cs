@@ -11,15 +11,14 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/auto-labeling-rules")]
-public class AutoLabelingRulesController : ControllerBase
+public class AutoLabelingRulesController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
-    private readonly ILogger<AutoLabelingRulesController> _logger;
 
     public AutoLabelingRulesController(PostgreSqlConnect db, ILogger<AutoLabelingRulesController> logger)
+        : base(logger)
     {
         _db = db;
-        _logger = logger;
     }
 
     /// <summary>
@@ -28,7 +27,7 @@ public class AutoLabelingRulesController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetRules()
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
         try
         {
             await _db.OpenAsync();
@@ -62,7 +61,7 @@ public class AutoLabelingRulesController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateRule([FromBody] AutoLabelingRule rule)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         // Validation
         if (string.IsNullOrWhiteSpace(rule.RuleName))
@@ -166,7 +165,7 @@ public class AutoLabelingRulesController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateRule(Guid id, [FromBody] AutoLabelingRule rule)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         // Validation
         if (string.IsNullOrWhiteSpace(rule.RuleName))
@@ -280,7 +279,7 @@ public class AutoLabelingRulesController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteRule(Guid id)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         try
         {
@@ -314,7 +313,7 @@ public class AutoLabelingRulesController : ControllerBase
     [HttpPost("{id}/toggle")]
     public async Task<IActionResult> ToggleRule(Guid id)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         try
         {

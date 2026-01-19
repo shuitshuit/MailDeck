@@ -11,15 +11,14 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
-public class LabelsController : ControllerBase
+public class LabelsController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
-    private readonly ILogger<LabelsController> _logger;
 
     public LabelsController(PostgreSqlConnect db, ILogger<LabelsController> logger)
+        : base(logger)
     {
         _db = db;
-        _logger = logger;
     }
 
     /// <summary>
@@ -28,7 +27,7 @@ public class LabelsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetLabels()
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
         try
         {
             await _db.OpenAsync();
@@ -53,7 +52,7 @@ public class LabelsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateLabel([FromBody] LabelRequest request)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         if (string.IsNullOrWhiteSpace(request.Name))
         {
@@ -107,7 +106,7 @@ public class LabelsController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateLabel(string id, [FromBody] LabelRequest request)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         if (!Guid.TryParse(id, out var labelId))
         {
@@ -168,7 +167,7 @@ public class LabelsController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteLabel(string id)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         if (!Guid.TryParse(id, out var labelId))
         {
@@ -205,7 +204,7 @@ public class LabelsController : ControllerBase
     [HttpGet("message/{messageId}")]
     public async Task<IActionResult> GetLabelsForMessage(int messageId, [FromQuery] string serverConfigId)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         if (string.IsNullOrWhiteSpace(serverConfigId))
         {
@@ -265,7 +264,7 @@ public class LabelsController : ControllerBase
     [HttpPost("message")]
     public async Task<IActionResult> AddLabelToMessage([FromBody] AddLabelToMessageRequest request)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         if (string.IsNullOrWhiteSpace(request.LabelId) || string.IsNullOrWhiteSpace(request.ServerConfigId))
         {
@@ -333,7 +332,7 @@ public class LabelsController : ControllerBase
     [HttpDelete("message")]
     public async Task<IActionResult> RemoveLabelFromMessage([FromQuery] int messageId, [FromQuery] string labelId, [FromQuery] string serverConfigId)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         if (string.IsNullOrWhiteSpace(labelId) || string.IsNullOrWhiteSpace(serverConfigId))
         {

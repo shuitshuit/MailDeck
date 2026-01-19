@@ -13,15 +13,14 @@ namespace MailDeck.Api.Controllers;
 [ApiController]
 [Route("api/custom-actions/recent-codes")]
 [Authorize]
-public class RecentCodesController : ControllerBase
+public class RecentCodesController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
-    private readonly ILogger<RecentCodesController> _logger;
 
     public RecentCodesController(PostgreSqlConnect db, ILogger<RecentCodesController> logger)
+        : base(logger)
     {
         _db = db;
-        _logger = logger;
     }
 
     /// <summary>
@@ -31,7 +30,7 @@ public class RecentCodesController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetRecentCodes()
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userId = GetUserId();
         if (string.IsNullOrEmpty(userId))
         {
             return Unauthorized(new { error = "User ID not found in token" });
@@ -71,7 +70,7 @@ public class RecentCodesController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteRecentCode(Guid id)
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userId = GetUserId();
         if (string.IsNullOrEmpty(userId))
         {
             return Unauthorized(new { error = "User ID not found in token" });
@@ -116,7 +115,7 @@ public class RecentCodesController : ControllerBase
     [HttpDelete]
     public async Task<IActionResult> ClearAllRecentCodes()
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userId = GetUserId();
         if (string.IsNullOrEmpty(userId))
         {
             return Unauthorized(new { error = "User ID not found in token" });

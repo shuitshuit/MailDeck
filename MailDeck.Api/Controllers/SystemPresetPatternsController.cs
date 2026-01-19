@@ -13,15 +13,14 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/system-preset-patterns")]
-public class SystemPresetPatternsController : ControllerBase
+public class SystemPresetPatternsController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
-    private readonly ILogger<SystemPresetPatternsController> _logger;
 
     public SystemPresetPatternsController(PostgreSqlConnect db, ILogger<SystemPresetPatternsController> logger)
+        : base(logger)
     {
         _db = db;
-        _logger = logger;
     }
 
     /// <summary>
@@ -109,7 +108,7 @@ public class SystemPresetPatternsController : ControllerBase
     [HttpPost("{presetId}/import")]
     public async Task<IActionResult> ImportPreset(Guid presetId)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         try
         {
@@ -184,7 +183,7 @@ public class SystemPresetPatternsController : ControllerBase
     [HttpPost("import-multiple")]
     public async Task<IActionResult> ImportMultiplePresets([FromBody] List<Guid> presetIds)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         if (presetIds == null || presetIds.Count == 0)
         {

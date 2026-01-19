@@ -15,15 +15,14 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/pattern-usage-stats")]
-public class PatternUsageStatsController : ControllerBase
+public class PatternUsageStatsController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
-    private readonly ILogger<PatternUsageStatsController> _logger;
 
     public PatternUsageStatsController(PostgreSqlConnect db, ILogger<PatternUsageStatsController> logger)
+        : base(logger)
     {
         _db = db;
-        _logger = logger;
     }
 
     /// <summary>
@@ -32,7 +31,7 @@ public class PatternUsageStatsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> RecordUsage([FromBody] RecordUsageRequest request)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         // Validate action type
         var validActionTypes = new[] { "copy", "link_click", "highlight_copy" };
@@ -86,7 +85,7 @@ public class PatternUsageStatsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetStats([FromQuery] int days = 30)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         if (days < 1 || days > 365)
         {
@@ -179,7 +178,7 @@ public class PatternUsageStatsController : ControllerBase
     [HttpGet("{patternId}")]
     public async Task<IActionResult> GetPatternStats(Guid patternId, [FromQuery] int days = 30)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         if (days < 1 || days > 365)
         {

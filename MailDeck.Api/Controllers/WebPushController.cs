@@ -11,17 +11,16 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
-public class WebPushController : ControllerBase
+public class WebPushController : BaseAuthController
 {
     private readonly IConfiguration _configuration;
     private readonly ShuitNet.ORM.PostgreSQL.PostgreSqlConnect _db;
-    private readonly ILogger<WebPushController> _logger;
 
     public WebPushController(IConfiguration configuration, ShuitNet.ORM.PostgreSQL.PostgreSqlConnect db, ILogger<WebPushController> logger)
+        : base(logger)
     {
         _configuration = configuration;
         _db = db;
-        _logger = logger;
     }
 
     [HttpGet("vapid-public-key")]
@@ -38,8 +37,7 @@ public class WebPushController : ControllerBase
     [HttpPost("subscribe")]
     public async Task<IActionResult> Subscribe([FromBody] WebPushSubscriptionRequest request)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-            ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+        var userId = GetUserId();
 
         if (string.IsNullOrEmpty(userId)) return Unauthorized();
 

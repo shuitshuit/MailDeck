@@ -10,15 +10,14 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
-public class ServerConfigController : ControllerBase
+public class ServerConfigController : BaseAuthController
 {
-    private readonly ILogger<ServerConfigController> _logger;
-    private readonly ShuitNet.ORM.PostgreSQL.PostgreSqlConnect _db;
+    private readonly PostgreSqlConnect _db;
     private readonly Services.IEncryptionService _encryptionService;
 
-    public ServerConfigController(ILogger<ServerConfigController> logger, ShuitNet.ORM.PostgreSQL.PostgreSqlConnect db, Services.IEncryptionService encryptionService)
+    public ServerConfigController(ILogger<ServerConfigController> logger, PostgreSqlConnect db, Services.IEncryptionService encryptionService)
+        : base(logger)
     {
-        _logger = logger;
         _db = db;
         _encryptionService = encryptionService;
     }
@@ -26,8 +25,7 @@ public class ServerConfigController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetConfigs()
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                     ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+        var userId = GetUserId();
 
         if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
@@ -51,8 +49,7 @@ public class ServerConfigController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> AddConfig([FromBody] ServerConfigRequest request)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-            ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+        var userId = GetUserId();
 
         if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
@@ -195,8 +192,7 @@ public class ServerConfigController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateConfig(string id, [FromBody] ServerConfigRequest request)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                     ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+        var userId = GetUserId();
 
         if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
@@ -245,8 +241,7 @@ public class ServerConfigController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteConfig(string id)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                     ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+        var userId = GetUserId();
 
         if (string.IsNullOrEmpty(userId)) return Unauthorized();
 

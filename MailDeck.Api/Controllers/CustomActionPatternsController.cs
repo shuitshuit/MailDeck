@@ -11,15 +11,14 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/custom-action-patterns")]
-public class CustomActionPatternsController : ControllerBase
+public class CustomActionPatternsController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
-    private readonly ILogger<CustomActionPatternsController> _logger;
 
     public CustomActionPatternsController(PostgreSqlConnect db, ILogger<CustomActionPatternsController> logger)
+        : base(logger)
     {
         _db = db;
-        _logger = logger;
     }
 
     /// <summary>
@@ -28,7 +27,7 @@ public class CustomActionPatternsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetPatterns()
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
         try
         {
             await _db.OpenAsync();
@@ -64,7 +63,7 @@ public class CustomActionPatternsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreatePattern([FromBody] CustomActionPattern pattern)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         // Validation
         if (string.IsNullOrWhiteSpace(pattern.PatternName))
@@ -190,7 +189,7 @@ public class CustomActionPatternsController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdatePattern(Guid id, [FromBody] CustomActionPattern updatedPattern)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         // Validation
         if (string.IsNullOrWhiteSpace(updatedPattern.PatternName))
@@ -331,7 +330,7 @@ public class CustomActionPatternsController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeletePattern(Guid id)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         try
         {
@@ -373,7 +372,7 @@ public class CustomActionPatternsController : ControllerBase
     [HttpPost("{id}/toggle")]
     public async Task<IActionResult> TogglePattern(Guid id)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
+        var userId = GetUserId();
 
         try
         {

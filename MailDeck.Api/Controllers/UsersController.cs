@@ -10,22 +10,20 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
-public class UsersController : ControllerBase
+public class UsersController : BaseAuthController
 {
-    private readonly ILogger<UsersController> _logger;
     private readonly PostgreSqlConnect _db;
 
     public UsersController(ILogger<UsersController> logger, PostgreSqlConnect db)
+        : base(logger)
     {
-        _logger = logger;
         _db = db;
     }
 
     [HttpPost("sync")]
     public async Task<IActionResult> Sync()
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value 
-            ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+        var userId = GetUserId();
         var email = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
 
         if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(email))
