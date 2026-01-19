@@ -66,10 +66,128 @@ export async function getInbox(configId: string, page = 1) {
 }
 
 /**
+ * Get messages from a specific folder
+ */
+export async function getInboxFolder(configId: string, folderName: string, page = 1) {
+    const response = await authFetch(`/mail/inbox/${encodeURIComponent(folderName)}?configId=${configId}&page=${page}`);
+    return await response.json();
+}
+
+/**
  * Get single message details
  */
 export async function getMessage(configId: string, messageId: number) {
     const response = await authFetch(`/mail/message/${messageId}?configId=${configId}`);
+    return await response.json();
+}
+
+/**
+ * Delete a message
+ */
+export async function deleteMessage(configId: string, messageId: number) {
+    await authFetch(`/mail/message/${messageId}?configId=${configId}`, {
+        method: 'DELETE'
+    });
+}
+
+/**
+ * Move a message to trash
+ */
+export async function moveToTrash(configId: string, messageId: number) {
+    const response = await authFetch(`/mail/move-to-trash/${messageId}?configId=${configId}`, {
+        method: 'PUT'
+    });
+    return await response.json();
+}
+
+/**
+ * Get mail folders
+ */
+export async function getFolders(configId: string, forceSync = false) {
+    const response = await authFetch(`/mail/folders?configId=${configId}&forceSync=${forceSync}`);
+    return await response.json();
+}
+
+/**
+ * Sync mail folders (force refresh from IMAP)
+ */
+export async function syncFolders(configId: string) {
+    const response = await authFetch(`/mail/folders/sync?configId=${configId}`, {
+        method: 'POST'
+    });
+    return await response.json();
+}
+
+/**
+ * Get drafts
+ */
+export async function getDrafts(configId: string, page = 1) {
+    const response = await authFetch(`/mail/drafts?configId=${configId}&page=${page}`);
+    return await response.json();
+}
+
+/**
+ * Save a draft
+ */
+export async function saveDraft(draft: { to?: string; subject?: string; body?: string; configId: string }) {
+    const response = await authFetch('/mail/draft', {
+        method: 'POST',
+        body: JSON.stringify(draft)
+    });
+    return await response.json();
+}
+
+/**
+ * Get a single draft
+ */
+export async function getDraft(configId: string, draftId: number) {
+    const response = await authFetch(`/mail/draft/${draftId}?configId=${configId}`);
+    return await response.json();
+}
+
+/**
+ * Update a draft
+ */
+export async function updateDraft(configId: string, draftId: number, draft: { to?: string; subject?: string; body?: string }) {
+    const response = await authFetch(`/mail/draft/${draftId}?configId=${configId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...draft, configId })
+    });
+    return await response.json();
+}
+
+/**
+ * Delete a draft
+ */
+export async function deleteDraft(configId: string, draftId: number) {
+    await authFetch(`/mail/draft/${draftId}?configId=${configId}`, {
+        method: 'DELETE'
+    });
+}
+
+/**
+ * Send a draft
+ */
+export async function sendDraft(configId: string, draftId: number) {
+    const response = await authFetch(`/mail/draft/send/${draftId}?configId=${configId}`, {
+        method: 'POST'
+    });
+    return await response.json();
+}
+
+/**
+ * Get spam messages
+ */
+export async function getSpam(configId: string, page = 1) {
+    const response = await authFetch(`/mail/spam?configId=${configId}&page=${page}`);
+    return await response.json();
+}
+
+/**
+ * Get trash messages
+ */
+export async function getTrash(configId: string, page = 1) {
+    const response = await authFetch(`/mail/trash?configId=${configId}&page=${page}`);
     return await response.json();
 }
 

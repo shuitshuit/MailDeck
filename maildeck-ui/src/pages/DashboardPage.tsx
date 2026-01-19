@@ -6,7 +6,7 @@ import ComposeModal from '../components/ComposeModal';
 import MailDetailModal from '../components/MailDetailModal';
 import LabelBadge from '../components/LabelBadge';
 import SearchBar from '../components/SearchBar';
-import { getInbox, getServerConfigs } from '../lib/api';
+import { getInbox, getInboxFolder, getServerConfigs, getDrafts, getSpam, getTrash } from '../lib/api';
 import type { Label } from '../types/label';
 import { useToast } from '../contexts/ToastContext';
 import { useLabels } from '../contexts/LabelContext';
@@ -33,7 +33,13 @@ interface Email {
     labels?: Label[]; // Labels attached to this email
 }
 
-export default function DashboardPage() {
+type FolderType = 'inbox' | 'drafts' | 'spam' | 'trash';
+
+interface DashboardPageProps {
+    folderType?: FolderType;
+}
+
+export default function DashboardPage({ folderType = 'inbox' }: DashboardPageProps) {
     const { accountId } = useParams();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -49,6 +55,22 @@ export default function DashboardPage() {
     const [searchQueryString, setSearchQueryString] = useState('');
     const [parsedSearchQuery, setParsedSearchQuery] = useState<SearchQuery>({ keywords: [] });
     const toast = useToast();
+
+    // Get custom folder from URL params
+    const customFolderPath = searchParams.get('folder');
+
+    // Folder type title mapping
+    const folderTitles: Record<FolderType, string> = {
+        inbox: '受信トレイ',
+        drafts: '下書き',
+        spam: 'スパム',
+        trash: 'ゴミ箱'
+    };
+
+    // Get display title (custom folder name or standard folder title)
+    const displayTitle = customFolderPath
+        ? customFolderPath.split('/').pop() || customFolderPath
+        : folderTitles[folderType];
 
     // URLから検索条件とラベルフィルタを読み込む
     useEffect(() => {
@@ -105,38 +127,74 @@ export default function DashboardPage() {
         }
     };
 
+    // API function based on folder type
+    const getFolderApi = useCallback((type: FolderType) => {
+        switch (type) {
+            case 'drafts':
+                return getDrafts;
+            case 'spam':
+                return getSpam;
+            case 'trash':
+                return getTrash;
+            default:
+                return getInbox;
+        }
+    }, []);
+
     const loadInbox = useCallback(async () => {
         if (activeTab === null) return;
 
         setLoading(true);
         try {
-            if (activeTab === 'all') {
-                // Fetch all and merge
-                const promises = accounts.map(acc => getInbox(acc.id, page).then(res => ({
-                    messages: (res.messages || []).map((m: any) => ({ ...m, configId: acc.id }))
-                })));
-                const results = await Promise.all(promises);
-                const allMails = results.flatMap(r => r.messages || []);
-                // Sort by date desc
-                allMails.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                setMails(allMails);
+            // Check if we're loading a custom folder
+            if (customFolderPath) {
+                if (activeTab === 'all') {
+                    // Fetch from all accounts
+                    const promises = accounts.map(acc =>
+                        getInboxFolder(acc.id, customFolderPath, page).then(res => ({
+                            messages: (res.messages || []).map((m: any) => ({ ...m, configId: acc.id }))
+                        })).catch(() => ({ messages: [] })) // Ignore errors for accounts that don't have this folder
+                    );
+                    const results = await Promise.all(promises);
+                    const allMails = results.flatMap(r => r.messages || []);
+                    allMails.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                    setMails(allMails);
+                } else {
+                    const data = await getInboxFolder(activeTab, customFolderPath, page);
+                    const messagesWithConfig = (data.messages || []).map((m: any) => ({ ...m, configId: activeTab }));
+                    setMails(messagesWithConfig);
+                }
             } else {
-                const data = await getInbox(activeTab, page);
-                // Inject configId for single tab too for consistency
-                const messagesWithConfig = (data.messages || []).map((m: any) => ({ ...m, configId: activeTab }));
-                setMails(messagesWithConfig);
+                const apiFunc = getFolderApi(folderType);
+
+                if (activeTab === 'all') {
+                    // Fetch all and merge
+                    const promises = accounts.map(acc => apiFunc(acc.id, page).then(res => ({
+                        messages: (res.messages || []).map((m: any) => ({ ...m, configId: acc.id }))
+                    })));
+                    const results = await Promise.all(promises);
+                    const allMails = results.flatMap(r => r.messages || []);
+                    // Sort by date desc
+                    allMails.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                    setMails(allMails);
+                } else {
+                    const data = await apiFunc(activeTab, page);
+                    // Inject configId for single tab too for consistency
+                    const messagesWithConfig = (data.messages || []).map((m: any) => ({ ...m, configId: activeTab }));
+                    setMails(messagesWithConfig);
+                }
             }
         } catch (error) {
-            console.error('Failed to load inbox', error);
+            console.error(`Failed to load ${customFolderPath || folderType}`, error);
         } finally {
             setLoading(false);
         }
-    }, [activeTab, page, accounts]);
+    }, [activeTab, page, accounts, folderType, getFolderApi, customFolderPath]);
 
-    // Clear inbox on tab switch
+    // Clear inbox on tab switch, folder type, or custom folder change
     useEffect(() => {
         setMails([]);
-    }, [activeTab]);
+    }, [activeTab, folderType, customFolderPath]);
 
     useEffect(() => {
         loadConfigs();
@@ -289,7 +347,7 @@ export default function DashboardPage() {
     return (
         <div className="p-4 md:p-8">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                <h1 className="text-2xl font-bold">受信トレイ</h1>
+                <h1 className="text-2xl font-bold">{displayTitle}</h1>
                 <div className="flex gap-2 w-full md:w-auto">
                     <button
                         onClick={() => loadInbox()}
@@ -361,7 +419,13 @@ export default function DashboardPage() {
                             ? '検索結果がありません。'
                             : selectedLabelId
                                 ? 'このラベルのメールはありません。'
-                                : 'メールはありません。'}
+                                : folderType === 'drafts'
+                                    ? '下書きはありません。'
+                                    : folderType === 'spam'
+                                        ? 'スパムはありません。'
+                                        : folderType === 'trash'
+                                            ? 'ゴミ箱は空です。'
+                                            : 'メールはありません。'}
                     </div>
                 ) : (
                     <>

@@ -5,10 +5,22 @@ import LoginPage from './pages/LoginPage';
 import SettingsPage from './pages/SettingsPage';
 
 import { useEffect, useState } from 'react';
-import { syncUser } from './lib/api';
-import { ToastProvider } from './contexts/ToastContext';
 import { ConfirmProvider } from './contexts/ConfirmContext';
 import { LabelProvider, useLabels } from './contexts/LabelContext';
+import { ToastProvider } from './contexts/ToastContext';
+import { syncUser, getServerConfigs, getFolders } from './lib/api';
+
+interface MailFolder {
+  name: string;
+  fullName: string;
+  totalMessages: number;
+  unreadMessages: number;
+}
+
+interface ServerConfig {
+  id: string;
+  accountName: string;
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { authStatus } = useAuthenticator(context => [context.authStatus]);
@@ -35,6 +47,11 @@ function Layout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { labels } = useLabels();
   const [isLabelsExpanded, setIsLabelsExpanded] = useState(true);
+  const [isFoldersExpanded, setIsFoldersExpanded] = useState(false);
+  const [folders, setFolders] = useState<MailFolder[]>([]);
+  const [accounts, setAccounts] = useState<ServerConfig[]>([]);
+  const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
+  const [foldersLoading, setFoldersLoading] = useState(false);
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
@@ -43,8 +60,59 @@ function Layout({ children }: { children: React.ReactNode }) {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
 
+  // Load accounts on mount
+  useEffect(() => {
+    const loadAccounts = async () => {
+      try {
+        const configs = await getServerConfigs();
+        setAccounts(configs);
+        if (configs.length > 0 && !selectedConfigId) {
+          setSelectedConfigId(configs[0].id);
+        }
+      } catch (error) {
+        console.error('Failed to load accounts:', error);
+      }
+    };
+    loadAccounts();
+  }, []);
+
+  // Extract accountId from URL path
+  useEffect(() => {
+    const match = location.pathname.match(/\/inbox\/([^/]+)/);
+    if (match && match[1]) {
+      setSelectedConfigId(match[1]);
+    }
+  }, [location.pathname]);
+
+  // Load folders when config changes or folders section is expanded
+  useEffect(() => {
+    const loadFolders = async () => {
+      if (!selectedConfigId || !isFoldersExpanded) return;
+
+      setFoldersLoading(true);
+      try {
+        const response = await getFolders(selectedConfigId);
+        setFolders(response.folders || []);
+      } catch (error) {
+        console.error('Failed to load folders:', error);
+        setFolders([]);
+      } finally {
+        setFoldersLoading(false);
+      }
+    };
+    loadFolders();
+  }, [selectedConfigId, isFoldersExpanded]);
+
   // Check if a label is currently selected
   const selectedLabelId = searchParams.get('label');
+  const selectedFolder = searchParams.get('folder');
+
+  // Filter out standard folders for "Other Folders" section
+  const standardFolderNames = ['inbox', 'drafts', 'spam', 'trash', 'sent', 'junk', 'deleted items'];
+  const customFolders = folders.filter(f =>
+    !standardFolderNames.includes(f.name.toLowerCase()) &&
+    !standardFolderNames.includes(f.fullName.toLowerCase().split('/').pop() || '')
+  );
 
   const SidebarContent = () => (
     <>
@@ -60,16 +128,57 @@ function Layout({ children }: { children: React.ReactNode }) {
           {/* Inbox - clickable to show all mail */}
           <Link
             to="/inbox"
-            className={`flex items-center px-4 py-2 rounded-md hover:bg-gray-100 font-medium ${
-              !selectedLabelId && (location.pathname === '/' || location.pathname.startsWith('/inbox'))
-                ? 'bg-gray-100 text-brand-600'
-                : 'text-gray-700'
-            }`}
+            className={`flex items-center px-4 py-2 rounded-md hover:bg-gray-100 font-medium ${!selectedLabelId && (location.pathname === '/' || location.pathname.startsWith('/inbox'))
+              ? 'bg-gray-100 text-brand-600'
+              : 'text-gray-700'
+              }`}
           >
             <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
             </svg>
             Inbox
+          </Link>
+
+          {/* Drafts */}
+          <Link
+            to="/drafts"
+            className={`flex items-center px-4 py-2 rounded-md hover:bg-gray-100 font-medium ${location.pathname.startsWith('/drafts')
+              ? 'bg-gray-100 text-brand-600'
+              : 'text-gray-700'
+              }`}
+          >
+            <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Drafts
+          </Link>
+
+          {/* Spam */}
+          <Link
+            to="/spam"
+            className={`flex items-center px-4 py-2 rounded-md hover:bg-gray-100 font-medium ${location.pathname.startsWith('/spam')
+              ? 'bg-gray-100 text-brand-600'
+              : 'text-gray-700'
+              }`}
+          >
+            <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            Spam
+          </Link>
+
+          {/* Trash */}
+          <Link
+            to="/trash"
+            className={`flex items-center px-4 py-2 rounded-md hover:bg-gray-100 font-medium ${location.pathname.startsWith('/trash')
+              ? 'bg-gray-100 text-brand-600'
+              : 'text-gray-700'
+              }`}
+          >
+            <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Trash
           </Link>
 
           {/* Labels subsection */}
@@ -96,11 +205,10 @@ function Layout({ children }: { children: React.ReactNode }) {
                     <Link
                       key={label.id}
                       to={`/inbox?label=${label.id}`}
-                      className={`flex items-center px-4 py-1.5 text-sm rounded-md transition-colors ${
-                        selectedLabelId === label.id
-                          ? 'bg-gray-100 font-medium text-brand-600'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                      }`}
+                      className={`flex items-center px-4 py-1.5 text-sm rounded-md transition-colors ${selectedLabelId === label.id
+                        ? 'bg-gray-100 font-medium text-brand-600'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`}
                     >
                       <span
                         className="w-3 h-3 rounded-full mr-2 flex-shrink-0"
@@ -109,6 +217,52 @@ function Layout({ children }: { children: React.ReactNode }) {
                       <span className="truncate">{label.name}</span>
                     </Link>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Folders subsection */}
+          {accounts.length > 0 && (
+            <div className="ml-4 mt-1 space-y-0.5">
+              <button
+                onClick={() => setIsFoldersExpanded(!isFoldersExpanded)}
+                className="flex items-center w-full px-4 py-1.5 text-sm text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-50"
+              >
+                <svg
+                  className={`w-4 h-4 mr-2 transition-transform ${isFoldersExpanded ? 'rotate-90' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                フォルダ
+              </button>
+
+              {isFoldersExpanded && (
+                <div className="ml-2 mt-1 space-y-0.5">
+                  {foldersLoading ? (
+                    <div className="px-4 py-2 text-sm text-gray-500">読み込み中...</div>
+                  ) : customFolders.length > 0 ? (
+                    customFolders.map(folder => (
+                      <Link
+                        key={folder.fullName}
+                        to={`/inbox?folder=${encodeURIComponent(folder.fullName)}`}
+                        className={`flex items-center px-4 py-1.5 text-sm rounded-md transition-colors ${selectedFolder === folder.fullName
+                          ? 'bg-gray-100 font-medium text-brand-600'
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                          }`}
+                      >
+                        <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                        </svg>
+                        <span className="truncate">{folder.name}</span>
+                      </Link>
+                    ))
+                  ) : (
+                    <div className="px-4 py-2 text-sm text-gray-500">カスタムフォルダなし</div>
+                  )}
                 </div>
               )}
             </div>
@@ -202,66 +356,89 @@ function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
-import ContactsPage from './pages/ContactsPage';
+import NotificationListener from './components/Notification ';
 import AutoLabelingPage from './pages/AutoLabelingPage';
+import ContactsPage from './pages/ContactsPage';
 import CustomActionsPage from './pages/CustomActionsPage';
 
 function App() {
   return (
     <ToastProvider>
+      <NotificationListener />
       <ConfirmProvider>
         <LabelProvider>
           <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/" element={
-        <ProtectedRoute>
-          <Layout>
-            <DashboardPage />
-          </Layout>
-        </ProtectedRoute>
-      } />
-      <Route path="/inbox" element={
-        <ProtectedRoute>
-          <Layout>
-            <DashboardPage />
-          </Layout>
-        </ProtectedRoute>
-      } />
-      <Route path="/inbox/:accountId" element={
-        <ProtectedRoute>
-          <Layout>
-            <DashboardPage />
-          </Layout>
-        </ProtectedRoute>
-      } />
-      <Route path="/contacts" element={
-        <ProtectedRoute>
-          <Layout>
-            <ContactsPage />
-          </Layout>
-        </ProtectedRoute>
-      } />
-      <Route path="/settings" element={
-        <ProtectedRoute>
-          <Layout>
-            <SettingsPage />
-          </Layout>
-        </ProtectedRoute>
-      } />
-      <Route path="/auto-labeling" element={
-        <ProtectedRoute>
-          <Layout>
-            <AutoLabelingPage />
-          </Layout>
-        </ProtectedRoute>
-      } />
-      <Route path="/custom-actions" element={
-        <ProtectedRoute>
-          <Layout>
-            <CustomActionsPage />
-          </Layout>
-        </ProtectedRoute>
-      } />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/" element={
+              <ProtectedRoute>
+                <Layout>
+                  <DashboardPage />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/inbox" element={
+              <ProtectedRoute>
+                <Layout>
+                  <DashboardPage />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/inbox/:accountId" element={
+              <ProtectedRoute>
+                <Layout>
+                  <DashboardPage />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/drafts" element={
+              <ProtectedRoute>
+                <Layout>
+                  <DashboardPage folderType="drafts" />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/spam" element={
+              <ProtectedRoute>
+                <Layout>
+                  <DashboardPage folderType="spam" />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/trash" element={
+              <ProtectedRoute>
+                <Layout>
+                  <DashboardPage folderType="trash" />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/contacts" element={
+              <ProtectedRoute>
+                <Layout>
+                  <ContactsPage />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute>
+                <Layout>
+                  <SettingsPage />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/auto-labeling" element={
+              <ProtectedRoute>
+                <Layout>
+                  <AutoLabelingPage />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/custom-actions" element={
+              <ProtectedRoute>
+                <Layout>
+                  <CustomActionsPage />
+                </Layout>
+              </ProtectedRoute>
+            } />
           </Routes>
         </LabelProvider>
       </ConfirmProvider>
