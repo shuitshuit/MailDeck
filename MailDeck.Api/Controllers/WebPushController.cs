@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MailDeck.Api.Extensions;
 using MailDeck.Api.Models;
+using MailDeck.Api.Models.DTO.WebPush;
+using MailDeck.Api.Models.DTO.Common;
 using ShuitNet.ORM.PostgreSQL.LinqToSql;
 
 namespace MailDeck.Api.Controllers;
@@ -30,13 +32,13 @@ public class WebPushController : ControllerBase
         {
             return StatusCode(500, "VAPID Public Key is not configured.");
         }
-        return Ok(new { publicKey });
+        return Ok(new VapidPublicKeyResponse { PublicKey = publicKey });
     }
 
     [HttpPost("subscribe")]
-    public async Task<IActionResult> Subscribe([FromBody] WebPushSubscription subscription)
+    public async Task<IActionResult> Subscribe([FromBody] WebPushSubscriptionRequest request)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
+        var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
             ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
 
         if (string.IsNullOrEmpty(userId)) return Unauthorized();
@@ -48,13 +50,13 @@ public class WebPushController : ControllerBase
             try
             {
                 var existingSubscription = await _db.AsQueryable<WebPushSubscription>()
-                    .Where(s => s.UserId == userId && s.Token == subscription.Token)
+                    .Where(s => s.UserId == userId && s.Token == request.Token)
                     .FirstOrDefaultAsync();
                 if (existingSubscription != null)
                 {
                     existingSubscription!.UpdatedAt = DateTime.UtcNow;
-                    await _db.UpdateAsync(existingSubscription); // Upsert to update the timestamp
-                    return Ok(new { success = true });
+                    await _db.UpdateAsync(existingSubscription);
+                    return Ok(SuccessResponse.Ok());
                 }
             }
             catch (InvalidOperationException)
@@ -62,14 +64,18 @@ public class WebPushController : ControllerBase
                 // No existing subscription found, proceed to insert
             }
 
-            subscription.UserId = userId;
-            subscription.Id = Guid.NewGuid(); // Generate new UUID
-            subscription.CreatedAt = DateTime.UtcNow;
-            subscription.UpdatedAt = DateTime.UtcNow;
+            var subscription = new WebPushSubscription
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Token = request.Token,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
 
             await _db.InsertAsync(subscription);
 
-            return Ok(new { success = true });
+            return Ok(SuccessResponse.Ok());
         }
         catch (Exception ex)
         {

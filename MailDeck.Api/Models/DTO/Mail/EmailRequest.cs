@@ -1,4 +1,4 @@
-namespace MailDeck.Api.Models;
+namespace MailDeck.Api.Models.DTO.Mail;
 
 public class EmailRequest
 {

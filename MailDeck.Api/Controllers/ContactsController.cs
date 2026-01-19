@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MailDeck.Api.Models;
+using MailDeck.Api.Models.DTO.Contacts;
 using MailDeck.Api.Extensions;
 using ShuitNet.ORM.PostgreSQL;
 using System.Security.Claims;
@@ -25,11 +26,12 @@ public class ContactsController : ControllerBase
     public async Task<IActionResult> GetContacts()
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
-        try 
+        try
         {
             await _db.OpenAsync();
             var contacts = await _db.GetMultipleAsync<Contact>(new { user_id = userId });
-            return Ok(contacts);
+            var responses = contacts.Select(ContactResponse.FromEntity).ToList();
+            return Ok(responses);
         }
         catch (Exception ex)
         {
@@ -43,23 +45,30 @@ public class ContactsController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> AddContact([FromBody] Contact contact)
+    public async Task<IActionResult> AddContact([FromBody] ContactRequest request)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
-        
-        if (string.IsNullOrWhiteSpace(contact.Name) || string.IsNullOrWhiteSpace(contact.Email))
+
+        if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Email))
         {
             return BadRequest("Name and Email are required.");
         }
 
-        contact.UserId = userId;
-        contact.Id = Guid.NewGuid(); // Generate new UUID
+        var contact = new Contact
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Name = request.Name,
+            Email = request.Email,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
 
         try
         {
             await _db.OpenAsync();
             var result = await _db.InsertAsync(contact);
-            return Ok(result > 0 ? contact : throw new Exception("Insert failed"));
+            return Ok(result > 0 ? ContactResponse.FromEntity(contact) : throw new Exception("Insert failed"));
         }
         catch (Exception ex)
         {
@@ -99,7 +108,7 @@ public class ContactsController : ControllerBase
         }
     }
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateContact(string id, [FromBody] Contact updatedContact)
+    public async Task<IActionResult> UpdateContact(string id, [FromBody] ContactRequest request)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
 
@@ -112,11 +121,12 @@ public class ContactsController : ControllerBase
                 return NotFound();
             }
 
-            existing.Name = updatedContact.Name;
-            existing.Email = updatedContact.Email;
-            
+            existing.Name = request.Name;
+            existing.Email = request.Email;
+            existing.UpdatedAt = DateTime.UtcNow;
+
             await _db.UpdateAsync(existing);
-            return Ok(existing);
+            return Ok(ContactResponse.FromEntity(existing));
         }
         catch (Exception ex)
         {

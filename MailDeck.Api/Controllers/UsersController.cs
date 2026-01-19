@@ -88,4 +88,15 @@ public class UsersController : ControllerBase
             return StatusCode(500, "Internal server error");
         }
     }
+
+    /// <summary>
+    /// サインアップ時にLambaから実行される、セットアップエンドポイント。
+    /// 下書き・ゴミ箱、ラベル・カスタムスクリプトを追加
+    /// </summary>
+    /// <returns></returns>
+    [HttpPost("setup")]
+    public async Task<IActionResult> Setup()
+    {
+        return Ok();
+    }
 }

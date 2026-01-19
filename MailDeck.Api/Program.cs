@@ -6,6 +6,7 @@ using MailDeck.Api.Middleware;
 using MailDeck.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using Serilog;
 using Serilog.Enrichers.Span;
 using Serilog.Events;
@@ -99,7 +100,40 @@ try
     // Add services to the container.
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
-    builder.Services.AddSwaggerGen();
+    builder.Services.AddSwaggerGen(options =>
+    {
+        options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+        {
+            Description = "JWT Auth Bearer Scheme",
+            Name = "Authorization",
+            In = ParameterLocation.Header,
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            Reference = new OpenApiReference
+            {
+                Type = ReferenceType.SecurityScheme,
+                Id = "Bearer"
+            }
+        });
+        options.AddSecurityRequirement(new OpenApiSecurityRequirement
+                    {
+                        {
+                            new OpenApiSecurityScheme
+                            {
+                                Description = "JWT Auth Bearer Scheme",
+                                Name = "Authorization",
+                                In = ParameterLocation.Header,
+                                Type = SecuritySchemeType.Http,
+                                Scheme = "bearer",
+                                Reference = new OpenApiReference
+                                {
+                                    Type = ReferenceType.SecurityScheme,
+                                    Id = "Bearer"
+                                }
+                            }, new string[] { "Bearer" }
+                        }
+                    });
+    });
 
     // AWS Cognito Authentication
     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -143,9 +177,6 @@ try
     builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
     builder.Services.AddAWSService<IAmazonKeyManagementService>();
     builder.Services.AddSingleton<IEncryptionService, KmsEncryptionService>();
-
-    // Operation Performance Logger
-    builder.Services.AddScoped<IOperationPerformanceLogger, OperationPerformanceLogger>();
 
     // Channel Service for auto-labeling
     builder.Services.AddSingleton<ChannelService>();

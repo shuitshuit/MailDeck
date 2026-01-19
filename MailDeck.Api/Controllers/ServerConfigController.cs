@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MailDeck.Api.Models;
+using MailDeck.Api.Models.DTO.ServerConfig;
 using MailDeck.Api.Extensions;
-using ShuitNet.ORM.PostgreSQL; // Ensure ORM methods are available
-// using ShuitNet.ORM; // Placeholder
+using ShuitNet.ORM.PostgreSQL;
 
 namespace MailDeck.Api.Controllers;
 
@@ -26,24 +26,20 @@ public class ServerConfigController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetConfigs()
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
+        var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
                      ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
-        
+
         if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
-        try 
+        try
         {
             await _db.OpenAsync();
             var userConfigs = await _db.GetMultipleAsync<UserServerConfig>(new { user_id = userId });
 
-            // Do NOT decrypt passwords when returning configs to UI for security
-            foreach (var config in userConfigs)
-            {
-                config.ImapPassword = "*****";
-                config.SmtpPassword = "*****";
-            }
+            // Convert to DTOs with masked passwords
+            var responses = userConfigs.Select(ServerConfigResponse.FromEntity).ToList();
 
-            return Ok(userConfigs);
+            return Ok(responses);
         }
         catch (Exception ex)
         {
@@ -53,40 +49,49 @@ public class ServerConfigController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> AddConfig([FromBody] UserServerConfig config)
+    public async Task<IActionResult> AddConfig([FromBody] ServerConfigRequest request)
     {
-        var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
+        var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
             ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
 
         if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
-        config.Id = Guid.NewGuid(); // Generate new UUID
-        config.UserId = userId;
-        config.CreatedAt = DateTime.UtcNow;
-        config.UpdatedAt = DateTime.UtcNow;
+        var config = new UserServerConfig
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            AccountName = request.AccountName,
+            ImapHost = request.ImapHost,
+            ImapPort = request.ImapPort,
+            ImapUsername = request.ImapUsername,
+            ImapSslEnabled = request.ImapSslEnabled,
+            SmtpHost = request.SmtpHost,
+            SmtpPort = request.SmtpPort,
+            SmtpUsername = request.SmtpUsername,
+            SmtpSslEnabled = request.SmtpSslEnabled,
+            IsDefault = request.IsDefault,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
 
         try
         {
             // Encrypt passwords
-            if (!string.IsNullOrEmpty(config.ImapPassword))
+            if (!string.IsNullOrEmpty(request.ImapPassword))
             {
-                config.ImapPassword = await _encryptionService.EncryptAsync(config.ImapPassword);
+                config.ImapPassword = await _encryptionService.EncryptAsync(request.ImapPassword);
             }
-            if (!string.IsNullOrEmpty(config.SmtpPassword))
+            if (!string.IsNullOrEmpty(request.SmtpPassword))
             {
-                config.SmtpPassword = await _encryptionService.EncryptAsync(config.SmtpPassword);
+                config.SmtpPassword = await _encryptionService.EncryptAsync(request.SmtpPassword);
             }
 
             await _db.OpenAsync();
             await _db.InsertAsync(config);
-            
-            _logger.LogInformation("Added server config for user {UserId}", userId);
-            
-            // Mask passwords in response
-            config.ImapPassword = "*****";
-            config.SmtpPassword = "*****";
 
-            return Ok(config);
+            _logger.LogInformation("Added server config for user {UserId}", userId);
+
+            return Ok(ServerConfigResponse.FromEntity(config));
         }
         catch (Exception ex)
         {
@@ -96,16 +101,16 @@ public class ServerConfigController : ControllerBase
     }
     
     [HttpPost("autoconfig")]
-    public async Task<IActionResult> AutoConfig([FromBody] string email)
+    public async Task<IActionResult> AutoConfig([FromBody] AutoConfigRequest request)
     {
-        if (string.IsNullOrWhiteSpace(email) || !email.Contains("@"))
+        if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains("@"))
         {
             return BadRequest("Invalid email address.");
         }
 
-        var domain = email.Split('@')[1];
+        var domain = request.Email.Split('@')[1];
         using var client = new HttpClient();
-        client.Timeout = TimeSpan.FromSeconds(5); // Set timeout for each request
+        client.Timeout = TimeSpan.FromSeconds(5);
 
         // Method 1: Mozilla ISPDB (Thunderbird's public database)
         try
@@ -118,7 +123,7 @@ public class ServerConfigController : ControllerBase
             {
                 var xmlContent = await response.Content.ReadAsStringAsync();
                 _logger.LogInformation("Found config in Mozilla ISPDB for domain: {Domain}", domain);
-                return Ok(new { source = "ispdb", xml = xmlContent });
+                return Ok(new AutoConfigResponse { Source = "ispdb", Xml = xmlContent });
             }
         }
         catch (Exception ex)
@@ -129,7 +134,7 @@ public class ServerConfigController : ControllerBase
         // Method 2: autoconfig.domain.com
         try
         {
-            var autoconfigUrl = $"http://autoconfig.{domain}/mail/config-v1.1.xml?emailaddress={Uri.EscapeDataString(email)}";
+            var autoconfigUrl = $"http://autoconfig.{domain}/mail/config-v1.1.xml?emailaddress={Uri.EscapeDataString(request.Email)}";
             _logger.LogInformation("Trying autoconfig subdomain: {Url}", autoconfigUrl);
 
             var response = await client.GetAsync(autoconfigUrl);
@@ -137,7 +142,7 @@ public class ServerConfigController : ControllerBase
             {
                 var xmlContent = await response.Content.ReadAsStringAsync();
                 _logger.LogInformation("Found config at autoconfig.{Domain}", domain);
-                return Ok(new { source = "autoconfig_subdomain", xml = xmlContent });
+                return Ok(new AutoConfigResponse { Source = "autoconfig_subdomain", Xml = xmlContent });
             }
         }
         catch (Exception ex)
@@ -148,7 +153,7 @@ public class ServerConfigController : ControllerBase
         // Method 3: domain.com/.well-known/autoconfig/mail/config-v1.1.xml
         try
         {
-            var wellKnownUrl = $"https://{domain}/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress={Uri.EscapeDataString(email)}";
+            var wellKnownUrl = $"https://{domain}/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress={Uri.EscapeDataString(request.Email)}";
             _logger.LogInformation("Trying .well-known: {Url}", wellKnownUrl);
 
             var response = await client.GetAsync(wellKnownUrl);
@@ -156,7 +161,7 @@ public class ServerConfigController : ControllerBase
             {
                 var xmlContent = await response.Content.ReadAsStringAsync();
                 _logger.LogInformation("Found config at .well-known for domain: {Domain}", domain);
-                return Ok(new { source = "well_known", xml = xmlContent });
+                return Ok(new AutoConfigResponse { Source = "well_known", Xml = xmlContent });
             }
         }
         catch (Exception ex)
@@ -167,7 +172,7 @@ public class ServerConfigController : ControllerBase
         // Method 4: Try HTTP version of .well-known (some servers don't have HTTPS)
         try
         {
-            var wellKnownHttpUrl = $"http://{domain}/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress={Uri.EscapeDataString(email)}";
+            var wellKnownHttpUrl = $"http://{domain}/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress={Uri.EscapeDataString(request.Email)}";
             _logger.LogInformation("Trying .well-known (HTTP): {Url}", wellKnownHttpUrl);
 
             var response = await client.GetAsync(wellKnownHttpUrl);
@@ -175,7 +180,7 @@ public class ServerConfigController : ControllerBase
             {
                 var xmlContent = await response.Content.ReadAsStringAsync();
                 _logger.LogInformation("Found config at .well-known (HTTP) for domain: {Domain}", domain);
-                return Ok(new { source = "well_known_http", xml = xmlContent });
+                return Ok(new AutoConfigResponse { Source = "well_known_http", Xml = xmlContent });
             }
         }
         catch (Exception ex)
@@ -184,11 +189,11 @@ public class ServerConfigController : ControllerBase
         }
 
         _logger.LogInformation("No autoconfig found for domain: {Domain}", domain);
-        return Ok(new { source = "none" });
+        return Ok(new AutoConfigResponse { Source = "none" });
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateConfig(string id, [FromBody] UserServerConfig updatedConfig)
+    public async Task<IActionResult> UpdateConfig(string id, [FromBody] ServerConfigRequest request)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
                      ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
@@ -205,29 +210,30 @@ public class ServerConfigController : ControllerBase
             }
 
             // Update fields
-            existing.AccountName = updatedConfig.AccountName;
-            existing.ImapHost = updatedConfig.ImapHost;
-            existing.ImapPort = updatedConfig.ImapPort;
-            existing.ImapUsername = updatedConfig.ImapUsername;
-            existing.ImapSslEnabled = updatedConfig.ImapSslEnabled;
-            existing.SmtpHost = updatedConfig.SmtpHost;
-            existing.SmtpPort = updatedConfig.SmtpPort;
-            existing.SmtpUsername = updatedConfig.SmtpUsername;
-            existing.SmtpSslEnabled = updatedConfig.SmtpSslEnabled;
+            existing.AccountName = request.AccountName;
+            existing.ImapHost = request.ImapHost;
+            existing.ImapPort = request.ImapPort;
+            existing.ImapUsername = request.ImapUsername;
+            existing.ImapSslEnabled = request.ImapSslEnabled;
+            existing.SmtpHost = request.SmtpHost;
+            existing.SmtpPort = request.SmtpPort;
+            existing.SmtpUsername = request.SmtpUsername;
+            existing.SmtpSslEnabled = request.SmtpSslEnabled;
+            existing.IsDefault = request.IsDefault;
             existing.UpdatedAt = DateTime.UtcNow;
 
             // Handle password updates
-            if (!string.IsNullOrEmpty(updatedConfig.ImapPassword) && updatedConfig.ImapPassword != "*****")
+            if (!string.IsNullOrEmpty(request.ImapPassword) && request.ImapPassword != "*****")
             {
-                existing.ImapPassword = await _encryptionService.EncryptAsync(updatedConfig.ImapPassword);
+                existing.ImapPassword = await _encryptionService.EncryptAsync(request.ImapPassword);
             }
-            if (!string.IsNullOrEmpty(updatedConfig.SmtpPassword) && updatedConfig.SmtpPassword != "*****")
+            if (!string.IsNullOrEmpty(request.SmtpPassword) && request.SmtpPassword != "*****")
             {
-                existing.SmtpPassword = await _encryptionService.EncryptAsync(updatedConfig.SmtpPassword);
+                existing.SmtpPassword = await _encryptionService.EncryptAsync(request.SmtpPassword);
             }
 
             await _db.UpdateAsync(existing);
-            return Ok(existing);
+            return Ok(ServerConfigResponse.FromEntity(existing));
         }
         catch (Exception ex)
         {

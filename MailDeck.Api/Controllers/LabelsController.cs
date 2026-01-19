@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MailDeck.Api.Models;
+using MailDeck.Api.Models.DTO.Labels;
 using MailDeck.Api.Extensions;
 using ShuitNet.ORM.PostgreSQL;
 using System.Security.Claims;
@@ -32,7 +33,8 @@ public class LabelsController : ControllerBase
         {
             await _db.OpenAsync();
             var labels = await _db.GetMultipleAsync<Label>(new { user_id = userId });
-            return Ok(labels);
+            var responses = labels.Select(LabelDetailResponse.FromEntity).ToList();
+            return Ok(responses);
         }
         catch (Exception ex)
         {
@@ -49,39 +51,44 @@ public class LabelsController : ControllerBase
     /// Create a new label
     /// </summary>
     [HttpPost]
-    public async Task<IActionResult> CreateLabel([FromBody] Label label)
+    public async Task<IActionResult> CreateLabel([FromBody] LabelRequest request)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
 
-        if (string.IsNullOrWhiteSpace(label.Name))
+        if (string.IsNullOrWhiteSpace(request.Name))
         {
             return BadRequest("Label name is required.");
         }
 
         // Validate color format (HEX)
-        if (!string.IsNullOrWhiteSpace(label.Color) && !System.Text.RegularExpressions.Regex.IsMatch(label.Color, @"^#[0-9A-Fa-f]{6}$"))
+        if (!string.IsNullOrWhiteSpace(request.Color) && !System.Text.RegularExpressions.Regex.IsMatch(request.Color, @"^#[0-9A-Fa-f]{6}$"))
         {
             return BadRequest("Color must be a valid HEX format (#RRGGBB).");
         }
 
-        label.UserId = userId;
-        label.Id = Guid.NewGuid();
-        label.CreatedAt = DateTime.UtcNow;
-        label.UpdatedAt = DateTime.UtcNow;
+        var label = new Label
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Name = request.Name,
+            Color = request.Color ?? "#3B82F6",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
 
         try
         {
             await _db.OpenAsync();
 
             // Check for duplicate label name
-            var existing = await _db.GetMultipleAsync<Label>(new { user_id = userId, name = label.Name });
+            var existing = await _db.GetMultipleAsync<Label>(new { user_id = userId, name = request.Name });
             if (existing.Any())
             {
                 return Conflict("A label with this name already exists.");
             }
 
             var result = await _db.InsertAsync(label);
-            return result > 0 ? Ok(label) : StatusCode(500, "Insert failed");
+            return result > 0 ? Ok(LabelDetailResponse.FromEntity(label)) : StatusCode(500, "Insert failed");
         }
         catch (Exception ex)
         {
@@ -98,7 +105,7 @@ public class LabelsController : ControllerBase
     /// Update an existing label
     /// </summary>
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateLabel(string id, [FromBody] Label label)
+    public async Task<IActionResult> UpdateLabel(string id, [FromBody] LabelRequest request)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
 
@@ -107,13 +114,13 @@ public class LabelsController : ControllerBase
             return BadRequest("Invalid label ID.");
         }
 
-        if (string.IsNullOrWhiteSpace(label.Name))
+        if (string.IsNullOrWhiteSpace(request.Name))
         {
             return BadRequest("Label name is required.");
         }
 
         // Validate color format
-        if (!string.IsNullOrWhiteSpace(label.Color) && !System.Text.RegularExpressions.Regex.IsMatch(label.Color, @"^#[0-9A-Fa-f]{6}$"))
+        if (!string.IsNullOrWhiteSpace(request.Color) && !System.Text.RegularExpressions.Regex.IsMatch(request.Color, @"^#[0-9A-Fa-f]{6}$"))
         {
             return BadRequest("Color must be a valid HEX format (#RRGGBB).");
         }
@@ -130,19 +137,19 @@ public class LabelsController : ControllerBase
             }
 
             // Check for duplicate name (excluding current label)
-            var duplicate = await _db.GetMultipleAsync<Label>(new { user_id = userId, name = label.Name });
+            var duplicate = await _db.GetMultipleAsync<Label>(new { user_id = userId, name = request.Name });
             if (duplicate.Any(l => l.Id != labelId))
             {
                 return Conflict("A label with this name already exists.");
             }
 
             // Update fields
-            existing.Name = label.Name;
-            existing.Color = label.Color ?? existing.Color;
+            existing.Name = request.Name;
+            existing.Color = request.Color ?? existing.Color;
             existing.UpdatedAt = DateTime.UtcNow;
 
             await _db.UpdateAsync(existing);
-            return Ok(existing);
+            return Ok(LabelDetailResponse.FromEntity(existing));
         }
         catch (Exception ex)
         {
@@ -226,16 +233,16 @@ public class LabelsController : ControllerBase
             var labelIds = mailLabels.Select(ml => ml.LabelId).ToList();
             if (!labelIds.Any())
             {
-                return Ok(new List<Label>());
+                return Ok(new List<LabelDetailResponse>());
             }
 
-            var labels = new List<Label>();
+            var labels = new List<LabelDetailResponse>();
             foreach (var labelId in labelIds)
             {
                 var label = await _db.GetAsync<Label>(labelId);
                 if (label != null)
                 {
-                    labels.Add(label);
+                    labels.Add(LabelDetailResponse.FromEntity(label));
                 }
             }
 
@@ -256,7 +263,7 @@ public class LabelsController : ControllerBase
     /// Add a label to a message
     /// </summary>
     [HttpPost("message")]
-    public async Task<IActionResult> AddLabelToMessage([FromBody] AddLabelRequest request)
+    public async Task<IActionResult> AddLabelToMessage([FromBody] AddLabelToMessageRequest request)
     {
         var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
 
@@ -307,7 +314,7 @@ public class LabelsController : ControllerBase
             };
 
             var result = await _db.InsertAsync(mailLabel);
-            return result > 0 ? Ok(mailLabel) : StatusCode(500, "Insert failed");
+            return result > 0 ? Ok(MailLabelResponse.FromEntity(mailLabel)) : StatusCode(500, "Insert failed");
         }
         catch (Exception ex)
         {
@@ -373,14 +380,4 @@ public class LabelsController : ControllerBase
             _db.Close();
         }
     }
-}
-
-/// <summary>
-/// Request model for adding label to message
-/// </summary>
-public class AddLabelRequest
-{
-    public int MessageId { get; set; }
-    public string LabelId { get; set; } = string.Empty;
-    public string ServerConfigId { get; set; } = string.Empty;
 }
