@@ -13,6 +13,7 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/system-preset-patterns")]
+[Produces("application/json")]
 public class SystemPresetPatternsController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
@@ -27,6 +28,8 @@ public class SystemPresetPatternsController : BaseAuthController
     /// Get all system preset patterns
     /// </summary>
     [HttpGet]
+    [ProducesResponseType(typeof(List<SystemPresetPattern>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetPresets([FromQuery] string? category = null)
     {
         try
@@ -71,6 +74,8 @@ public class SystemPresetPatternsController : BaseAuthController
     /// Get distinct categories
     /// </summary>
     [HttpGet("categories")]
+    [ProducesResponseType(typeof(List<string>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetCategories()
     {
         try
@@ -106,6 +111,10 @@ public class SystemPresetPatternsController : BaseAuthController
     /// Import a system preset pattern as a user pattern
     /// </summary>
     [HttpPost("{presetId}/import")]
+    [ProducesResponseType(typeof(CustomActionPattern), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> ImportPreset(Guid presetId)
     {
         var userId = GetUserId();
@@ -181,6 +190,9 @@ public class SystemPresetPatternsController : BaseAuthController
     /// Import multiple presets at once
     /// </summary>
     [HttpPost("import-multiple")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> ImportMultiplePresets([FromBody] List<Guid> presetIds)
     {
         var userId = GetUserId();

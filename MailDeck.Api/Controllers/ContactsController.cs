@@ -11,6 +11,7 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
+[Produces("application/json")]
 public class ContactsController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
@@ -22,6 +23,8 @@ public class ContactsController : BaseAuthController
     }
 
     [HttpGet]
+    [ProducesResponseType(typeof(List<ContactResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetContacts()
     {
         var userId = GetUserId();
@@ -44,6 +47,9 @@ public class ContactsController : BaseAuthController
     }
 
     [HttpPost]
+    [ProducesResponseType(typeof(ContactResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> AddContact([FromBody] ContactRequest request)
     {
         var userId = GetUserId();
@@ -81,6 +87,9 @@ public class ContactsController : BaseAuthController
     }
 
     [HttpDelete("{id}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> DeleteContact(string id)
     {
         var userId = GetUserId();
@@ -107,6 +116,9 @@ public class ContactsController : BaseAuthController
         }
     }
     [HttpPut("{id}")]
+    [ProducesResponseType(typeof(ContactResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> UpdateContact(string id, [FromBody] ContactRequest request)
     {
         var userId = GetUserId();

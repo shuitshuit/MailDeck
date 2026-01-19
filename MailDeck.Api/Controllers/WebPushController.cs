@@ -11,6 +11,7 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
+[Produces("application/json")]
 public class WebPushController : BaseAuthController
 {
     private readonly IConfiguration _configuration;
@@ -24,6 +25,8 @@ public class WebPushController : BaseAuthController
     }
 
     [HttpGet("vapid-public-key")]
+    [ProducesResponseType(typeof(VapidPublicKeyResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public IActionResult GetVapidPublicKey()
     {
         var publicKey = _configuration["WebPush:PublicKey"];
@@ -35,6 +38,9 @@ public class WebPushController : BaseAuthController
     }
 
     [HttpPost("subscribe")]
+    [ProducesResponseType(typeof(SuccessResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Subscribe([FromBody] WebPushSubscriptionRequest request)
     {
         var userId = GetUserId();

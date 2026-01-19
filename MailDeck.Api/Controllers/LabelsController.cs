@@ -11,6 +11,7 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
+[Produces("application/json")]
 public class LabelsController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
@@ -25,6 +26,8 @@ public class LabelsController : BaseAuthController
     /// Get all labels for the authenticated user
     /// </summary>
     [HttpGet]
+    [ProducesResponseType(typeof(List<LabelDetailResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetLabels()
     {
         var userId = GetUserId();
@@ -50,6 +53,10 @@ public class LabelsController : BaseAuthController
     /// Create a new label
     /// </summary>
     [HttpPost]
+    [ProducesResponseType(typeof(LabelDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> CreateLabel([FromBody] LabelRequest request)
     {
         var userId = GetUserId();
@@ -104,6 +111,11 @@ public class LabelsController : BaseAuthController
     /// Update an existing label
     /// </summary>
     [HttpPut("{id}")]
+    [ProducesResponseType(typeof(LabelDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> UpdateLabel(string id, [FromBody] LabelRequest request)
     {
         var userId = GetUserId();
@@ -165,6 +177,10 @@ public class LabelsController : BaseAuthController
     /// Delete a label (cascade deletes all mail_labels associations)
     /// </summary>
     [HttpDelete("{id}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> DeleteLabel(string id)
     {
         var userId = GetUserId();
@@ -202,6 +218,9 @@ public class LabelsController : BaseAuthController
     /// Get all labels for a specific message
     /// </summary>
     [HttpGet("message/{messageId}")]
+    [ProducesResponseType(typeof(List<LabelDetailResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetLabelsForMessage(int messageId, [FromQuery] string serverConfigId)
     {
         var userId = GetUserId();
@@ -262,6 +281,11 @@ public class LabelsController : BaseAuthController
     /// Add a label to a message
     /// </summary>
     [HttpPost("message")]
+    [ProducesResponseType(typeof(MailLabelResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> AddLabelToMessage([FromBody] AddLabelToMessageRequest request)
     {
         var userId = GetUserId();
@@ -330,6 +354,10 @@ public class LabelsController : BaseAuthController
     /// Remove a label from a message
     /// </summary>
     [HttpDelete("message")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> RemoveLabelFromMessage([FromQuery] int messageId, [FromQuery] string labelId, [FromQuery] string serverConfigId)
     {
         var userId = GetUserId();

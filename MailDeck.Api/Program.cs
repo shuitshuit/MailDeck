@@ -58,17 +58,6 @@ Log.Logger = new LoggerConfiguration()
             rollingInterval: RollingInterval.Day,
             retainedFileCountLimit: 7,
             buffered: false))
-    // 操作パフォーマンスログ専用ファイル（IMAP/SMTP操作計測用）
-    .WriteTo.Logger(lc => lc
-        .Filter.ByIncludingOnly(evt =>
-            evt.Properties.ContainsKey("SourceContext") &&
-            evt.Properties["SourceContext"].ToString().Contains("OperationPerformanceLogger"))
-        .WriteTo.File(
-            new CompactJsonFormatter(),
-            path: "logs/operations-.json",
-            rollingInterval: RollingInterval.Day,
-            retainedFileCountLimit: 7,
-            buffered: false))
     // アプリケーションログファイル（Fluent Bit用JSON形式）
     .WriteTo.Logger(lc => lc
         .Filter.ByExcluding(evt =>

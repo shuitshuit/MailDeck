@@ -15,6 +15,7 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/pattern-usage-stats")]
+[Produces("application/json")]
 public class PatternUsageStatsController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
@@ -29,6 +30,10 @@ public class PatternUsageStatsController : BaseAuthController
     /// Record a pattern usage event (copy, link_click, highlight_copy)
     /// </summary>
     [HttpPost]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> RecordUsage([FromBody] RecordUsageRequest request)
     {
         var userId = GetUserId();
@@ -83,6 +88,9 @@ public class PatternUsageStatsController : BaseAuthController
     /// Get usage statistics for the user's patterns
     /// </summary>
     [HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetStats([FromQuery] int days = 30)
     {
         var userId = GetUserId();
@@ -176,6 +184,10 @@ public class PatternUsageStatsController : BaseAuthController
     /// Get stats for a specific pattern
     /// </summary>
     [HttpGet("{patternId}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetPatternStats(Guid patternId, [FromQuery] int days = 30)
     {
         var userId = GetUserId();

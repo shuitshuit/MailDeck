@@ -13,6 +13,7 @@ namespace MailDeck.Api.Controllers;
 [ApiController]
 [Route("api/custom-actions/recent-codes")]
 [Authorize]
+[Produces("application/json")]
 public class RecentCodesController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
@@ -28,6 +29,9 @@ public class RecentCodesController : BaseAuthController
     /// Ordered by creation time descending (newest first).
     /// </summary>
     [HttpGet]
+    [ProducesResponseType(typeof(List<RecentOtpCode>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetRecentCodes()
     {
         var userId = GetUserId();
@@ -68,6 +72,11 @@ public class RecentCodesController : BaseAuthController
     /// Delete a specific recent OTP code.
     /// </summary>
     [HttpDelete("{id}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> DeleteRecentCode(Guid id)
     {
         var userId = GetUserId();
@@ -113,6 +122,9 @@ public class RecentCodesController : BaseAuthController
     /// Clear all recent OTP codes for the current user.
     /// </summary>
     [HttpDelete]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> ClearAllRecentCodes()
     {
         var userId = GetUserId();

@@ -10,6 +10,7 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
+[Produces("application/json")]
 public class UsersController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
@@ -21,6 +22,9 @@ public class UsersController : BaseAuthController
     }
 
     [HttpPost("sync")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Sync()
     {
         var userId = GetUserId();
@@ -93,6 +97,7 @@ public class UsersController : BaseAuthController
     /// </summary>
     /// <returns></returns>
     [HttpPost("setup")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> Setup()
     {
         return Ok();

@@ -11,6 +11,7 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/auto-labeling-rules")]
+[Produces("application/json")]
 public class AutoLabelingRulesController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
@@ -25,6 +26,8 @@ public class AutoLabelingRulesController : BaseAuthController
     /// Get all auto-labeling rules for the authenticated user
     /// </summary>
     [HttpGet]
+    [ProducesResponseType(typeof(List<AutoLabelingRule>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetRules()
     {
         var userId = GetUserId();
@@ -59,6 +62,11 @@ public class AutoLabelingRulesController : BaseAuthController
     /// Create a new auto-labeling rule
     /// </summary>
     [HttpPost]
+    [ProducesResponseType(typeof(AutoLabelingRule), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> CreateRule([FromBody] AutoLabelingRule rule)
     {
         var userId = GetUserId();
@@ -163,6 +171,11 @@ public class AutoLabelingRulesController : BaseAuthController
     /// Update an existing auto-labeling rule
     /// </summary>
     [HttpPut("{id}")]
+    [ProducesResponseType(typeof(AutoLabelingRule), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> UpdateRule(Guid id, [FromBody] AutoLabelingRule rule)
     {
         var userId = GetUserId();
@@ -277,6 +290,9 @@ public class AutoLabelingRulesController : BaseAuthController
     /// Delete an auto-labeling rule
     /// </summary>
     [HttpDelete("{id}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> DeleteRule(Guid id)
     {
         var userId = GetUserId();
@@ -311,6 +327,9 @@ public class AutoLabelingRulesController : BaseAuthController
     /// Toggle the enabled/disabled state of an auto-labeling rule
     /// </summary>
     [HttpPost("{id}/toggle")]
+    [ProducesResponseType(typeof(AutoLabelingRule), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> ToggleRule(Guid id)
     {
         var userId = GetUserId();

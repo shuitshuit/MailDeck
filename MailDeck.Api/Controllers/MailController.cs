@@ -15,6 +15,7 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
+[Produces("application/json")]
 public class MailController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
@@ -31,6 +32,9 @@ public class MailController : BaseAuthController
     }
 
     [HttpGet("inbox")]
+    [ProducesResponseType(typeof(InboxResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetInbox(Guid configId, int page = 1, int pageSize = 20)
     {
         var userId = GetUserId();
@@ -123,6 +127,9 @@ public class MailController : BaseAuthController
     }
 
     [HttpGet("inbox/{folder-name}")]
+    [ProducesResponseType(typeof(InboxResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetInboxFolder(Guid configId, string folderName, int page = 1, int pageSize = 20)
     {
         var userId = GetUserId();
@@ -200,6 +207,9 @@ public class MailController : BaseAuthController
     }
 
     [HttpGet("folders")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetFolders(Guid configId, bool forceSync = false)
     {
         var userId = GetUserId();
@@ -264,6 +274,9 @@ public class MailController : BaseAuthController
     }
 
     [HttpPost("folders/sync")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> SyncFolders(Guid configId)
     {
         return await GetFolders(configId, forceSync: true);
@@ -323,6 +336,10 @@ public class MailController : BaseAuthController
     }
 
     [HttpGet("message/{id}")]
+    [ProducesResponseType(typeof(MailMessageDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetMessage(string id, Guid configId)
     {
         var userId = GetUserId();
@@ -379,6 +396,10 @@ public class MailController : BaseAuthController
     }
 
     [HttpDelete("message/{id}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> DeleteMessage(string id, Guid configId)
     {
         var userId = GetUserId();
@@ -412,6 +433,9 @@ public class MailController : BaseAuthController
     }
 
     [HttpPost("send")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> SendMail([FromBody] EmailRequest request)
     {
         var userId = GetUserId();
@@ -461,6 +485,9 @@ public class MailController : BaseAuthController
     }
 
     [HttpPost("draft")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> SaveDraft([FromBody] DraftRequest request)
     {
         if (string.IsNullOrEmpty(request.To) && string.IsNullOrEmpty(request.Subject)
@@ -513,6 +540,10 @@ public class MailController : BaseAuthController
     }
 
     [HttpGet("draft/{id}")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetDraft(string id, Guid configId)
     {
         var userId = GetUserId();
@@ -564,6 +595,10 @@ public class MailController : BaseAuthController
     }
 
     [HttpPut("draft/{id}")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> UpdateDraft(string id, Guid configId, [FromBody] DraftRequest request)
     {
         var userId = GetUserId();
@@ -613,6 +648,10 @@ public class MailController : BaseAuthController
     }
 
     [HttpDelete("draft/{id}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> DeleteDraft(string id, Guid configId)
     {
         var userId = GetUserId();
@@ -654,6 +693,10 @@ public class MailController : BaseAuthController
     }
 
     [HttpPost("draft/send/{id}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> SendDraft(string id, Guid configId)
     {
         var userId = GetUserId();
@@ -706,6 +749,9 @@ public class MailController : BaseAuthController
     }
 
     [HttpGet("drafts")]
+    [ProducesResponseType(typeof(InboxResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetDrafts(Guid configId, int page = 1, int pageSize = 20)
     {
         var userId = GetUserId();
@@ -767,6 +813,9 @@ public class MailController : BaseAuthController
     }
 
     [HttpGet("spam")]
+    [ProducesResponseType(typeof(InboxResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetSpam(Guid configId, int page = 1, int pageSize = 20)
     {
         var userId = GetUserId();
@@ -828,6 +877,10 @@ public class MailController : BaseAuthController
     }
 
     [HttpPut("move-to-trash/{id}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> MoveToTrash(string id, Guid configId)
     {
         var userId = GetUserId();
@@ -870,6 +923,9 @@ public class MailController : BaseAuthController
     }
 
     [HttpGet("trash")]
+    [ProducesResponseType(typeof(InboxResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetTrash(Guid configId, int page = 1, int pageSize = 20)
     {
         var userId = GetUserId();

@@ -11,6 +11,7 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/custom-action-patterns")]
+[Produces("application/json")]
 public class CustomActionPatternsController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
@@ -25,6 +26,8 @@ public class CustomActionPatternsController : BaseAuthController
     /// Get all custom action patterns for the authenticated user
     /// </summary>
     [HttpGet]
+    [ProducesResponseType(typeof(List<CustomActionPattern>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetPatterns()
     {
         var userId = GetUserId();
@@ -61,6 +64,10 @@ public class CustomActionPatternsController : BaseAuthController
     /// Create a new custom action pattern
     /// </summary>
     [HttpPost]
+    [ProducesResponseType(typeof(CustomActionPattern), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> CreatePattern([FromBody] CustomActionPattern pattern)
     {
         var userId = GetUserId();
@@ -187,6 +194,12 @@ public class CustomActionPatternsController : BaseAuthController
     /// Update an existing custom action pattern
     /// </summary>
     [HttpPut("{id}")]
+    [ProducesResponseType(typeof(CustomActionPattern), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> UpdatePattern(Guid id, [FromBody] CustomActionPattern updatedPattern)
     {
         var userId = GetUserId();
@@ -328,6 +341,10 @@ public class CustomActionPatternsController : BaseAuthController
     /// Delete a custom action pattern
     /// </summary>
     [HttpDelete("{id}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> DeletePattern(Guid id)
     {
         var userId = GetUserId();
@@ -370,6 +387,10 @@ public class CustomActionPatternsController : BaseAuthController
     /// Toggle a custom action pattern's enabled status
     /// </summary>
     [HttpPost("{id}/toggle")]
+    [ProducesResponseType(typeof(CustomActionPattern), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> TogglePattern(Guid id)
     {
         var userId = GetUserId();

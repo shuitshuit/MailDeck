@@ -10,6 +10,7 @@ namespace MailDeck.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
+[Produces("application/json")]
 public class ServerConfigController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
@@ -23,6 +24,9 @@ public class ServerConfigController : BaseAuthController
     }
 
     [HttpGet]
+    [ProducesResponseType(typeof(List<ServerConfigResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetConfigs()
     {
         var userId = GetUserId();
@@ -47,6 +51,9 @@ public class ServerConfigController : BaseAuthController
     }
 
     [HttpPost]
+    [ProducesResponseType(typeof(ServerConfigResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> AddConfig([FromBody] ServerConfigRequest request)
     {
         var userId = GetUserId();
@@ -98,6 +105,8 @@ public class ServerConfigController : BaseAuthController
     }
     
     [HttpPost("autoconfig")]
+    [ProducesResponseType(typeof(AutoConfigResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> AutoConfig([FromBody] AutoConfigRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains("@"))
@@ -190,6 +199,10 @@ public class ServerConfigController : BaseAuthController
     }
 
     [HttpPut("{id}")]
+    [ProducesResponseType(typeof(ServerConfigResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> UpdateConfig(string id, [FromBody] ServerConfigRequest request)
     {
         var userId = GetUserId();
@@ -239,6 +252,10 @@ public class ServerConfigController : BaseAuthController
     }
 
     [HttpDelete("{id}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> DeleteConfig(string id)
     {
         var userId = GetUserId();
