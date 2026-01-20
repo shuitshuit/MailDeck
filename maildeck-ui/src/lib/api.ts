@@ -192,6 +192,73 @@ export async function getTrash(configId: string, page = 1) {
 }
 
 /**
+ * Permanently delete a message from trash
+ */
+export async function deleteFromTrash(configId: string, messageId: number) {
+    const response = await authFetch(`/mail/trash/${messageId}?configId=${configId}`, {
+        method: 'DELETE'
+    });
+    return await response.json();
+}
+
+/**
+ * Restore a message from trash to inbox
+ */
+export async function restoreFromTrash(configId: string, messageId: number) {
+    const response = await authFetch(`/mail/trash/restore/${messageId}?configId=${configId}`, {
+        method: 'PUT'
+    });
+    return await response.json();
+}
+
+/**
+ * Empty all messages from trash for a specific account
+ */
+export async function emptyTrash(configId: string) {
+    const response = await authFetch(`/mail/trash?configId=${configId}`, {
+        method: 'DELETE'
+    });
+    return await response.json();
+}
+
+// ============================================================================
+// Bulk Operations API
+// ============================================================================
+
+/**
+ * Move multiple messages to trash
+ */
+export async function bulkMoveToTrash(configId: string, messageIds: number[]) {
+    const response = await authFetch('/mail/bulk/move-to-trash', {
+        method: 'POST',
+        body: JSON.stringify({ configId, messageIds })
+    });
+    return await response.json();
+}
+
+/**
+ * Permanently delete multiple messages from trash
+ */
+export async function bulkDeleteFromTrash(configId: string, messageIds: number[]) {
+    const response = await authFetch('/mail/bulk/delete-from-trash', {
+        method: 'POST',
+        body: JSON.stringify({ configId, messageIds })
+    });
+    return await response.json();
+}
+
+/**
+ * Restore multiple messages from trash to inbox
+ */
+export async function bulkRestoreFromTrash(configId: string, messageIds: number[]) {
+    const response = await authFetch('/mail/bulk/restore-from-trash', {
+        method: 'POST',
+        body: JSON.stringify({ configId, messageIds })
+    });
+    return await response.json();
+}
+
+/**
  * Add a new server configuration
  */
 export async function addServerConfig(config: any) {
@@ -208,7 +275,7 @@ export async function addServerConfig(config: any) {
 export async function autoConfig(email: string) {
     const response = await authFetch('/serverconfig/autoconfig', {
         method: 'POST',
-        body: JSON.stringify(email)
+        body: JSON.stringify({ email })
     });
     return await response.json();
 }
@@ -529,5 +596,41 @@ export async function getPatternUsageStats(days: number = 30) {
  */
 export async function getPatternStats(patternId: string, days: number = 30) {
     const response = await authFetch(`/pattern-usage-stats/${patternId}?days=${days}`);
+    return await response.json();
+}
+
+// ============================================================================
+// Consent API
+// ============================================================================
+
+export interface ConsentStatus {
+    termsOfServiceConsented: boolean;
+    termsOfServiceConsentedVersion: string | null;
+    termsOfServiceConsentedAt: string | null;
+    privacyPolicyConsented: boolean;
+    privacyPolicyConsentedVersion: string | null;
+    privacyPolicyConsentedAt: string | null;
+    latestTermsOfServiceVersion: string;
+    latestPrivacyPolicyVersion: string;
+    requiresTermsOfServiceConsent: boolean;
+    requiresPrivacyPolicyConsent: boolean;
+}
+
+/**
+ * Get current consent status
+ */
+export async function getConsentStatus(): Promise<ConsentStatus> {
+    const response = await authFetch('/consent/status');
+    return await response.json();
+}
+
+/**
+ * Record consent for terms of service and/or privacy policy
+ */
+export async function recordConsent(termsOfService: boolean, privacyPolicy: boolean): Promise<ConsentStatus> {
+    const response = await authFetch('/consent', {
+        method: 'POST',
+        body: JSON.stringify({ termsOfService, privacyPolicy })
+    });
     return await response.json();
 }

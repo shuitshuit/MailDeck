@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MailDeck.Api.Models;
+using MailDeck.Api.Models.DTO.Users;
 using MailDeck.Api.Extensions;
 using ShuitNet.ORM.PostgreSQL;
 using System.Security.Claims;
@@ -92,14 +93,120 @@ public class UsersController : BaseAuthController
     }
 
     /// <summary>
-    /// サインアップ時にLambaから実行される、セットアップエンドポイント。
-    /// 下書き・ゴミ箱、ラベル・カスタムスクリプトを追加
+    /// サインアップ時にLambdaから実行される、セットアップエンドポイント。
+    /// デフォルトフォルダ設定、非表示ラベル（赤色）を追加
     /// </summary>
-    /// <returns></returns>
     [HttpPost("setup")]
+    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Setup()
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> Setup([FromBody] SetupRequest request)
     {
-        return Ok();
+        // Lambda API Key認証
+        var apiKey = Request.Headers["X-Lambda-Api-Key"].FirstOrDefault();
+        var expectedApiKey = Environment.GetEnvironmentVariable("LAMBDA_API_KEY");
+
+        if (string.IsNullOrEmpty(expectedApiKey) || apiKey != expectedApiKey)
+        {
+            _logger.LogWarning("Invalid or missing Lambda API key for setup endpoint");
+            return Unauthorized("Invalid API key");
+        }
+
+        if (string.IsNullOrEmpty(request.UserId) || string.IsNullOrEmpty(request.Email))
+        {
+            return BadRequest("UserId and Email are required");
+        }
+
+        try
+        {
+            await _db.OpenAsync();
+
+            // 1. ユーザー作成（存在しない場合）
+            var existingUser = await _db.GetAsync<User>(request.UserId);
+
+            if (existingUser == null)
+            {
+                var newUser = new User
+                {
+                    Id = request.UserId,
+                    Email = request.Email,
+                    Settings = new UserSettings
+                    {
+                        DefaultFolders = new DefaultFolders()
+                    },
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                await _db.InsertAsync(newUser);
+                _logger.LogInformation("Setup: Created new user {UserId}", request.UserId);
+            }
+            else
+            {
+                _logger.LogInformation("Setup: User {UserId} already exists", request.UserId);
+            }
+
+            // 2. 非表示ラベル（赤色）を作成
+            var existingLabels = await _db.GetMultipleAsync<Label>(
+                new { user_id = request.UserId, name = "非表示" }
+            );
+
+            if (!existingLabels.Any())
+            {
+                var hiddenLabel = new Label
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = request.UserId,
+                    Name = "非表示",
+                    Color = "#EF4444", // Red color
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                await _db.InsertAsync(hiddenLabel);
+                _logger.LogInformation("Setup: Created hidden label for user {UserId}", request.UserId);
+            }
+            else
+            {
+                _logger.LogInformation("Setup: Hidden label already exists for user {UserId}", request.UserId);
+            }
+
+            return Ok(new { message = "User setup completed successfully" });
+        }
+        catch (InvalidOperationException)
+        {
+            // ユーザーが存在しない場合の処理（GetAsyncの例外）
+            var newUser = new User
+            {
+                Id = request.UserId,
+                Email = request.Email,
+                Settings = new UserSettings
+                {
+                    DefaultFolders = new DefaultFolders()
+                },
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            await _db.InsertAsync(newUser);
+
+            var hiddenLabel = new Label
+            {
+                Id = Guid.NewGuid(),
+                UserId = request.UserId,
+                Name = "非表示",
+                Color = "#EF4444",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            await _db.InsertAsync(hiddenLabel);
+
+            _logger.LogInformation("Setup: Created user and hidden label for {UserId} after exception", request.UserId);
+            return Ok(new { message = "User setup completed successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogErrorWithSql(ex, "Error during user setup for {UserId}", request.UserId);
+            return StatusCode(500, "Internal server error");
+        }
     }
 }

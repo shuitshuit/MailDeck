@@ -909,7 +909,6 @@ public class MailController : BaseAuthController
                 var inbox = client.Inbox;
                 await inbox.OpenAsync(FolderAccess.ReadWrite);
                 var trashFolder = await client.GetFolderAsync(trashFolderPath);
-                await trashFolder.OpenAsync(FolderAccess.ReadWrite);
                 await inbox.MoveToAsync(uid, trashFolder);
                 await client.DisconnectAsync(true);
                 return Ok(new { success = true });
@@ -983,6 +982,327 @@ public class MailController : BaseAuthController
         {
             _logger.LogErrorWithSql(ex, "Failed to fetch trash folder");
             return StatusCode(500, "Failed to fetch trash folder: " + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Permanently delete a message from trash
+    /// </summary>
+    [HttpDelete("trash/{id}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> DeleteFromTrash(string id, [FromQuery] Guid configId)
+    {
+        var userId = GetUserId();
+
+        try
+        {
+            await _db.OpenAsync();
+            var config = await _db.GetAsync<UserServerConfig>(new { id = configId, user_id = userId });
+            if (config == null) return NotFound("Config not found");
+
+            var folderPaths = await _db.GetMultipleAsync<ImapFolders>(new { config_id = configId });
+            var trashFolderPath = folderPaths
+                .FirstOrDefault(f => f.ImapPath is "Trash" or "ゴミ箱")?.ImapPath;
+            trashFolderPath ??= folderPaths.FirstOrDefault(f => f.DisplayName is "Trash" or "ゴミ箱")?
+                .ImapPath ?? "Trash";
+
+            if (!uint.TryParse(id, out var uidVal)) return BadRequest("Invalid message ID");
+            var uid = new UniqueId(uidVal);
+
+            using var client = new ImapClient();
+            await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
+            var decryptedPassword = await _encryptionService.DecryptAsync(config.ImapPassword);
+            await client.AuthenticateAsync(config.ImapUsername, decryptedPassword);
+
+            var trashFolder = await client.GetFolderAsync(trashFolderPath);
+            await trashFolder.OpenAsync(FolderAccess.ReadWrite);
+            await trashFolder.AddFlagsAsync(uid, MessageFlags.Deleted, true);
+            await trashFolder.ExpungeAsync();
+
+            await client.DisconnectAsync(true);
+            return Ok(new { success = true, message = "Message permanently deleted" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogErrorWithSql(ex, "Failed to delete message from trash");
+            return StatusCode(500, "Failed to delete message: " + ex.Message);
+        }
+        finally
+        {
+            _db.Close();
+        }
+    }
+
+    /// <summary>
+    /// Restore a message from trash to inbox
+    /// </summary>
+    [HttpPut("trash/restore/{id}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> RestoreFromTrash(string id, [FromQuery] Guid configId)
+    {
+        var userId = GetUserId();
+
+        try
+        {
+            await _db.OpenAsync();
+            var config = await _db.GetAsync<UserServerConfig>(new { id = configId, user_id = userId });
+            if (config == null) return NotFound("Config not found");
+
+            var folderPaths = await _db.GetMultipleAsync<ImapFolders>(new { config_id = configId });
+            var trashFolderPath = folderPaths
+                .FirstOrDefault(f => f.ImapPath is "Trash" or "ゴミ箱")?.ImapPath;
+            trashFolderPath ??= folderPaths.FirstOrDefault(f => f.DisplayName is "Trash" or "ゴミ箱")?
+                .ImapPath ?? "Trash";
+
+            if (!uint.TryParse(id, out var uidVal)) return BadRequest("Invalid message ID");
+            var uid = new UniqueId(uidVal);
+
+            using var client = new ImapClient();
+            await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
+            var decryptedPassword = await _encryptionService.DecryptAsync(config.ImapPassword);
+            await client.AuthenticateAsync(config.ImapUsername, decryptedPassword);
+
+            var trashFolder = await client.GetFolderAsync(trashFolderPath);
+            await trashFolder.OpenAsync(FolderAccess.ReadWrite);
+
+            var inbox = client.Inbox;
+            await trashFolder.MoveToAsync(uid, inbox);
+
+            await client.DisconnectAsync(true);
+            return Ok(new { success = true, message = "Message restored to inbox" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogErrorWithSql(ex, "Failed to restore message from trash");
+            return StatusCode(500, "Failed to restore message: " + ex.Message);
+        }
+        finally
+        {
+            _db.Close();
+        }
+    }
+
+    /// <summary>
+    /// Empty all messages from trash
+    /// </summary>
+    [HttpDelete("trash")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> EmptyTrash([FromQuery] Guid configId)
+    {
+        var userId = GetUserId();
+
+        try
+        {
+            await _db.OpenAsync();
+            var config = await _db.GetAsync<UserServerConfig>(new { id = configId, user_id = userId });
+            if (config == null) return NotFound("Config not found");
+
+            var folderPaths = await _db.GetMultipleAsync<ImapFolders>(new { config_id = configId });
+            var trashFolderPath = folderPaths
+                .FirstOrDefault(f => f.ImapPath is "Trash" or "ゴミ箱")?.ImapPath;
+            trashFolderPath ??= folderPaths.FirstOrDefault(f => f.DisplayName is "Trash" or "ゴミ箱")?
+                .ImapPath ?? "Trash";
+
+            using var client = new ImapClient();
+            await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
+            var decryptedPassword = await _encryptionService.DecryptAsync(config.ImapPassword);
+            await client.AuthenticateAsync(config.ImapUsername, decryptedPassword);
+
+            var trashFolder = await client.GetFolderAsync(trashFolderPath);
+            await trashFolder.OpenAsync(FolderAccess.ReadWrite);
+
+            // Mark all messages as deleted
+            if (trashFolder.Count > 0)
+            {
+                var uids = await trashFolder.SearchAsync(MailKit.Search.SearchQuery.All);
+                if (uids.Count > 0)
+                {
+                    await trashFolder.AddFlagsAsync(uids, MessageFlags.Deleted, true);
+                    await trashFolder.ExpungeAsync();
+                }
+            }
+
+            await client.DisconnectAsync(true);
+            return Ok(new { success = true, message = "Trash emptied successfully" });
+        }
+        catch (FolderNotFoundException)
+        {
+            return Ok(new { success = true, message = "Trash folder is already empty or does not exist" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogErrorWithSql(ex, "Failed to empty trash");
+            return StatusCode(500, "Failed to empty trash: " + ex.Message);
+        }
+        finally
+        {
+            _db.Close();
+        }
+    }
+
+    // ============================================================================
+    // Bulk Operations
+    // ============================================================================
+
+    /// <summary>
+    /// Move multiple messages to trash
+    /// </summary>
+    [HttpPost("bulk/move-to-trash")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> BulkMoveToTrash([FromBody] BulkMessageRequest request)
+    {
+        var userId = GetUserId();
+
+        if (request.MessageIds == null || request.MessageIds.Count == 0)
+            return BadRequest("No message IDs provided");
+
+        try
+        {
+            await _db.OpenAsync();
+            var config = await _db.GetAsync<UserServerConfig>(new { id = request.ConfigId, user_id = userId });
+            if (config == null) return NotFound("Config not found");
+
+            var folderPaths = await _db.GetMultipleAsync<ImapFolders>(new { config_id = request.ConfigId, user_id = userId });
+            var trashFolderPath = folderPaths
+                .FirstOrDefault(f => f.ImapPath is "Trash" or "ゴミ箱")?.ImapPath;
+            trashFolderPath ??= folderPaths.FirstOrDefault(f => f.DisplayName is "Trash" or "ゴミ箱")?
+                .ImapPath ?? "Trash";
+
+            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
+            using var client = new ImapClient();
+            await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
+            await client.AuthenticateAsync(config.ImapUsername, password);
+
+            var inbox = client.Inbox;
+            await inbox.OpenAsync(FolderAccess.ReadWrite);
+            var trashFolder = await client.GetFolderAsync(trashFolderPath);
+
+            var uids = request.MessageIds.Select(id => new UniqueId((uint)id)).ToList();
+            await inbox.MoveToAsync(uids, trashFolder);
+
+            await client.DisconnectAsync(true);
+            return Ok(new { success = true, movedCount = uids.Count });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogErrorWithSql(ex, "Failed to bulk move messages to trash");
+            return StatusCode(500, "Failed to move messages to trash: " + ex.Message);
+        }
+        finally
+        {
+            _db.Close();
+        }
+    }
+
+    /// <summary>
+    /// Permanently delete multiple messages from trash
+    /// </summary>
+    [HttpPost("bulk/delete-from-trash")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> BulkDeleteFromTrash([FromBody] BulkMessageRequest request)
+    {
+        var userId = GetUserId();
+
+        if (request.MessageIds == null || request.MessageIds.Count == 0)
+            return BadRequest("No message IDs provided");
+
+        try
+        {
+            await _db.OpenAsync();
+            var config = await _db.GetAsync<UserServerConfig>(new { id = request.ConfigId, user_id = userId });
+            if (config == null) return NotFound("Config not found");
+
+            var folderPaths = await _db.GetMultipleAsync<ImapFolders>(new { config_id = request.ConfigId });
+            var trashFolderPath = folderPaths
+                .FirstOrDefault(f => f.ImapPath is "Trash" or "ゴミ箱")?.ImapPath;
+            trashFolderPath ??= folderPaths.FirstOrDefault(f => f.DisplayName is "Trash" or "ゴミ箱")?
+                .ImapPath ?? "Trash";
+
+            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
+            using var client = new ImapClient();
+            await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
+            await client.AuthenticateAsync(config.ImapUsername, password);
+
+            var trashFolder = await client.GetFolderAsync(trashFolderPath);
+            await trashFolder.OpenAsync(FolderAccess.ReadWrite);
+
+            var uids = request.MessageIds.Select(id => new UniqueId((uint)id)).ToList();
+            await trashFolder.AddFlagsAsync(uids, MessageFlags.Deleted, true);
+            await trashFolder.ExpungeAsync();
+
+            await client.DisconnectAsync(true);
+            return Ok(new { success = true, deletedCount = uids.Count });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogErrorWithSql(ex, "Failed to bulk delete messages from trash");
+            return StatusCode(500, "Failed to delete messages: " + ex.Message);
+        }
+        finally
+        {
+            _db.Close();
+        }
+    }
+
+    /// <summary>
+    /// Restore multiple messages from trash to inbox
+    /// </summary>
+    [HttpPost("bulk/restore-from-trash")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> BulkRestoreFromTrash([FromBody] BulkMessageRequest request)
+    {
+        var userId = GetUserId();
+
+        if (request.MessageIds == null || request.MessageIds.Count == 0)
+            return BadRequest("No message IDs provided");
+
+        try
+        {
+            await _db.OpenAsync();
+            var config = await _db.GetAsync<UserServerConfig>(new { id = request.ConfigId, user_id = userId });
+            if (config == null) return NotFound("Config not found");
+
+            var folderPaths = await _db.GetMultipleAsync<ImapFolders>(new { config_id = request.ConfigId });
+            var trashFolderPath = folderPaths
+                .FirstOrDefault(f => f.ImapPath is "Trash" or "ゴミ箱")?.ImapPath;
+            trashFolderPath ??= folderPaths.FirstOrDefault(f => f.DisplayName is "Trash" or "ゴミ箱")?
+                .ImapPath ?? "Trash";
+
+            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
+            using var client = new ImapClient();
+            await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
+            await client.AuthenticateAsync(config.ImapUsername, password);
+
+            var trashFolder = await client.GetFolderAsync(trashFolderPath);
+            await trashFolder.OpenAsync(FolderAccess.ReadWrite);
+
+            var inbox = client.Inbox;
+
+            var uids = request.MessageIds.Select(id => new UniqueId((uint)id)).ToList();
+            await trashFolder.MoveToAsync(uids, inbox);
+
+            await client.DisconnectAsync(true);
+            return Ok(new { success = true, restoredCount = uids.Count });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogErrorWithSql(ex, "Failed to bulk restore messages from trash");
+            return StatusCode(500, "Failed to restore messages: " + ex.Message);
+        }
+        finally
+        {
+            _db.Close();
         }
     }
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getMessage, getLabelsForMessage, addLabelToMessage, removeLabelFromMessage, createLabel, getCustomActionPatterns } from '../lib/api';
+import { getMessage, getLabelsForMessage, addLabelToMessage, removeLabelFromMessage, createLabel, getCustomActionPatterns, moveToTrash, deleteFromTrash, restoreFromTrash } from '../lib/api';
 import { useModalClose } from '../hooks/useModalClose';
 import type { Label } from '../types/label';
 import type { CustomActionPattern } from '../types/customAction';
@@ -9,11 +9,15 @@ import EnhancedMailContent from './EnhancedMailContent';
 import { useToast } from '../contexts/ToastContext';
 import { useLabels } from '../contexts/LabelContext';
 
+type FolderType = 'inbox' | 'drafts' | 'spam' | 'trash';
+
 interface MailDetailModalProps {
     isOpen: boolean;
     onClose: () => void;
     configId: string;
     messageId: number;
+    folderType?: FolderType;
+    onMessageDeleted?: () => void;
 }
 
 interface MessageDetail {
@@ -27,11 +31,12 @@ interface MessageDetail {
     bodyText: string;
 }
 
-export default function MailDetailModal({ isOpen, onClose, configId, messageId }: MailDetailModalProps) {
+export default function MailDetailModal({ isOpen, onClose, configId, messageId, folderType = 'inbox', onMessageDeleted }: MailDetailModalProps) {
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState<MessageDetail | null>(null);
     const [showImages, setShowImages] = useState(false);
     const [hasBlockedImages, setHasBlockedImages] = useState(false);
+    const [actionLoading, setActionLoading] = useState(false);
     const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
     const toast = useToast();
     const { labels: allLabels, reloadLabels } = useLabels();
@@ -204,6 +209,56 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
         }
     };
 
+    // Handle move to trash
+    const handleMoveToTrash = async () => {
+        if (!confirm('このメールをゴミ箱に移動しますか？')) return;
+        setActionLoading(true);
+        try {
+            await moveToTrash(configId, messageId);
+            toast.success('ゴミ箱に移動しました');
+            onMessageDeleted?.();
+            onClose();
+        } catch (err) {
+            console.error('Failed to move to trash', err);
+            toast.error('ゴミ箱への移動に失敗しました');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // Handle permanent delete from trash
+    const handleDeletePermanently = async () => {
+        if (!confirm('このメールを完全に削除しますか？この操作は取り消せません。')) return;
+        setActionLoading(true);
+        try {
+            await deleteFromTrash(configId, messageId);
+            toast.success('完全に削除しました');
+            onMessageDeleted?.();
+            onClose();
+        } catch (err) {
+            console.error('Failed to delete permanently', err);
+            toast.error('削除に失敗しました');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // Handle restore from trash
+    const handleRestore = async () => {
+        setActionLoading(true);
+        try {
+            await restoreFromTrash(configId, messageId);
+            toast.success('受信トレイに復元しました');
+            onMessageDeleted?.();
+            onClose();
+        } catch (err) {
+            console.error('Failed to restore', err);
+            toast.error('復元に失敗しました');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -211,11 +266,49 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId }
             <div ref={modalContentRef} className="bg-white md:rounded-lg shadow-xl w-full max-w-4xl h-full md:h-auto md:max-h-[90vh] flex flex-col">
                 <div className="p-4 border-b border-gray-100 flex justify-between items-center">
                     <h2 className="text-xl font-semibold truncate flex-1 pr-4">{message?.subject || 'Loading...'}</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {/* Action buttons based on folder type */}
+                        {folderType === 'trash' ? (
+                            <>
+                                <button
+                                    onClick={handleRestore}
+                                    disabled={actionLoading}
+                                    className="text-green-600 hover:text-green-800 hover:bg-green-50 p-2 rounded-lg transition-colors disabled:opacity-50"
+                                    title="受信トレイに復元"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={handleDeletePermanently}
+                                    disabled={actionLoading}
+                                    className="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded-lg transition-colors disabled:opacity-50"
+                                    title="完全に削除"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                    </svg>
+                                </button>
+                            </>
+                        ) : folderType !== 'drafts' && (
+                            <button
+                                onClick={handleMoveToTrash}
+                                disabled={actionLoading}
+                                className="text-gray-500 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors disabled:opacity-50"
+                                title="ゴミ箱に移動"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                </svg>
+                            </button>
+                        )}
+                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
                 <div className="overflow-auto flex-1 p-6">

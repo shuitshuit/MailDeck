@@ -6,7 +6,7 @@ import ComposeModal from '../components/ComposeModal';
 import MailDetailModal from '../components/MailDetailModal';
 import LabelBadge from '../components/LabelBadge';
 import SearchBar from '../components/SearchBar';
-import { getInbox, getInboxFolder, getServerConfigs, getDrafts, getSpam, getTrash } from '../lib/api';
+import { getInbox, getInboxFolder, getServerConfigs, getDrafts, getSpam, getTrash, emptyTrash, bulkMoveToTrash, bulkDeleteFromTrash, bulkRestoreFromTrash } from '../lib/api';
 import type { Label } from '../types/label';
 import { useToast } from '../contexts/ToastContext';
 import { useLabels } from '../contexts/LabelContext';
@@ -54,6 +54,10 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
     const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
     const [searchQueryString, setSearchQueryString] = useState('');
     const [parsedSearchQuery, setParsedSearchQuery] = useState<SearchQuery>({ keywords: [] });
+    const [emptyTrashLoading, setEmptyTrashLoading] = useState(false);
+    const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
+    const [bulkActionLoading, setBulkActionLoading] = useState(false);
+    const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
     const toast = useToast();
 
     // Get custom folder from URL params
@@ -120,10 +124,12 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
     // Handle tab change
     const onTabChange = (id: string) => {
         setActiveTab(id);
+        // Navigate to the correct folder type
+        const basePath = folderType === 'inbox' ? '/inbox' : `/${folderType}`;
         if (id === 'all') {
-            navigate('/inbox');
+            navigate(basePath);
         } else {
-            navigate(`/inbox/${id}`);
+            navigate(`${basePath}/${id}`);
         }
     };
 
@@ -310,6 +316,167 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         setSearchParams(newParams);
     };
 
+    // Handle empty trash
+    const handleEmptyTrash = async () => {
+        if (!activeTab || activeTab === 'all') {
+            toast.warning('アカウントを選択してください');
+            return;
+        }
+        if (!confirm('ゴミ箱のすべてのメールを完全に削除しますか？この操作は取り消せません。')) return;
+
+        setEmptyTrashLoading(true);
+        try {
+            await emptyTrash(activeTab);
+            toast.success('ゴミ箱を空にしました');
+            loadInbox();
+        } catch (error) {
+            console.error('Failed to empty trash', error);
+            toast.error('ゴミ箱を空にできませんでした');
+        } finally {
+            setEmptyTrashLoading(false);
+        }
+    };
+
+    // Handle message selection with Shift/Ctrl support
+    const toggleMessageSelection = (mailKey: string, index: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+
+        // Shift+Click: Range selection
+        if (e.shiftKey && lastSelectedIndex !== null) {
+            const start = Math.min(lastSelectedIndex, index);
+            const end = Math.max(lastSelectedIndex, index);
+            const rangeKeys = filteredMails
+                .slice(start, end + 1)
+                .map(mail => `${mail.configId}::${mail.id}`);
+
+            setSelectedMessages(prev => {
+                const newSet = new Set(prev);
+                rangeKeys.forEach(key => newSet.add(key));
+                return newSet;
+            });
+            return;
+        }
+
+        // Ctrl+Click (or Cmd+Click on Mac): Toggle single item without clearing others
+        if (e.ctrlKey || e.metaKey) {
+            setSelectedMessages(prev => {
+                const newSet = new Set(prev);
+                if (newSet.has(mailKey)) {
+                    newSet.delete(mailKey);
+                } else {
+                    newSet.add(mailKey);
+                }
+                return newSet;
+            });
+            setLastSelectedIndex(index);
+            return;
+        }
+
+        // Normal click: Toggle selection (clear others if selecting)
+        setSelectedMessages(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(mailKey)) {
+                newSet.delete(mailKey);
+            } else {
+                newSet.add(mailKey);
+            }
+            return newSet;
+        });
+        setLastSelectedIndex(index);
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedMessages.size === filteredMails.length) {
+            setSelectedMessages(new Set());
+        } else {
+            const allKeys = filteredMails.map(mail => `${mail.configId}::${mail.id}`);
+            setSelectedMessages(new Set(allKeys));
+        }
+    };
+
+    const clearSelection = () => {
+        setSelectedMessages(new Set());
+    };
+
+    // Get selected messages grouped by configId
+    const getSelectedMessagesByConfig = () => {
+        const result: Map<string, number[]> = new Map();
+        selectedMessages.forEach(key => {
+            const [configId, messageId] = key.split('::');
+            if (!result.has(configId)) {
+                result.set(configId, []);
+            }
+            result.get(configId)!.push(parseInt(messageId));
+        });
+        return result;
+    };
+
+    // Bulk move to trash
+    const handleBulkMoveToTrash = async () => {
+        if (selectedMessages.size === 0) return;
+        if (!confirm(`${selectedMessages.size}件のメールをゴミ箱に移動しますか？`)) return;
+
+        setBulkActionLoading(true);
+        try {
+            const messagesByConfig = getSelectedMessagesByConfig();
+            for (const [configId, messageIds] of messagesByConfig) {
+                await bulkMoveToTrash(configId, messageIds);
+            }
+            toast.success(`${selectedMessages.size}件のメールをゴミ箱に移動しました`);
+            clearSelection();
+            loadInbox();
+        } catch (error) {
+            console.error('Failed to bulk move to trash', error);
+            toast.error('ゴミ箱への移動に失敗しました');
+        } finally {
+            setBulkActionLoading(false);
+        }
+    };
+
+    // Bulk delete from trash
+    const handleBulkDeleteFromTrash = async () => {
+        if (selectedMessages.size === 0) return;
+        if (!confirm(`${selectedMessages.size}件のメールを完全に削除しますか？この操作は取り消せません。`)) return;
+
+        setBulkActionLoading(true);
+        try {
+            const messagesByConfig = getSelectedMessagesByConfig();
+            for (const [configId, messageIds] of messagesByConfig) {
+                await bulkDeleteFromTrash(configId, messageIds);
+            }
+            toast.success(`${selectedMessages.size}件のメールを削除しました`);
+            clearSelection();
+            loadInbox();
+        } catch (error) {
+            console.error('Failed to bulk delete from trash', error);
+            toast.error('削除に失敗しました');
+        } finally {
+            setBulkActionLoading(false);
+        }
+    };
+
+    // Bulk restore from trash
+    const handleBulkRestoreFromTrash = async () => {
+        if (selectedMessages.size === 0) return;
+        if (!confirm(`${selectedMessages.size}件のメールを復元しますか？`)) return;
+
+        setBulkActionLoading(true);
+        try {
+            const messagesByConfig = getSelectedMessagesByConfig();
+            for (const [configId, messageIds] of messagesByConfig) {
+                await bulkRestoreFromTrash(configId, messageIds);
+            }
+            toast.success(`${selectedMessages.size}件のメールを復元しました`);
+            clearSelection();
+            loadInbox();
+        } catch (error) {
+            console.error('Failed to bulk restore from trash', error);
+            toast.error('復元に失敗しました');
+        } finally {
+            setBulkActionLoading(false);
+        }
+    };
+
     const handleSendMail = async (to: string, subject: string, body: string, configId: string) => {
         if (!configId) {
             toast.warning('アカウントを選択してください');
@@ -358,6 +525,18 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                         </svg>
                         更新
                     </button>
+                    {folderType === 'trash' && (
+                        <button
+                            onClick={handleEmptyTrash}
+                            disabled={emptyTrashLoading || mails.length === 0}
+                            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 shadow-sm font-medium flex items-center justify-center gap-2 flex-1 md:flex-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                            </svg>
+                            {emptyTrashLoading ? '削除中...' : 'ゴミ箱を空にする'}
+                        </button>
+                    )}
                     <button
                         onClick={() => setIsComposeOpen(true)}
                         className="bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 shadow-sm font-medium flex items-center justify-center gap-2 flex-1 md:flex-none"
@@ -410,6 +589,58 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                 ))}
             </div>
 
+            {/* Bulk Action Toolbar */}
+            {selectedMessages.size > 0 && (
+                <div className="bg-brand-50 border border-brand-200 rounded-lg p-3 mb-4 flex flex-wrap items-center gap-3">
+                    <span className="text-sm font-medium text-brand-700">
+                        {selectedMessages.size}件選択中
+                    </span>
+                    <div className="flex gap-2 flex-wrap">
+                        {folderType === 'trash' ? (
+                            <>
+                                <button
+                                    onClick={handleBulkRestoreFromTrash}
+                                    disabled={bulkActionLoading}
+                                    className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                                    </svg>
+                                    復元
+                                </button>
+                                <button
+                                    onClick={handleBulkDeleteFromTrash}
+                                    disabled={bulkActionLoading}
+                                    className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 flex items-center gap-1"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                    </svg>
+                                    完全に削除
+                                </button>
+                            </>
+                        ) : (
+                            <button
+                                onClick={handleBulkMoveToTrash}
+                                disabled={bulkActionLoading}
+                                className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 flex items-center gap-1"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                </svg>
+                                ゴミ箱に移動
+                            </button>
+                        )}
+                        <button
+                            onClick={clearSelection}
+                            className="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                        >
+                            選択解除
+                        </button>
+                    </div>
+                </div>
+            )}
+
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[400px]">
                 {loading ? (
                     <div className="p-8 text-center text-gray-500">読み込み中...</div>
@@ -431,64 +662,99 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     <>
                         {/* Mobile View (Cards) */}
                         <div className="block md:hidden divide-y divide-gray-100">
-                            {filteredMails.map(mail => (
-                                <div
-                                    key={`mobile-${mail.configId}-${mail.id}`}
-                                    onClick={() => setSelectedMail(mail)}
-                                    className={`p-4 active:bg-gray-50 cursor-pointer ${!mail.isRead ? 'font-semibold bg-blue-50/30' : ''}`}
-                                >
-                                    <div className="flex justify-between items-start mb-1">
-                                        <div className="text-sm font-medium text-gray-900 truncate flex-1 pr-2">{mail.from}</div>
-                                        <div className="text-xs text-gray-500 whitespace-nowrap">
-                                            {new Date(mail.date).toLocaleDateString()}
+                            {filteredMails.map((mail, index) => {
+                                const mailKey = `${mail.configId}::${mail.id}`;
+                                const isSelected = selectedMessages.has(mailKey);
+                                return (
+                                    <div
+                                        key={`mobile-${mailKey}`}
+                                        className={`p-4 active:bg-gray-50 cursor-pointer flex gap-3 ${!mail.isRead ? 'font-semibold bg-blue-50/30' : ''} ${isSelected ? 'bg-brand-50' : ''}`}
+                                    >
+                                        <div
+                                            className="flex items-start pt-1"
+                                            onClick={(e) => toggleMessageSelection(mailKey, index, e)}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                onChange={() => {}}
+                                                className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                                            />
+                                        </div>
+                                        <div className="flex-1 min-w-0" onClick={() => setSelectedMail(mail)}>
+                                            <div className="flex justify-between items-start mb-1">
+                                                <div className="text-sm font-medium text-gray-900 truncate flex-1 pr-2">{mail.from}</div>
+                                                <div className="text-xs text-gray-500 whitespace-nowrap">
+                                                    {new Date(mail.date).toLocaleDateString()}
+                                                </div>
+                                            </div>
+                                            <div className="text-sm text-gray-800 mb-1 truncate">{mail.subject || '(件名なし)'}</div>
+                                            {mail.labels && mail.labels.length > 0 && (
+                                                <div className="flex flex-wrap gap-1 mt-2">
+                                                    {mail.labels.map(label => (
+                                                        <LabelBadge key={label.id} label={label} />
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                    <div className="text-sm text-gray-800 mb-1 truncate">{mail.subject || '(件名なし)'}</div>
-                                    {mail.labels && mail.labels.length > 0 && (
-                                        <div className="flex flex-wrap gap-1 mt-2">
-                                            {mail.labels.map(label => (
-                                                <LabelBadge key={label.id} label={label} />
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
 
                         {/* Desktop View (Table) */}
                         <table className="hidden md:table w-full table-fixed">
                             <thead className="bg-gray-50/50 border-b border-gray-100">
                                 <tr>
+                                    <th className="w-12 p-4">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedMessages.size === filteredMails.length && filteredMails.length > 0}
+                                            onChange={toggleSelectAll}
+                                            className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                                        />
+                                    </th>
                                     <th className="text-left p-4 font-medium text-gray-500 text-sm w-1/4">送信者</th>
                                     <th className="text-left p-4 font-medium text-gray-500 text-sm w-1/2">件名</th>
                                     <th className="text-right p-4 font-medium text-gray-500 text-sm w-1/4">日時</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                {filteredMails.map(mail => (
-                                    <tr
-                                        key={`${mail.configId}-${mail.id}`}
-                                        onClick={() => setSelectedMail(mail)}
-                                        className={`hover:bg-gray-50 cursor-pointer transition-colors ${!mail.isRead ? 'font-semibold bg-blue-50/30' : ''}`}
-                                    >
-                                        <td className="p-4 text-gray-900 truncate" title={mail.from}>{mail.from}</td>
-                                        <td className="p-4">
-                                            <div className="flex flex-col gap-1">
-                                                <span className="text-gray-900 truncate">{mail.subject || '(件名なし)'}</span>
-                                                {mail.labels && mail.labels.length > 0 && (
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {mail.labels.map(label => (
-                                                            <LabelBadge key={label.id} label={label} />
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="p-4 text-right text-gray-500 text-sm whitespace-nowrap">
-                                            {new Date(mail.date).toLocaleString()}
-                                        </td>
-                                    </tr>
-                                ))}
+                                {filteredMails.map((mail, index) => {
+                                    const mailKey = `${mail.configId}::${mail.id}`;
+                                    const isSelected = selectedMessages.has(mailKey);
+                                    return (
+                                        <tr
+                                            key={mailKey}
+                                            className={`hover:bg-gray-50 cursor-pointer transition-colors ${!mail.isRead ? 'font-semibold bg-blue-50/30' : ''} ${isSelected ? 'bg-brand-50' : ''}`}
+                                        >
+                                            <td className="p-4" onClick={(e) => toggleMessageSelection(mailKey, index, e)}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isSelected}
+                                                    onChange={() => {}}
+                                                    className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                                                />
+                                            </td>
+                                            <td className="p-4 text-gray-900 truncate" title={mail.from} onClick={() => setSelectedMail(mail)}>{mail.from}</td>
+                                            <td className="p-4" onClick={() => setSelectedMail(mail)}>
+                                                <div className="flex flex-col gap-1">
+                                                    <span className="text-gray-900 truncate">{mail.subject || '(件名なし)'}</span>
+                                                    {mail.labels && mail.labels.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {mail.labels.map(label => (
+                                                                <LabelBadge key={label.id} label={label} />
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="p-4 text-right text-gray-500 text-sm whitespace-nowrap" onClick={() => setSelectedMail(mail)}>
+                                                {new Date(mail.date).toLocaleString()}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </>
@@ -508,6 +774,8 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     onClose={() => setSelectedMail(null)}
                     configId={selectedMail.configId}
                     messageId={parseInt(selectedMail.id)}
+                    folderType={folderType}
+                    onMessageDeleted={loadInbox}
                 />
             )}
         </div>
