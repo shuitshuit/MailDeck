@@ -275,7 +275,7 @@ export async function addServerConfig(config: any) {
 export async function autoConfig(email: string) {
     const response = await authFetch('/serverconfig/autoconfig', {
         method: 'POST',
-        body: JSON.stringify(email)
+        body: JSON.stringify({ email })
     });
     return await response.json();
 }

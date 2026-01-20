@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { addServerConfig, deleteServerConfig, getServerConfigs, updateServerConfig } from '../lib/api';
 import ServerConfigModal from '../components/ServerConfigModal';
 import LabelManager from '../components/LabelManager';
+import PasskeySettings from '../components/PasskeySettings';
 import { useToast } from '../contexts/ToastContext';
 
 interface ServerConfig {
@@ -19,7 +20,7 @@ interface ServerConfig {
     smtpPassword: string;
 }
 
-type TabType = 'accounts' | 'labels' | 'notifications';
+type TabType = 'accounts' | 'labels' | 'security' | 'notifications';
 
 export default function SettingsPage() {
     const [activeTab, setActiveTab] = useState<TabType>('accounts');
@@ -89,6 +90,7 @@ export default function SettingsPage() {
     const tabs = [
         { id: 'accounts' as TabType, label: 'メールアカウント', icon: 'M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75' },
         { id: 'labels' as TabType, label: 'ラベル', icon: 'M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z' },
+        { id: 'security' as TabType, label: 'セキュリティ', icon: 'M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z' },
         { id: 'notifications' as TabType, label: '通知設定', icon: 'M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0' },
     ];
 
@@ -211,6 +213,11 @@ export default function SettingsPage() {
                     {/* Labels Tab */}
                     {activeTab === 'labels' && (
                         <LabelManager />
+                    )}
+
+                    {/* Security Tab */}
+                    {activeTab === 'security' && (
+                        <PasskeySettings />
                     )}
 
                     {/* Notifications Tab */}

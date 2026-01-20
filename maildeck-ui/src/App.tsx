@@ -1,7 +1,10 @@
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { Link, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
 import DashboardPage from './pages/DashboardPage';
-import LoginPage from './pages/LoginPage';
+import LoginPage from './pages/auth/LoginPage';
+import SignUpPage from './pages/auth/SignUpPage';
+import ConfirmSignUpPage from './pages/auth/ConfirmSignUpPage';
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import SettingsPage from './pages/SettingsPage';
 
 import { useEffect, useState } from 'react';
@@ -400,6 +403,9 @@ function App() {
           <LabelProvider>
             <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignUpPage />} />
+            <Route path="/confirm-signup" element={<ConfirmSignUpPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/" element={
               <ProtectedRoute>
                 <Layout>

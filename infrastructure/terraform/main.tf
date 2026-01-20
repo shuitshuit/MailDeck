@@ -32,7 +32,7 @@ resource "aws_cognito_user_pool" "pool" {
   }
 
   web_authn_configuration {
-    relying_party_id = "${var.cognito_domain_prefix}.auth.${var.aws_region}.amazoncognito.com"
+    relying_party_id = "maildeck.shuit.net"
     user_verification = "preferred"
   }
 
