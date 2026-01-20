@@ -12,6 +12,10 @@ public class User
     [Name("email")]
     public string Email { get; set; } = string.Empty;
 
+    [Name("settings")]
+    [Jsonb]
+    public UserSettings Settings { get; set; } = new();
+
     [Name("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
