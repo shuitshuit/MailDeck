@@ -1,0 +1,18 @@
+# MailDeck nginx logs - permanent storage with compression
+# Place this file in /etc/logrotate.d/maildeck-nginx
+
+/var/log/nginx/maildeck-*.log {
+    daily
+    missingok
+    rotate 9999
+    compress
+    delaycompress
+    notifempty
+    create 0640 www-data adm
+    dateext
+    dateformat -%Y%m%d
+    sharedscripts
+    postrotate
+        invoke-rc.d nginx rotate >/dev/null 2>&1
+    endscript
+}
