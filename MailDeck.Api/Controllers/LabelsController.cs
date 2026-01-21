@@ -78,6 +78,8 @@ public class LabelsController : BaseAuthController
             UserId = userId,
             Name = request.Name,
             Color = request.Color ?? "#3B82F6",
+            HideFromInbox = request.HideFromInbox ?? false,
+            NotifyEnabled = request.NotifyEnabled ?? true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -157,6 +159,8 @@ public class LabelsController : BaseAuthController
             // Update fields
             existing.Name = request.Name;
             existing.Color = request.Color ?? existing.Color;
+            existing.HideFromInbox = request.HideFromInbox ?? existing.HideFromInbox;
+            existing.NotifyEnabled = request.NotifyEnabled ?? existing.NotifyEnabled;
             existing.UpdatedAt = DateTime.UtcNow;
 
             await _db.UpdateAsync(existing);

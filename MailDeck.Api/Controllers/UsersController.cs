@@ -1,8 +1,9 @@
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
+using FirebaseAdmin.Messaging;
+using MailDeck.Api.Extensions;
 using MailDeck.Api.Models;
 using MailDeck.Api.Models.DTO.Users;
-using MailDeck.Api.Extensions;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using ShuitNet.ORM.PostgreSQL;
 using System.Security.Claims;
 
@@ -160,10 +161,25 @@ public class UsersController : BaseAuthController
                     UserId = request.UserId,
                     Name = "非表示",
                     Color = "#EF4444", // Red color
+                    HideFromInbox = true,
+                    NotifyEnabled = false, // Default hidden label should not trigger notifications
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
-                await _db.InsertAsync(hiddenLabel);
+                var nonNotification = new Label
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = request.UserId,
+                    Name = "非通知",
+                    Color = "#3B82F6", // Blue color
+                    HideFromInbox = false,
+                    NotifyEnabled = false, // Default hidden label should not trigger notifications
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                var task1 = _db.InsertAsync(hiddenLabel);
+                var task2 = _db.InsertAsync(nonNotification);
+                await Task.WhenAll(task1, task2);
                 _logger.LogInformation("Setup: Created hidden label for user {UserId}", request.UserId);
             }
             else
@@ -195,6 +211,8 @@ public class UsersController : BaseAuthController
                 UserId = request.UserId,
                 Name = "非表示",
                 Color = "#EF4444",
+                HideFromInbox = true,
+                NotifyEnabled = false, // Default hidden label should not trigger notifications
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };

@@ -3,6 +3,8 @@ export interface Label {
   userId: string;
   name: string;
   color: string; // HEX color (#RRGGBB)
+  hideFromInbox: boolean; // When true, emails with this label won't appear in inbox
+  notifyEnabled: boolean; // When false, new emails with this label won't trigger notifications
   createdAt: string;
   updatedAt: string;
 }

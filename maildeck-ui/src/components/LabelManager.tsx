@@ -24,14 +24,14 @@ export default function LabelManager() {
         setIsModalOpen(true);
     };
 
-    const handleSaveLabel = async (name: string, color: string) => {
+    const handleSaveLabel = async (name: string, color: string, hideFromInbox: boolean, notifyEnabled: boolean) => {
         try {
             if (editingLabel) {
                 // Update existing label
-                await updateLabel(editingLabel.id, name, color);
+                await updateLabel(editingLabel.id, name, color, hideFromInbox, notifyEnabled);
             } else {
                 // Create new label
-                await createLabel(name, color);
+                await createLabel(name, color, hideFromInbox, notifyEnabled);
             }
             await reloadLabels();
         } catch (error) {
@@ -129,8 +129,24 @@ export default function LabelManager() {
                                     </button>
                                 </div>
                             </div>
-                            <div className="text-xs text-gray-500">
-                                作成日: {new Date(label.createdAt).toLocaleDateString('ja-JP')}
+                            <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+                                <span>作成日: {new Date(label.createdAt).toLocaleDateString('ja-JP')}</span>
+                                {label.hideFromInbox && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 rounded text-gray-600" title="受信トレイから非表示">
+                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                        </svg>
+                                        非表示
+                                    </span>
+                                )}
+                                {!label.notifyEnabled && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 rounded text-gray-600" title="通知オフ">
+                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                                        </svg>
+                                        通知オフ
+                                    </span>
+                                )}
                             </div>
                         </div>
                     ))}
@@ -145,7 +161,7 @@ export default function LabelManager() {
                     setEditingLabel(null);
                 }}
                 onSave={handleSaveLabel}
-                initialData={editingLabel ? { name: editingLabel.name, color: editingLabel.color } : null}
+                initialData={editingLabel ? { name: editingLabel.name, color: editingLabel.color, hideFromInbox: editingLabel.hideFromInbox, notifyEnabled: editingLabel.notifyEnabled } : null}
             />
         </div>
     );

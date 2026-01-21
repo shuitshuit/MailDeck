@@ -4,4 +4,6 @@ public class LabelRequest
 {
     public string Name { get; set; } = string.Empty;
     public string? Color { get; set; }
+    public bool? HideFromInbox { get; set; }
+    public bool? NotifyEnabled { get; set; }
 }

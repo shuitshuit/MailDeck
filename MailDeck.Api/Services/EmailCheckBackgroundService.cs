@@ -1,4 +1,3 @@
-using FirebaseAdmin.Messaging;
 using MailDeck.Api.Extensions;
 using MailDeck.Api.Models;
 using MailKit;
@@ -149,12 +148,7 @@ public class EmailCheckBackgroundService : BackgroundService
                             );
                         }
 
-                        // Sort by UID to get the last one
-                        var lastMsg = newMessages.OrderByDescending(m => m.UniqueId).FirstOrDefault();
-                        if (lastMsg != null)
-                        {
-                            await SendPushNotificationAsync(db, config.UserId, newMessages.Count, lastMsg, config.Id, stoppingToken);
-                        }
+                        // Note: Push notifications are now handled by AutoLabelingService after applying labels
                         config.LastKnownUid = currentMax;
                     }
                 }
@@ -216,49 +210,6 @@ public class EmailCheckBackgroundService : BackgroundService
         var fetchedMessages = await inbox.FetchAsync(uids, MessageSummaryItems.Envelope | MessageSummaryItems.UniqueId, stoppingToken);
         await client.DisconnectAsync(true, stoppingToken);
         return new MessageFetchResult(fetchedMessages, messages);
-    }
-
-    private async Task SendPushNotificationAsync(PostgreSqlConnect db, string userId, int count, IMessageSummary summary, Guid configId, CancellationToken stoppingToken)
-    {
-        using var scope = _scopeFactory.CreateScope();
-        var messaging = scope.ServiceProvider.GetRequiredService<FirebaseMessaging>();
-
-        var subscriptions = await db.AsQueryable<WebPushSubscription>()
-        .Where(s => s.UserId == userId)
-        .ToListAsync();
-        var tokens = subscriptions.Select(s => s.Token).Distinct().ToList();
-
-        if (subscriptions.Count != tokens.Count)
-        {
-            _logger.LogWarning("Found {DuplicateCount} duplicate tokens for user {UserId}", subscriptions.Count - tokens.Count, userId);
-        }
-
-        var envelope = summary.Envelope;
-        var messageBody = envelope.Subject ?? "(No Subject)";
-        messageBody += "\n";
-        if (string.IsNullOrEmpty(summary.Body?.ToString()))
-        {
-            messageBody += "(No Preview Available)";
-        }
-        else
-        {
-            messageBody += summary.Body.ToString()[..Math.Min(20, summary.Body.ToString().Length)];
-        }
-        foreach (var token in tokens)
-        {
-            var message = new Message()
-            {
-                Notification = new Notification
-                {
-                    Title = summary.Envelope.From.ToString(),
-                    Body = count == 1 ?
-                        messageBody :
-                        $"You have received {count} new emails. Latest: {envelope.Subject}"
-                },
-                Token = token,
-            };
-            await messaging.SendAsync(message, stoppingToken);
-        }
     }
 }
 
