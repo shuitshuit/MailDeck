@@ -71,6 +71,7 @@ public class MailController : BaseAuthController
                     MessageSummaryItems.InternalDate | MessageSummaryItems.UniqueId);
 
                 var messages = new List<MailMessageResponse>();
+                var hiddenCount = 0;
 
                 foreach (var s in summaries)
                 {
@@ -86,6 +87,7 @@ public class MailController : BaseAuthController
 
                     var labelIds = mailLabels.Select(ml => ml.LabelId).ToList();
                     var labels = new List<LabelResponse>();
+                    var shouldHideFromInbox = false;
 
                     foreach (var labelId in labelIds)
                     {
@@ -98,7 +100,20 @@ public class MailController : BaseAuthController
                                 Name = label.Name,
                                 Color = label.Color
                             });
+
+                            // Check if this label hides messages from inbox
+                            if (label.HideFromInbox)
+                            {
+                                shouldHideFromInbox = true;
+                            }
                         }
+                    }
+
+                    // Skip messages with hide-from-inbox labels
+                    if (shouldHideFromInbox)
+                    {
+                        hiddenCount++;
+                        continue;
                     }
 
                     messages.Add(new MailMessageResponse
@@ -116,7 +131,8 @@ public class MailController : BaseAuthController
 
                 await client.DisconnectAsync(true);
 
-                return Ok(new InboxResponse { Messages = messages, Total = total });
+                // Adjust total to exclude hidden messages
+                return Ok(new InboxResponse { Messages = messages, Total = total - hiddenCount });
             }
         }
         catch (Exception ex)
@@ -1180,12 +1196,22 @@ public class MailController : BaseAuthController
             await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
             await client.AuthenticateAsync(config.ImapUsername, password);
 
-            var inbox = client.Inbox;
-            await inbox.OpenAsync(FolderAccess.ReadWrite);
+            // Get source folder (default to INBOX if not specified)
+            IMailFolder sourceFolder;
+            if (!string.IsNullOrEmpty(request.SourceFolder) && request.SourceFolder != "INBOX")
+            {
+                sourceFolder = await client.GetFolderAsync(request.SourceFolder);
+            }
+            else
+            {
+                sourceFolder = client.Inbox;
+            }
+            await sourceFolder.OpenAsync(FolderAccess.ReadWrite);
+
             var trashFolder = await client.GetFolderAsync(trashFolderPath);
 
             var uids = request.MessageIds.Select(id => new UniqueId((uint)id)).ToList();
-            await inbox.MoveToAsync(uids, trashFolder);
+            await sourceFolder.MoveToAsync(uids, trashFolder);
 
             await client.DisconnectAsync(true);
             return Ok(new { success = true, movedCount = uids.Count });

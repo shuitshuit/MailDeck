@@ -49,7 +49,9 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
     const [isComposeOpen, setIsComposeOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<string | null>(null);
     const [accounts, setAccounts] = useState<Account[]>([]);
-    const [page] = useState(1);
+    const [page, setPage] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
+    const pageSize = 20;
     const { labels } = useLabels();
     const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
     const [searchQueryString, setSearchQueryString] = useState('');
@@ -124,12 +126,15 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
     // Handle tab change
     const onTabChange = (id: string) => {
         setActiveTab(id);
-        // Navigate to the correct folder type
+        // Navigate to the correct folder type, preserving label parameter
         const basePath = folderType === 'inbox' ? '/inbox' : `/${folderType}`;
+        const labelParam = searchParams.get('label');
+        const queryString = labelParam ? `?label=${labelParam}` : '';
+
         if (id === 'all') {
-            navigate(basePath);
+            navigate(`${basePath}${queryString}`);
         } else {
-            navigate(`${basePath}/${id}`);
+            navigate(`${basePath}/${id}${queryString}`);
         }
     };
 
@@ -158,17 +163,21 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     // Fetch from all accounts
                     const promises = accounts.map(acc =>
                         getInboxFolder(acc.id, customFolderPath, page).then(res => ({
-                            messages: (res.messages || []).map((m: any) => ({ ...m, configId: acc.id }))
-                        })).catch(() => ({ messages: [] })) // Ignore errors for accounts that don't have this folder
+                            messages: (res.messages || []).map((m: any) => ({ ...m, configId: acc.id })),
+                            total: res.total || 0
+                        })).catch(() => ({ messages: [], total: 0 })) // Ignore errors for accounts that don't have this folder
                     );
                     const results = await Promise.all(promises);
                     const allMails = results.flatMap(r => r.messages || []);
+                    const total = results.reduce((sum, r) => sum + r.total, 0);
                     allMails.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                     setMails(allMails);
+                    setTotalCount(total);
                 } else {
                     const data = await getInboxFolder(activeTab, customFolderPath, page);
                     const messagesWithConfig = (data.messages || []).map((m: any) => ({ ...m, configId: activeTab }));
                     setMails(messagesWithConfig);
+                    setTotalCount(data.total || 0);
                 }
             } else {
                 const apiFunc = getFolderApi(folderType);
@@ -176,18 +185,22 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                 if (activeTab === 'all') {
                     // Fetch all and merge
                     const promises = accounts.map(acc => apiFunc(acc.id, page).then(res => ({
-                        messages: (res.messages || []).map((m: any) => ({ ...m, configId: acc.id }))
+                        messages: (res.messages || []).map((m: any) => ({ ...m, configId: acc.id })),
+                        total: res.total || 0
                     })));
                     const results = await Promise.all(promises);
                     const allMails = results.flatMap(r => r.messages || []);
+                    const total = results.reduce((sum, r) => sum + r.total, 0);
                     // Sort by date desc
                     allMails.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                     setMails(allMails);
+                    setTotalCount(total);
                 } else {
                     const data = await apiFunc(activeTab, page);
                     // Inject configId for single tab too for consistency
                     const messagesWithConfig = (data.messages || []).map((m: any) => ({ ...m, configId: activeTab }));
                     setMails(messagesWithConfig);
+                    setTotalCount(data.total || 0);
                 }
             }
         } catch (error) {
@@ -197,9 +210,11 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         }
     }, [activeTab, page, accounts, folderType, getFolderApi, customFolderPath]);
 
-    // Clear inbox on tab switch, folder type, or custom folder change
+    // Clear inbox and reset page on tab switch, folder type, or custom folder change
     useEffect(() => {
         setMails([]);
+        setPage(1);
+        setTotalCount(0);
     }, [activeTab, folderType, customFolderPath]);
 
     useEffect(() => {
@@ -411,6 +426,17 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         return result;
     };
 
+    // Get source folder name based on current view
+    const getSourceFolderName = () => {
+        if (customFolderPath) return customFolderPath;
+        switch (folderType) {
+            case 'drafts': return 'Drafts';
+            case 'spam': return 'Spam';
+            case 'trash': return 'Trash';
+            default: return 'INBOX';
+        }
+    };
+
     // Bulk move to trash
     const handleBulkMoveToTrash = async () => {
         if (selectedMessages.size === 0) return;
@@ -419,8 +445,9 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         setBulkActionLoading(true);
         try {
             const messagesByConfig = getSelectedMessagesByConfig();
+            const sourceFolder = getSourceFolderName();
             for (const [configId, messageIds] of messagesByConfig) {
-                await bulkMoveToTrash(configId, messageIds);
+                await bulkMoveToTrash(configId, messageIds, sourceFolder);
             }
             toast.success(`${selectedMessages.size}件のメールをゴミ箱に移動しました`);
             clearSelection();
@@ -760,6 +787,54 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     </>
                 )}
             </div>
+
+            {/* Pagination */}
+            {totalCount > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 px-2">
+                    <div className="text-sm text-gray-600">
+                        {totalCount}件中 {Math.min((page - 1) * pageSize + 1, totalCount)}〜{Math.min(page * pageSize, totalCount)}件を表示
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setPage(1)}
+                            disabled={page === 1 || loading}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="最初のページ"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5" />
+                            </svg>
+                        </button>
+                        <button
+                            onClick={() => setPage(p => Math.max(1, p - 1))}
+                            disabled={page === 1 || loading}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            前へ
+                        </button>
+                        <span className="px-3 py-1.5 text-sm text-gray-700">
+                            {page} / {Math.ceil(totalCount / pageSize)}
+                        </span>
+                        <button
+                            onClick={() => setPage(p => Math.min(Math.ceil(totalCount / pageSize), p + 1))}
+                            disabled={page >= Math.ceil(totalCount / pageSize) || loading}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            次へ
+                        </button>
+                        <button
+                            onClick={() => setPage(Math.ceil(totalCount / pageSize))}
+                            disabled={page >= Math.ceil(totalCount / pageSize) || loading}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="最後のページ"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 4.5l7.5 7.5-7.5 7.5m6-15l7.5 7.5-7.5 7.5" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <ComposeModal
                 isOpen={isComposeOpen}

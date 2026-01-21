@@ -1,7 +1,9 @@
 using System.Text.Json;
+using FirebaseAdmin.Messaging;
 using MailDeck.Api.Models;
 using MailDeck.Api.Extensions;
 using Npgsql;
+using ShuitNet.ORM.PostgreSQL.LinqToSql;
 
 namespace MailDeck.Api.Services;
 
@@ -71,61 +73,135 @@ public class AutoLabelingService : BackgroundService
                 .OrderByDescending(r => r.Priority)
                 .ToList();
 
-            if (rules.Count == 0)
-            {
-                _logger.LogDebug("No auto-labeling rules found for user {UserId}", notification.UserId);
-                return;
-            }
-
-            _logger.LogDebug("Found {Count} auto-labeling rules for user {UserId}",
-                rules.Count, notification.UserId);
-
-            // 2. Evaluate each rule
+            // Track applied label IDs for notification check
+            var appliedLabelIds = new List<Guid>();
             var appliedLabels = new List<string>();
 
-            foreach (var rule in rules)
+            if (rules.Count > 0)
             {
-                try
+                _logger.LogDebug("Found {Count} auto-labeling rules for user {UserId}",
+                    rules.Count, notification.UserId);
+
+                // 2. Evaluate each rule
+                foreach (var rule in rules)
                 {
-                    if (EvaluateRule(rule, notification))
+                    try
                     {
-                        // 3. Apply label to message
-                        await AddLabelToMessageAsync(
-                            notification.MessageId,
-                            rule.LabelId,
-                            notification.ConfigId,
-                            notification.UserId,
-                            db,
-                            ct
-                        );
+                        if (EvaluateRule(rule, notification))
+                        {
+                            // 3. Apply label to message
+                            await AddLabelToMessageAsync(
+                                notification.MessageId,
+                                rule.LabelId,
+                                notification.ConfigId,
+                                notification.UserId,
+                                db,
+                                ct
+                            );
 
-                        appliedLabels.Add(rule.RuleName);
+                            appliedLabelIds.Add(rule.LabelId);
+                            appliedLabels.Add(rule.RuleName);
 
-                        _logger.LogInformation(
-                            "Auto-labeled message {MessageId} with label {LabelId} using rule '{RuleName}'",
-                            notification.MessageId, rule.LabelId, rule.RuleName
-                        );
+                            _logger.LogInformation(
+                                "Auto-labeled message {MessageId} with label {LabelId} using rule '{RuleName}'",
+                                notification.MessageId, rule.LabelId, rule.RuleName
+                            );
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogErrorWithSql(ex,
+                            "Failed to evaluate or apply rule '{RuleName}' for message {MessageId}",
+                            rule.RuleName, notification.MessageId);
                     }
                 }
-                catch (Exception ex)
+
+                if (appliedLabels.Count > 0)
                 {
-                    _logger.LogErrorWithSql(ex,
-                        "Failed to evaluate or apply rule '{RuleName}' for message {MessageId}",
-                        rule.RuleName, notification.MessageId);
+                    _logger.LogInformation(
+                        "Applied {Count} auto-labeling rules to message {MessageId}: {Rules}",
+                        appliedLabels.Count, notification.MessageId, string.Join(", ", appliedLabels)
+                    );
                 }
             }
 
-            if (appliedLabels.Count > 0)
+            // 4. Check if notification should be sent
+            bool shouldNotify = true;
+            if (appliedLabelIds.Count > 0)
             {
-                _logger.LogInformation(
-                    "Applied {Count} auto-labeling rules to message {MessageId}: {Rules}",
-                    appliedLabels.Count, notification.MessageId, string.Join(", ", appliedLabels)
-                );
+                // Check if any applied label has NotifyEnabled = false
+                foreach (var labelId in appliedLabelIds)
+                {
+                    var label = await db.GetAsync<Label>(labelId);
+                    if (label != null && !label.NotifyEnabled)
+                    {
+                        shouldNotify = false;
+                        _logger.LogDebug(
+                            "Skipping notification for message {MessageId} due to label '{LabelName}' having notifications disabled",
+                            notification.MessageId, label.Name
+                        );
+                        break;
+                    }
+                }
+            }
+
+            // 5. Send push notification if needed
+            if (shouldNotify)
+            {
+                await SendPushNotificationAsync(db, notification, ct);
             }
         }
         finally
         {
             await db.CloseAsync();
+        }
+    }
+
+    private async Task SendPushNotificationAsync(ShuitNet.ORM.PostgreSQL.PostgreSqlConnect db, NewEmailNotification notification, CancellationToken ct)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var messaging = scope.ServiceProvider.GetRequiredService<FirebaseMessaging>();
+
+            var subscriptions = await db.AsQueryable<WebPushSubscription>()
+                .Where(s => s.UserId == notification.UserId)
+                .ToListAsync();
+            var tokens = subscriptions.Select(s => s.Token).Distinct().ToList();
+
+            if (tokens.Count == 0)
+            {
+                _logger.LogDebug("No push subscriptions found for user {UserId}", notification.UserId);
+                return;
+            }
+
+            var messageBody = notification.Subject ?? "(No Subject)";
+            if (!string.IsNullOrEmpty(notification.BodyText))
+            {
+                messageBody += "\n" + notification.BodyText[..Math.Min(50, notification.BodyText.Length)];
+            }
+
+            foreach (var token in tokens)
+            {
+                var message = new Message()
+                {
+                    Notification = new Notification
+                    {
+                        Title = notification.From,
+                        Body = messageBody
+                    },
+                    Token = token,
+                };
+                await messaging.SendAsync(message, ct);
+            }
+
+            _logger.LogDebug("Sent push notification for message {MessageId} to {Count} devices",
+                notification.MessageId, tokens.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogErrorWithSql(ex, "Failed to send push notification for message {MessageId}",
+                notification.MessageId);
         }
     }
 

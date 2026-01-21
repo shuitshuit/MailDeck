@@ -228,10 +228,10 @@ export async function emptyTrash(configId: string) {
 /**
  * Move multiple messages to trash
  */
-export async function bulkMoveToTrash(configId: string, messageIds: number[]) {
+export async function bulkMoveToTrash(configId: string, messageIds: number[], sourceFolder?: string) {
     const response = await authFetch('/mail/bulk/move-to-trash', {
         method: 'POST',
-        body: JSON.stringify({ configId, messageIds })
+        body: JSON.stringify({ configId, messageIds, sourceFolder })
     });
     return await response.json();
 }
@@ -334,10 +334,10 @@ export async function getLabels() {
 /**
  * Create a new label
  */
-export async function createLabel(name: string, color: string = '#3B82F6') {
+export async function createLabel(name: string, color: string = '#3B82F6', hideFromInbox: boolean = false, notifyEnabled: boolean = true) {
     const response = await authFetch('/labels', {
         method: 'POST',
-        body: JSON.stringify({ name, color })
+        body: JSON.stringify({ name, color, hideFromInbox, notifyEnabled })
     });
     return await response.json();
 }
@@ -345,10 +345,10 @@ export async function createLabel(name: string, color: string = '#3B82F6') {
 /**
  * Update an existing label
  */
-export async function updateLabel(id: string, name: string, color: string) {
+export async function updateLabel(id: string, name: string, color: string, hideFromInbox: boolean, notifyEnabled: boolean) {
     const response = await authFetch(`/labels/${id}`, {
         method: 'PUT',
-        body: JSON.stringify({ name, color })
+        body: JSON.stringify({ name, color, hideFromInbox, notifyEnabled })
     });
     return await response.json();
 }

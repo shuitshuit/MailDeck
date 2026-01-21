@@ -18,6 +18,12 @@ public class Label
     [Name("color")]
     public string Color { get; set; } = "#3B82F6"; // Default blue
 
+    [Name("hide_from_inbox")]
+    public bool HideFromInbox { get; set; } = false;
+
+    [Name("notify_enabled")]
+    public bool NotifyEnabled { get; set; } = true;
+
     [Name("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

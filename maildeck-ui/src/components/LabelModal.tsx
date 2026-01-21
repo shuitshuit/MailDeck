@@ -5,8 +5,8 @@ import { useToast } from '../contexts/ToastContext';
 interface LabelModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (name: string, color: string) => Promise<void>;
-    initialData?: { name: string; color: string } | null;
+    onSave: (name: string, color: string, hideFromInbox: boolean, notifyEnabled: boolean) => Promise<void>;
+    initialData?: { name: string; color: string; hideFromInbox: boolean; notifyEnabled: boolean } | null;
 }
 
 // Preset colors for quick selection
@@ -28,6 +28,8 @@ const PRESET_COLORS = [
 export default function LabelModal({ isOpen, onClose, onSave, initialData }: LabelModalProps) {
     const [name, setName] = useState('');
     const [color, setColor] = useState('#3B82F6');
+    const [hideFromInbox, setHideFromInbox] = useState(false);
+    const [notifyEnabled, setNotifyEnabled] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
     const toast = useToast();
@@ -37,9 +39,13 @@ export default function LabelModal({ isOpen, onClose, onSave, initialData }: Lab
             if (initialData) {
                 setName(initialData.name);
                 setColor(initialData.color);
+                setHideFromInbox(initialData.hideFromInbox);
+                setNotifyEnabled(initialData.notifyEnabled);
             } else {
                 setName('');
                 setColor('#3B82F6');
+                setHideFromInbox(false);
+                setNotifyEnabled(true);
             }
         }
     }, [isOpen, initialData]);
@@ -50,9 +56,11 @@ export default function LabelModal({ isOpen, onClose, onSave, initialData }: Lab
         e.preventDefault();
         setIsSaving(true);
         try {
-            await onSave(name, color);
+            await onSave(name, color, hideFromInbox, notifyEnabled);
             setName('');
             setColor('#3B82F6');
+            setHideFromInbox(false);
+            setNotifyEnabled(true);
             onClose();
         } catch (error) {
             console.error('Failed to save label:', error);
@@ -139,6 +147,44 @@ export default function LabelModal({ isOpen, onClose, onSave, initialData }: Lab
                             >
                                 {name || 'ラベル名'}
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Hide from inbox option */}
+                    <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                        <input
+                            type="checkbox"
+                            id="hideFromInbox"
+                            checked={hideFromInbox}
+                            onChange={(e) => setHideFromInbox(e.target.checked)}
+                            className="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div>
+                            <label htmlFor="hideFromInbox" className="block text-sm font-medium text-gray-700 cursor-pointer">
+                                受信トレイから非表示
+                            </label>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                                このラベルが付いたメールは受信トレイに表示されません
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Notification setting */}
+                    <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                        <input
+                            type="checkbox"
+                            id="notifyEnabled"
+                            checked={notifyEnabled}
+                            onChange={(e) => setNotifyEnabled(e.target.checked)}
+                            className="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div>
+                            <label htmlFor="notifyEnabled" className="block text-sm font-medium text-gray-700 cursor-pointer">
+                                通知を有効にする
+                            </label>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                                このラベルが付いたメールは通知を送信します
+                            </p>
                         </div>
                     </div>
 

@@ -7,7 +7,7 @@ import ConfirmSignUpPage from './pages/auth/ConfirmSignUpPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import SettingsPage from './pages/SettingsPage';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ConfirmProvider } from './contexts/ConfirmContext';
 import { ConsentProvider } from './contexts/ConsentContext';
 import { LabelProvider, useLabels } from './contexts/LabelContext';
@@ -59,6 +59,41 @@ function Layout({ children }: { children: React.ReactNode }) {
   const [foldersLoading, setFoldersLoading] = useState(false);
   const location = useLocation();
   const [searchParams] = useSearchParams();
+
+  // Extract accountId and folderType from URL path (e.g., /inbox/abc-123 -> { folder: 'inbox', accountId: 'abc-123' })
+  const { currentFolderType, currentAccountId } = useMemo(() => {
+    const pathParts = location.pathname.split('/').filter(Boolean);
+    const folderTypes = ['inbox', 'drafts', 'spam', 'trash'];
+
+    if (pathParts.length >= 1 && folderTypes.includes(pathParts[0])) {
+      return {
+        currentFolderType: pathParts[0],
+        currentAccountId: pathParts.length >= 2 ? pathParts[1] : null
+      };
+    }
+    return { currentFolderType: 'inbox', currentAccountId: null };
+  }, [location.pathname]);
+
+  // Helper function to build folder path with current accountId and optional label
+  const getFolderPath = (folderName: string, keepLabel: boolean = false) => {
+    let path = `/${folderName}`;
+    if (currentAccountId) {
+      path = `/${folderName}/${currentAccountId}`;
+    }
+    if (keepLabel && selectedLabelId) {
+      path += `?label=${selectedLabelId}`;
+    }
+    return path;
+  };
+
+  // Helper function to build label path for current folder
+  const getLabelPath = (labelId: string) => {
+    let path = `/${currentFolderType}`;
+    if (currentAccountId) {
+      path += `/${currentAccountId}`;
+    }
+    return `${path}?label=${labelId}`;
+  };
 
   // Close mobile menu when route changes
   useEffect(() => {
@@ -132,7 +167,7 @@ function Layout({ children }: { children: React.ReactNode }) {
         <div>
           {/* Inbox - clickable to show all mail */}
           <Link
-            to="/inbox"
+            to={getFolderPath('inbox')}
             className={`flex items-center px-4 py-2 rounded-md hover:bg-gray-100 font-medium ${!selectedLabelId && (location.pathname === '/' || location.pathname.startsWith('/inbox'))
               ? 'bg-gray-100 text-brand-600'
               : 'text-gray-700'
@@ -146,7 +181,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 
           {/* Drafts */}
           <Link
-            to="/drafts"
+            to={getFolderPath('drafts')}
             className={`flex items-center px-4 py-2 rounded-md hover:bg-gray-100 font-medium ${location.pathname.startsWith('/drafts')
               ? 'bg-gray-100 text-brand-600'
               : 'text-gray-700'
@@ -160,7 +195,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 
           {/* Spam */}
           <Link
-            to="/spam"
+            to={getFolderPath('spam')}
             className={`flex items-center px-4 py-2 rounded-md hover:bg-gray-100 font-medium ${location.pathname.startsWith('/spam')
               ? 'bg-gray-100 text-brand-600'
               : 'text-gray-700'
@@ -174,7 +209,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 
           {/* Trash */}
           <Link
-            to="/trash"
+            to={getFolderPath('trash')}
             className={`flex items-center px-4 py-2 rounded-md hover:bg-gray-100 font-medium ${location.pathname.startsWith('/trash')
               ? 'bg-gray-100 text-brand-600'
               : 'text-gray-700'
@@ -209,7 +244,7 @@ function Layout({ children }: { children: React.ReactNode }) {
                   {labels.map(label => (
                     <Link
                       key={label.id}
-                      to={`/inbox?label=${label.id}`}
+                      to={selectedLabelId === label.id ? getFolderPath(currentFolderType) : getLabelPath(label.id)}
                       className={`flex items-center px-4 py-1.5 text-sm rounded-md transition-colors ${selectedLabelId === label.id
                         ? 'bg-gray-100 font-medium text-brand-600'
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
