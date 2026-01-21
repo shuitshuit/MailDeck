@@ -6,6 +6,7 @@ import SignUpPage from './pages/auth/SignUpPage';
 import ConfirmSignUpPage from './pages/auth/ConfirmSignUpPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import SettingsPage from './pages/SettingsPage';
+import Logo from './components/Logo';
 
 import { useEffect, useMemo, useState } from 'react';
 import { ConfirmProvider } from './contexts/ConfirmContext';
@@ -157,9 +158,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const SidebarContent = () => (
     <>
       <div className="p-6">
-        <div className="font-bold text-xl text-brand-600 flex items-center gap-2">
-          MailDeck
-        </div>
+        <Logo size="md" />
       </div>
 
       <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
@@ -380,7 +379,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b z-30 flex items-center justify-between px-4">
-        <div className="font-bold text-xl text-brand-600">MailDeck</div>
+        <Logo size="sm" />
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           className="p-2 text-gray-600 hover:bg-gray-100 rounded-md"
@@ -424,6 +423,7 @@ import NotificationListener from './components/Notification ';
 import AutoLabelingPage from './pages/AutoLabelingPage';
 import ContactsPage from './pages/ContactsPage';
 import CustomActionsPage from './pages/CustomActionsPage';
+import LandingPage from './pages/LandingPage';
 
 function App() {
   const { authStatus } = useAuthenticator(context => [context.authStatus]);
@@ -437,16 +437,21 @@ function App() {
           <ConsentModal />
           <LabelProvider>
             <Routes>
+            <Route path="/welcome" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignUpPage />} />
             <Route path="/confirm-signup" element={<ConfirmSignUpPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/" element={
-              <ProtectedRoute>
-                <Layout>
-                  <DashboardPage />
-                </Layout>
-              </ProtectedRoute>
+              isAuthenticated ? (
+                <ProtectedRoute>
+                  <Layout>
+                    <DashboardPage />
+                  </Layout>
+                </ProtectedRoute>
+              ) : (
+                <LandingPage />
+              )
             } />
             <Route path="/inbox" element={
               <ProtectedRoute>
