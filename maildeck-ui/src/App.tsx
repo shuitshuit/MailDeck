@@ -424,6 +424,8 @@ import AutoLabelingPage from './pages/AutoLabelingPage';
 import ContactsPage from './pages/ContactsPage';
 import CustomActionsPage from './pages/CustomActionsPage';
 import LandingPage from './pages/LandingPage';
+import TermsPage from './pages/TermsPage';
+import PrivacyPage from './pages/PrivacyPage';
 
 function App() {
   const { authStatus } = useAuthenticator(context => [context.authStatus]);
@@ -438,6 +440,8 @@ function App() {
           <LabelProvider>
             <Routes>
             <Route path="/welcome" element={<LandingPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignUpPage />} />
             <Route path="/confirm-signup" element={<ConfirmSignUpPage />} />

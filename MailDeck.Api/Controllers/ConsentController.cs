@@ -35,33 +35,7 @@ public class ConsentController : BaseAuthController
         try
         {
             await _db.OpenAsync();
-
-            var logs = await _db.GetMultipleAsync<UserConsentLog>(new { user_id = userId });
-
-            var termsLog = logs
-                .Where(l => l.ConsentType == ConsentVersions.ConsentTypeTermsOfService)
-                .OrderByDescending(l => l.ConsentedAt)
-                .FirstOrDefault();
-
-            var privacyLog = logs
-                .Where(l => l.ConsentType == ConsentVersions.ConsentTypePrivacyPolicy)
-                .OrderByDescending(l => l.ConsentedAt)
-                .FirstOrDefault();
-
-            var response = new ConsentStatusResponse
-            {
-                TermsOfServiceConsented = termsLog?.ConsentVersion == ConsentVersions.LatestTermsOfServiceVersion,
-                TermsOfServiceConsentedVersion = termsLog?.ConsentVersion,
-                TermsOfServiceConsentedAt = termsLog?.ConsentedAt,
-                PrivacyPolicyConsented = privacyLog?.ConsentVersion == ConsentVersions.LatestPrivacyPolicyVersion,
-                PrivacyPolicyConsentedVersion = privacyLog?.ConsentVersion,
-                PrivacyPolicyConsentedAt = privacyLog?.ConsentedAt,
-                LatestTermsOfServiceVersion = ConsentVersions.LatestTermsOfServiceVersion,
-                LatestPrivacyPolicyVersion = ConsentVersions.LatestPrivacyPolicyVersion,
-                RequiresTermsOfServiceConsent = termsLog?.ConsentVersion != ConsentVersions.LatestTermsOfServiceVersion,
-                RequiresPrivacyPolicyConsent = privacyLog?.ConsentVersion != ConsentVersions.LatestPrivacyPolicyVersion
-            };
-
+            var response = await GetConsentStatusInternal(userId);
             return Ok(response);
         }
         catch (Exception ex)
@@ -73,6 +47,38 @@ public class ConsentController : BaseAuthController
         {
             _db.Close();
         }
+    }
+
+    /// <summary>
+    /// 同意状況を取得する内部メソッド（接続は呼び出し元で管理）
+    /// </summary>
+    private async Task<ConsentStatusResponse> GetConsentStatusInternal(string userId)
+    {
+        var logs = await _db.GetMultipleAsync<UserConsentLog>(new { user_id = userId });
+
+        var termsLog = logs
+            .Where(l => l.ConsentType == ConsentVersions.ConsentTypeTermsOfService)
+            .OrderByDescending(l => l.ConsentedAt)
+            .FirstOrDefault();
+
+        var privacyLog = logs
+            .Where(l => l.ConsentType == ConsentVersions.ConsentTypePrivacyPolicy)
+            .OrderByDescending(l => l.ConsentedAt)
+            .FirstOrDefault();
+
+        return new ConsentStatusResponse
+        {
+            TermsOfServiceConsented = termsLog?.ConsentVersion == ConsentVersions.LatestTermsOfServiceVersion,
+            TermsOfServiceConsentedVersion = termsLog?.ConsentVersion,
+            TermsOfServiceConsentedAt = termsLog?.ConsentedAt,
+            PrivacyPolicyConsented = privacyLog?.ConsentVersion == ConsentVersions.LatestPrivacyPolicyVersion,
+            PrivacyPolicyConsentedVersion = privacyLog?.ConsentVersion,
+            PrivacyPolicyConsentedAt = privacyLog?.ConsentedAt,
+            LatestTermsOfServiceVersion = ConsentVersions.LatestTermsOfServiceVersion,
+            LatestPrivacyPolicyVersion = ConsentVersions.LatestPrivacyPolicyVersion,
+            RequiresTermsOfServiceConsent = termsLog?.ConsentVersion != ConsentVersions.LatestTermsOfServiceVersion,
+            RequiresPrivacyPolicyConsent = privacyLog?.ConsentVersion != ConsentVersions.LatestPrivacyPolicyVersion
+        };
     }
 
     /// <summary>
@@ -144,7 +150,8 @@ public class ConsentController : BaseAuthController
                 }
             }
 
-            return await GetConsentStatus();
+            var response = await GetConsentStatusInternal(userId);
+            return Ok(response);
         }
         catch (Exception ex)
         {

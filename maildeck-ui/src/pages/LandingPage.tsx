@@ -233,11 +233,19 @@ export default function LandingPage() {
             {/* Footer */}
             <footer className="py-12 px-4 sm:px-6 lg:px-8 bg-gray-900">
                 <div className="max-w-7xl mx-auto">
-                    <div className="flex flex-col md:flex-row justify-between items-center">
-                        <div className="flex items-center gap-2 mb-4 md:mb-0">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+                        <div className="flex items-center gap-2">
                             <Logo size="sm" showText={false} />
                             <span className="text-xl font-bold text-white">MailDeck</span>
                         </div>
+                        <nav className="flex flex-wrap justify-center gap-6 text-sm">
+                            <Link to="/terms" className="text-gray-400 hover:text-white transition-colors">
+                                利用規約
+                            </Link>
+                            <Link to="/privacy" className="text-gray-400 hover:text-white transition-colors">
+                                プライバシーポリシー
+                            </Link>
+                        </nav>
                         <p className="text-gray-400 text-sm">
                             &copy; {new Date().getFullYear()} MailDeck. All rights reserved.
                         </p>

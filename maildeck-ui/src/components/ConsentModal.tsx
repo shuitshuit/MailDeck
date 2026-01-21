@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
 import { useConsent } from '../contexts/ConsentContext';
 import { useToast } from '../contexts/ToastContext';
 
@@ -21,10 +23,10 @@ export default function ConsentModal() {
                 const promises: Promise<Response>[] = [];
 
                 if (consentStatus.requiresTermsOfServiceConsent) {
-                    promises.push(fetch(`/legal/terms_of_service_${consentStatus.latestTermsOfServiceVersion}.txt`));
+                    promises.push(fetch('/legal/terms_of_service.md'));
                 }
                 if (consentStatus.requiresPrivacyPolicyConsent) {
-                    promises.push(fetch(`/legal/privacy_policy_${consentStatus.latestPrivacyPolicyVersion}.txt`));
+                    promises.push(fetch('/legal/privacy_policy.md'));
                 }
 
                 const responses = await Promise.all(promises);
@@ -74,21 +76,6 @@ export default function ConsentModal() {
         }
     };
 
-    const renderContent = (content: string) => {
-        return content.split('\n').map((line, index) => {
-            if (line.startsWith('第') || /^\d+\./.test(line)) {
-                return <p key={index} className="font-semibold mt-4 mb-2">{line}</p>;
-            }
-            if (line.startsWith('- ')) {
-                return <p key={index} className="ml-4">{line}</p>;
-            }
-            if (line.trim() === '') {
-                return <br key={index} />;
-            }
-            return <p key={index} className="mb-2">{line}</p>;
-        });
-    };
-
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
@@ -134,12 +121,21 @@ export default function ConsentModal() {
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
                                         <h3 className="font-semibold text-gray-900">利用規約</h3>
-                                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                                            {consentStatus.latestTermsOfServiceVersion}
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <Link
+                                                to="/terms"
+                                                target="_blank"
+                                                className="text-xs text-brand-600 hover:text-brand-700 hover:underline"
+                                            >
+                                                別タブで開く
+                                            </Link>
+                                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                                {consentStatus.latestTermsOfServiceVersion}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div className="bg-gray-50 rounded-lg p-4 h-48 overflow-y-auto border border-gray-200 text-sm text-gray-700 leading-relaxed">
-                                        {renderContent(termsContent)}
+                                    <div className="bg-gray-50 rounded-lg p-4 h-48 overflow-y-auto border border-gray-200 text-sm text-gray-700 leading-relaxed prose prose-sm prose-gray max-w-none prose-headings:text-gray-900 prose-h1:text-lg prose-h1:font-bold prose-h1:mb-3 prose-h2:text-base prose-h2:font-semibold prose-h2:mt-4 prose-h2:mb-2">
+                                        <ReactMarkdown>{termsContent}</ReactMarkdown>
                                     </div>
                                     <label className="flex items-center gap-3 cursor-pointer group">
                                         <input
@@ -160,12 +156,21 @@ export default function ConsentModal() {
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
                                         <h3 className="font-semibold text-gray-900">プライバシーポリシー</h3>
-                                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                                            {consentStatus.latestPrivacyPolicyVersion}
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <Link
+                                                to="/privacy"
+                                                target="_blank"
+                                                className="text-xs text-brand-600 hover:text-brand-700 hover:underline"
+                                            >
+                                                別タブで開く
+                                            </Link>
+                                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                                {consentStatus.latestPrivacyPolicyVersion}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div className="bg-gray-50 rounded-lg p-4 h-48 overflow-y-auto border border-gray-200 text-sm text-gray-700 leading-relaxed">
-                                        {renderContent(privacyContent)}
+                                    <div className="bg-gray-50 rounded-lg p-4 h-48 overflow-y-auto border border-gray-200 text-sm text-gray-700 leading-relaxed prose prose-sm prose-gray max-w-none prose-headings:text-gray-900 prose-h1:text-lg prose-h1:font-bold prose-h1:mb-3 prose-h2:text-base prose-h2:font-semibold prose-h2:mt-4 prose-h2:mb-2">
+                                        <ReactMarkdown>{privacyContent}</ReactMarkdown>
                                     </div>
                                     <label className="flex items-center gap-3 cursor-pointer group">
                                         <input
