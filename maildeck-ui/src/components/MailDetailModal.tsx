@@ -47,6 +47,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
 
     // Custom action patterns state
     const [patterns, setPatterns] = useState<CustomActionPattern[]>([]);
+    const [showCustomActions, setShowCustomActions] = useState(true);
 
     // Check if HTML has external images
     const checkForImages = useMemo(() => {
@@ -338,6 +339,39 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                 </div>
                             </div>
 
+                            {/* Custom Actions Toggle (if patterns exist) */}
+                            {patterns.length > 0 && (
+                                <div className="mb-4 pb-4 border-b border-gray-200">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                            </svg>
+                                            <h3 className="text-sm font-semibold text-gray-700">カスタムアクション</h3>
+                                        </div>
+                                        <button
+                                            onClick={() => setShowCustomActions(!showCustomActions)}
+                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                                showCustomActions ? 'bg-brand-600' : 'bg-gray-300'
+                                            }`}
+                                            title={showCustomActions ? 'カスタムアクションを無効化' : 'カスタムアクションを有効化'}
+                                        >
+                                            <span className="sr-only">カスタムアクションの切り替え</span>
+                                            <span
+                                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                                    showCustomActions ? 'translate-x-6' : 'translate-x-1'
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        {showCustomActions
+                                            ? 'パターンマッチング適用中（OTPコード検出など）'
+                                            : '元のメール内容を表示中'}
+                                    </p>
+                                </div>
+                            )}
+
                             {/* Labels section */}
                             <div className="mb-6 pb-6 border-b border-gray-200">
                                 <div className="flex items-center gap-2 mb-2">
@@ -371,7 +405,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                 <EnhancedMailContent
                                     content={message.bodyHtml ? processedHtml : message.bodyText}
                                     isHtml={!!message.bodyHtml}
-                                    patterns={patterns}
+                                    patterns={showCustomActions ? patterns : []}
                                     onCopy={(value) => toast.success(`コピーしました: ${value}`)}
                                 />
                             </div>
