@@ -1,5 +1,6 @@
 using Amazon.KeyManagementService;
 using Amazon.KeyManagementService.Model;
+using Microsoft.Extensions.Caching.Memory;
 using System.Text;
 
 namespace MailDeck.Api.Services;
@@ -14,6 +15,8 @@ public class KmsEncryptionService : IEncryptionService
 {
     private readonly IAmazonKeyManagementService _kmsClient;
     private readonly IConfiguration _configuration;
+    private readonly MemoryCache _cache = new(new MemoryCacheOptions());
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(10);
 
     public KmsEncryptionService(IAmazonKeyManagementService kmsClient, IConfiguration configuration)
     {
@@ -45,7 +48,10 @@ public class KmsEncryptionService : IEncryptionService
             };
 
             var response = await _kmsClient.EncryptAsync(request);
-            return Convert.ToBase64String(response.CiphertextBlob.ToArray());
+            var cipherText = Convert.ToBase64String(response.CiphertextBlob.ToArray());
+
+            _cache.Set(cipherText, plainText, CacheTtl);
+            return cipherText;
         }
         catch (Exception ex)
         {
@@ -57,6 +63,9 @@ public class KmsEncryptionService : IEncryptionService
     {
         if (string.IsNullOrEmpty(cipherText)) return cipherText;
 
+        if (_cache.TryGetValue(cipherText, out string? cached))
+            return cached!;
+
         try
         {
             var request = new DecryptRequest
@@ -65,7 +74,10 @@ public class KmsEncryptionService : IEncryptionService
             };
 
             var response = await _kmsClient.DecryptAsync(request);
-            return Encoding.UTF8.GetString(response.Plaintext.ToArray());
+            var plainText = Encoding.UTF8.GetString(response.Plaintext.ToArray());
+
+            _cache.Set(cipherText, plainText, CacheTtl);
+            return plainText;
         }
         catch (Exception ex)
         {
