@@ -178,6 +178,9 @@ try
     // Log Compression
     builder.Services.AddHostedService<LogCompressionBackgroundService>();
 
+    // Translation Service
+    builder.Services.AddHttpClient<ITranslationService, DeepLTranslationService>();
+
     // Firebase Messaging
     FirebaseApp.Create(new AppOptions()
     {
