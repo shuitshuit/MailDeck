@@ -173,7 +173,7 @@ try
     // Auto-labeling Service
     builder.Services.AddHostedService<AutoLabelingService>();
 
-    builder.Services.AddHostedService<EmailCheckBackgroundService>();
+    builder.Services.AddHostedService<ImapIdleService>();
 
     // Log Compression
     builder.Services.AddHostedService<LogCompressionBackgroundService>();
