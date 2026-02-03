@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using MailDeck.Api.Extensions;
 using MailDeck.Api.Models;
 using MailKit;
@@ -16,6 +17,16 @@ public class EmailCheckBackgroundService : BackgroundService
     private readonly IConfiguration _configuration;
     private readonly ChannelService _channelService;
     private readonly int _intervalMinutes;
+
+    /// <summary>
+    /// Per-host semaphore to limit concurrent IMAP connections to the same server.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _hostSemaphores = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Maximum concurrent IMAP connections allowed per host.
+    /// </summary>
+    private const int MaxConnectionsPerHost = 2;
 
     public EmailCheckBackgroundService(
         ILogger<EmailCheckBackgroundService> logger,
@@ -45,123 +56,187 @@ public class EmailCheckBackgroundService : BackgroundService
             {
                 _logger.LogErrorWithSql(ex, "Error occurred during email check cycle.");
             }
-            // Wait for the next interval
-            await Task.Delay(TimeSpan.FromMinutes(_intervalMinutes), stoppingToken);
         }
     }
 
     private async Task CheckEmailsAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Starting email check cycle...");
-        using (var scope = _scopeFactory.CreateScope())
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<PostgreSqlConnect>();
+        var encryptionService = scope.ServiceProvider.GetRequiredService<IEncryptionService>();
+
+        await db.OpenAsync();
+
+        // Fetch all configs ordered by least recently checked
+        var allConfigs = new List<UserServerConfig>();
+        var pageSize = 20;
+        var pageNumber = 1;
+
+        while (!stoppingToken.IsCancellationRequested)
         {
-            var db = scope.ServiceProvider.GetRequiredService<PostgreSqlConnect>();
-            var encryptionService = scope.ServiceProvider.GetRequiredService<IEncryptionService>();
+            var configs = await db.AsQueryable<UserServerConfig>()
+                .OrderBy(c => c.LastCheckedAt)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
 
-            await db.OpenAsync();
-
-            var pageSize = 20;
-            var pageNumber = 1;
-            var executeTaskList = new List<Task>();
-
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                var configs = await db.AsQueryable<UserServerConfig>()
-                    .OrderBy(c => c.LastCheckedAt)
-                    .Skip((pageNumber - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
-
-                executeTaskList.Add(RunCheck(configs, db, encryptionService, stoppingToken));
-                if (configs.Count < pageSize)
-                    break; // No more pages
-            }
-            await Task.WhenAll(executeTaskList);
+            allConfigs.AddRange(configs);
+            if (configs.Count < pageSize)
+                break;
+            pageNumber++;
         }
-    }
 
-    private async Task RunCheck(List<UserServerConfig> configs, PostgreSqlConnect db, IEncryptionService encryptionService, CancellationToken stoppingToken)
-    {
-        foreach (var config in configs)
+        if (allConfigs.Count == 0)
+        {
+            await Task.Delay(TimeSpan.FromMinutes(_intervalMinutes), stoppingToken);
+            return;
+        }
+
+        // Round-robin interleave by IMAP host to spread access across different servers
+        var interleaved = InterleaveByHost(allConfigs);
+
+        // Calculate stagger delay: spread all checks evenly across the interval
+        var totalInterval = TimeSpan.FromMinutes(_intervalMinutes);
+        var staggerDelay = interleaved.Count > 1
+            ? TimeSpan.FromMilliseconds(totalInterval.TotalMilliseconds / interleaved.Count)
+            : TimeSpan.Zero;
+
+        _logger.LogInformation(
+            "Processing {Count} configs across {HostCount} hosts, stagger delay: {StaggerMs}ms",
+            interleaved.Count,
+            allConfigs.Select(c => c.ImapHost).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+            staggerDelay.TotalMilliseconds);
+
+        // Process configs with staggered starts and per-host concurrency control
+        var tasks = new List<Task>();
+        foreach (var config in interleaved)
         {
             if (stoppingToken.IsCancellationRequested) break;
 
-            try
+            var semaphore = _hostSemaphores.GetOrAdd(config.ImapHost, _ => new SemaphoreSlim(MaxConnectionsPerHost, MaxConnectionsPerHost));
+            tasks.Add(RunCheckWithThrottle(config, semaphore, db, encryptionService, stoppingToken));
+
+            if (staggerDelay > TimeSpan.Zero)
             {
-                // Decrypt password
-                var password = await encryptionService.DecryptAsync(config.ImapPassword);
+                await Task.Delay(staggerDelay, stoppingToken);
+            }
+        }
 
-                using var client = new ImapClient();
+        await Task.WhenAll(tasks);
+    }
 
-                var currentMax = await FetchLastMessageUIDAsync(config, password, stoppingToken);
-                if (config.LastKnownUid == 0)
+    /// <summary>
+    /// Interleave configs by IMAP host in round-robin order so that
+    /// consecutive configs target different servers.
+    /// </summary>
+    private static List<UserServerConfig> InterleaveByHost(List<UserServerConfig> configs)
+    {
+        var grouped = configs
+            .GroupBy(c => c.ImapHost, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new Queue<UserServerConfig>(g))
+            .ToList();
+
+        var result = new List<UserServerConfig>(configs.Count);
+        while (grouped.Count > 0)
+        {
+            for (int i = grouped.Count - 1; i >= 0; i--)
+            {
+                result.Add(grouped[i].Dequeue());
+                if (grouped[i].Count == 0)
+                    grouped.RemoveAt(i);
+            }
+        }
+        return result;
+    }
+
+    private async Task RunCheckWithThrottle(
+        UserServerConfig config,
+        SemaphoreSlim hostSemaphore,
+        PostgreSqlConnect db,
+        IEncryptionService encryptionService,
+        CancellationToken stoppingToken)
+    {
+        await hostSemaphore.WaitAsync(stoppingToken);
+        try
+        {
+            await RunCheckSingle(config, db, encryptionService, stoppingToken);
+        }
+        finally
+        {
+            hostSemaphore.Release();
+        }
+    }
+
+    private async Task RunCheckSingle(UserServerConfig config, PostgreSqlConnect db, IEncryptionService encryptionService, CancellationToken stoppingToken)
+    {
+        try
+        {
+            // Decrypt password
+            var password = await encryptionService.DecryptAsync(config.ImapPassword);
+
+            var currentMax = await FetchLastMessageUIDAsync(config, password, stoppingToken);
+            if (config.LastKnownUid == 0)
+            {
+                config.LastKnownUid = currentMax;
+            }
+            else if (currentMax > config.LastKnownUid)
+            {
+                // Found new messages
+                var uidsToFetch = new List<UniqueId>();
+                for (uint i = (uint)config.LastKnownUid + 1; i <= currentMax; i++)
                 {
-                    config.LastKnownUid = currentMax;
+                    uidsToFetch.Add(new UniqueId(i));
                 }
-                else if (currentMax > config.LastKnownUid)
+
+                if (uidsToFetch.Count > 0)
                 {
-                    // Found new messages
-                    // Create list of UIDs to fetch
-                    var uidsToFetch = new List<UniqueId>();
-                    for (uint i = (uint)config.LastKnownUid + 1; i <= currentMax; i++)
+                    var currentMsgID = 0;
+                    try
                     {
-                        uidsToFetch.Add(new UniqueId(i));
-                    }
-
-                    if (uidsToFetch.Count > 0)
-                    {
-                        List<IMessageSummary> newMessages = [];
-                        var currentMsgID = 0;
-                        try
+                        var mimeMessages = await FetchMessageAsync(config, password, uidsToFetch, stoppingToken);
+                        var (fetchedMessages, messages) = mimeMessages;
+                        foreach (var msg in fetchedMessages)
                         {
-                            var mimeMessages = await FetchMessageAsync(config, password, uidsToFetch, stoppingToken);
-                            var (fetchedMessages, messages) = mimeMessages;
-                            newMessages = fetchedMessages.ToList();
-                            foreach (var msg in fetchedMessages)
+                            currentMsgID = (int)msg.UniqueId.Id;
+                            foreach (var mimeMessage in messages)
                             {
-                                currentMsgID = (int)msg.UniqueId.Id;
-                                foreach (var mimeMessage in messages)
-                                {
-                                    var bodyText = mimeMessage.TextBody ?? mimeMessage.HtmlBody ?? "";
+                                var bodyText = mimeMessage.TextBody ?? mimeMessage.HtmlBody ?? "";
 
-                                    var notification = new NewEmailNotification(
-                                        UserId: config.UserId,
-                                        ConfigId: config.Id.ToString(),
-                                        MessageId: (int)msg.UniqueId.Id,
-                                        From: msg.Envelope.From.ToString(),
-                                        Subject: msg.Envelope.Subject ?? "",
-                                        BodyText: bodyText
-                                    );
-                                    await _channelService.EnqueueAsync(notification, stoppingToken);
-                                    _logger.LogDebug(
-                                        "Enqueued new email for auto-labeling: UID={Uid}, From={From}, Subject={Subject}",
-                                        msg.UniqueId.Id, msg.Envelope.From, msg.Envelope.Subject
-                                    );
-                                }
+                                var notification = new NewEmailNotification(
+                                    UserId: config.UserId,
+                                    ConfigId: config.Id.ToString(),
+                                    MessageId: (int)msg.UniqueId.Id,
+                                    From: msg.Envelope.From.ToString(),
+                                    Subject: msg.Envelope.Subject ?? "",
+                                    BodyText: bodyText
+                                );
+                                await _channelService.EnqueueAsync(notification, stoppingToken);
+                                _logger.LogDebug(
+                                    "Enqueued new email for auto-labeling: UID={Uid}, From={From}, Subject={Subject}",
+                                    msg.UniqueId.Id, msg.Envelope.From, msg.Envelope.Subject
+                                );
                             }
                         }
-                        catch (Exception ex)
-                        {
-                            _logger.LogErrorWithSql(ex,
-                                "Failed to enqueue message {Uid} for auto-labeling",
-                                currentMsgID
-                            );
-                        }
-
-                        // Note: Push notifications are now handled by AutoLabelingService after applying labels
-                        config.LastKnownUid = currentMax;
                     }
+                    catch (Exception ex)
+                    {
+                        _logger.LogErrorWithSql(ex,
+                            "Failed to enqueue message {Uid} for auto-labeling",
+                            currentMsgID
+                        );
+                    }
+
+                    config.LastKnownUid = currentMax;
                 }
-
-                config.LastCheckedAt = DateTime.UtcNow;
-                await db.UpdateAsync(config);
-
-                await client.DisconnectAsync(true, stoppingToken);
             }
-            catch (Exception ex)
-            {
-                _logger.LogErrorWithSql(ex, $"Error checking email for config {config.Id} (User: {config.UserId})");
-            }
+
+            config.LastCheckedAt = DateTime.UtcNow;
+            await db.UpdateAsync(config);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogErrorWithSql(ex, $"Error checking email for config {config.Id} (User: {config.UserId})");
         }
     }
 
