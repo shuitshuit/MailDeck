@@ -273,9 +273,14 @@
     "list": [
       {
         "name": "DS_LOKI",
+        "label": "Lokiデータソース",
         "type": "datasource",
-        "pluginId": "loki",
-        "hide": 2
+        "query": "loki",
+        "refresh": 1,
+        "hide": 0,
+        "multi": false,
+        "includeAll": false,
+        "current": {}
       }
     ]
   }
