@@ -1,0 +1,19 @@
+# ローカルサーバー用: Grafanaのみ
+# Lokiはmaildeck鯖 (192.168.0.61) で稼働
+services:
+  grafana:
+    image: grafana/grafana:11.5.2
+    container_name: maildeck-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    restart: unless-stopped
+
+volumes:
+  grafana-data:

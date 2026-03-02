@@ -1,0 +1,101 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /var/lib/promtail/positions.yaml
+
+clients:
+  - url: http://localhost:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: maildeck_requests
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: maildeck
+          app: maildeck-api
+          log_type: requests
+          __path__: /opt/maildeck/build/logs/requests-*.json
+    pipeline_stages:
+      # gzip圧縮済みファイルは除外
+      - drop:
+          source: filename
+          expression: ".*\\.gz$"
+      # SerilogのCompactJsonFormatterをパース
+      - json:
+          expressions:
+            ts: '"@t"'
+            level: '"@l"'
+            message: '"@mt"'
+            method: Method
+            path: Path
+            status_code: StatusCode
+            ip_address: IpAddress
+            trace_id: '"@tr"'
+      # タイムスタンプを設定
+      - timestamp:
+          source: ts
+          format: RFC3339Nano
+      # ラベルとして抽出
+      - labels:
+          level:
+          method:
+          status_code:
+
+  - job_name: maildeck_performance
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: maildeck
+          app: maildeck-api
+          log_type: performance
+          __path__: /opt/maildeck/build/logs/performance-*.json
+    pipeline_stages:
+      - drop:
+          source: filename
+          expression: ".*\\.gz$"
+      - json:
+          expressions:
+            ts: '"@t"'
+            level: '"@l"'
+            message: '"@mt"'
+            method: Method
+            path: Path
+            status_code: StatusCode
+            elapsed_ms: ElapsedMilliseconds
+      - timestamp:
+          source: ts
+          format: RFC3339Nano
+      - labels:
+          level:
+          method:
+          status_code:
+
+  - job_name: maildeck_app
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: maildeck
+          app: maildeck-api
+          log_type: maildeck
+          __path__: /opt/maildeck/build/logs/maildeck-*.json
+    pipeline_stages:
+      - drop:
+          source: filename
+          expression: ".*\\.gz$"
+      - json:
+          expressions:
+            ts: '"@t"'
+            level: '"@l"'
+            message: '"@mt"'
+            source_context: SourceContext
+      - timestamp:
+          source: ts
+          format: RFC3339Nano
+      - labels:
+          level:
+          source_context:
