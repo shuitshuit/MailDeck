@@ -6,5 +6,9 @@ datasources:
     access: proxy
     url: http://192.168.0.61:3100
     isDefault: true
+    basicAuth: true
+    basicAuthUser: maildeck
+    secureJsonData:
+      basicAuthPassword: LTv__@vyhmPVim6bmH8ir.kJH637qJTxoUEPKofQkeFM-aTe-XTq3ZrP88JoyTzeh7c7EtaLHQjhVPo3TpUqFZj@nq7GP.z4D2VY
     jsonData:
       maxLines: 1000

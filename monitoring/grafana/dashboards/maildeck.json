@@ -1,20 +1,171 @@
 {
-  "title": "MailDeck Logs",
+  "title": "MailDeck",
   "uid": "maildeck-logs",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
   "panels": [
     {
       "id": 1,
-      "title": "HTTPリクエストログ",
-      "type": "logs",
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 8 },
+      "title": "リクエスト数 / 分",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 6 },
       "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
       "targets": [
         {
-          "expr": "{job=\"maildeck\", log_type=\"requests\"}",
+          "expr": "sum(rate({job=\"maildeck\", log_type=\"requests\"}[1m]))",
+          "legendFormat": "req/s",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "options": { "tooltip": { "mode": "single" } }
+    },
+    {
+      "id": 2,
+      "title": "平均 / p95 レスポンスタイム (ms)",
+      "type": "timeseries",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 6 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        {
+          "expr": "avg_over_time({job=\"maildeck\", log_type=\"performance\"} | json | unwrap ElapsedMilliseconds [1m])",
+          "legendFormat": "avg (ms)",
+          "refId": "A"
+        },
+        {
+          "expr": "quantile_over_time(0.95, {job=\"maildeck\", log_type=\"performance\"} | json | unwrap ElapsedMilliseconds [1m])",
+          "legendFormat": "p95 (ms)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "lineWidth": 2, "fillOpacity": 5 }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "ステータスコード分布",
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 6 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        {
+          "expr": "sum by (status_code) (rate({job=\"maildeck\", log_type=\"performance\"}[1m]))",
+          "legendFormat": "{{status_code}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "lineWidth": 2, "fillOpacity": 5 }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "エンドポイント別リクエスト数 (Top 10, OPTIONS除く)",
+      "type": "barchart",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 7 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (path) (count_over_time({job=\"maildeck\", log_type=\"requests\"} | json | method != \"OPTIONS\" [$__range])))",
+          "legendFormat": "{{path}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "options": {
+        "orientation": "horizontal",
+        "groupWidth": 0.7,
+        "barWidth": 0.97,
+        "fillOpacity": 80,
+        "tooltip": { "mode": "single" }
+      }
+    },
+    {
+      "id": 5,
+      "title": "HTTPメソッド別 (OPTIONS除く)",
+      "type": "piechart",
+      "gridPos": { "x": 12, "y": 6, "w": 6, "h": 7 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        {
+          "expr": "sum by (method) (count_over_time({job=\"maildeck\", log_type=\"requests\"} | json | method != \"OPTIONS\" [$__range]))",
+          "legendFormat": "{{method}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "pieType": "donut",
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }
+      }
+    },
+    {
+      "id": 6,
+      "title": "4xx / 5xx エラー数",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 6, "w": 6, "h": 7 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({job=\"maildeck\", log_type=\"performance\"} | json | StatusCode >= 400 [$__range]))",
+          "legendFormat": "4xx/5xx",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "graphMode": "area",
+        "colorMode": "background"
+      }
+    },
+    {
+      "id": 7,
+      "title": "HTTPリクエストログ (OPTIONS除く)",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 13, "w": 24, "h": 8 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        {
+          "expr": "{job=\"maildeck\", log_type=\"requests\"} | json | method != \"OPTIONS\"",
           "legendFormat": "",
           "refId": "A"
         }
@@ -22,21 +173,44 @@
       "options": {
         "showTime": true,
         "showLabels": false,
-        "wrapLogMessage": true,
-        "prettifyLogMessage": true,
+        "wrapLogMessage": false,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      }
+    },
+    {
+      "id": 8,
+      "title": "スロークエリ (200ms超)",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 21, "w": 24, "h": 7 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        {
+          "expr": "{job=\"maildeck\", log_type=\"performance\"} | json | ElapsedMilliseconds > 200",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": false,
+        "prettifyLogMessage": false,
         "enableLogDetails": true,
         "sortOrder": "Descending"
       }
     },
     {
-      "id": 2,
-      "title": "エラーログ",
+      "id": 9,
+      "title": "エラー / 警告ログ",
       "type": "logs",
-      "gridPos": { "x": 0, "y": 8, "w": 24, "h": 8 },
+      "gridPos": { "x": 0, "y": 28, "w": 24, "h": 7 },
       "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
       "targets": [
         {
-          "expr": "{job=\"maildeck\"} | json | level =~ \"Error|Fatal|Warning\"",
+          "expr": "{job=\"maildeck\", log_type=\"maildeck\"} | json | level =~ `(Error|Fatal|Warning)`",
           "legendFormat": "",
           "refId": "A"
         }
@@ -51,50 +225,32 @@
       }
     },
     {
-      "id": 3,
-      "title": "リクエスト数 (1分間隔)",
-      "type": "timeseries",
-      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
-      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
-      "targets": [
-        {
-          "expr": "sum by (log_type) (rate({job=\"maildeck\", log_type=\"requests\"}[1m]))",
-          "legendFormat": "{{log_type}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "color": { "mode": "palette-classic" }
-        }
-      }
-    },
-    {
-      "id": 4,
-      "title": "レスポンスタイム (ms)",
-      "type": "timeseries",
-      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
-      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
-      "targets": [
-        {
-          "expr": "avg_over_time({job=\"maildeck\", log_type=\"performance\"} | json | unwrap ElapsedMilliseconds [1m])",
-          "legendFormat": "avg response time",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms",
-          "color": { "mode": "palette-classic" }
-        }
-      }
-    },
-    {
-      "id": 5,
-      "title": "アプリケーションログ",
+      "id": 10,
+      "title": "バックグラウンドサービスログ",
       "type": "logs",
-      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 8 },
+      "gridPos": { "x": 0, "y": 35, "w": 24, "h": 7 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        {
+          "expr": "{job=\"maildeck\", log_type=\"maildeck\"} | json | SourceContext =~ `(ImapIdleService|AutoLabelingService|EmailCheckBackgroundService|LogCompressionBackgroundService|ChannelService)`",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": false,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      }
+    },
+    {
+      "id": 11,
+      "title": "全アプリログ",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 42, "w": 24, "h": 7 },
       "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
       "targets": [
         {
@@ -106,8 +262,8 @@
       "options": {
         "showTime": true,
         "showLabels": false,
-        "wrapLogMessage": true,
-        "prettifyLogMessage": true,
+        "wrapLogMessage": false,
+        "prettifyLogMessage": false,
         "enableLogDetails": true,
         "sortOrder": "Descending"
       }

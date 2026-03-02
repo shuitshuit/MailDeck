@@ -7,6 +7,9 @@ positions:
 
 clients:
   - url: http://localhost:3100/loki/api/v1/push
+    basic_auth:
+      username: maildeck
+      password: LTv__@vyhmPVim6bmH8ir.kJH637qJTxoUEPKofQkeFM-aTe-XTq3ZrP88JoyTzeh7c7EtaLHQjhVPo3TpUqFZj@nq7GP.z4D2VY
 
 scrape_configs:
   - job_name: maildeck_requests

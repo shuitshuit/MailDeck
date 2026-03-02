@@ -1,15 +1,28 @@
-# maildeck鯖用: Lokiのみ
+# maildeck鯖用: Loki + nginx (Basic認証)
 # Grafanaはローカルサーバーで稼働
 services:
   loki:
     image: grafana/loki:3.4.1
     container_name: maildeck-loki
-    ports:
-      - "3100:3100"
+    # 外部に直接公開せずnginx経由のみ
+    expose:
+      - "3100"
     volumes:
       - ./loki-config.yml:/etc/loki/config.yml:ro
       - loki-data:/loki
     command: -config.file=/etc/loki/config.yml
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: maildeck-loki-nginx
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./htpasswd:/etc/nginx/htpasswd:ro
+    depends_on:
+      - loki
     restart: unless-stopped
 
 volumes:
