@@ -273,35 +273,61 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
 
-        // Collect all text nodes
+        // 翻訳をスキップするタグ
+        const SKIP_TAGS = new Set(['STYLE', 'SCRIPT', 'NOSCRIPT', 'CODE', 'PRE', 'HEAD']);
+
+        // Collect all text nodes (style/script/code/pre を除外)
         const textNodes: { node: Text; text: string }[] = [];
         const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, null);
         let node: Text | null;
         while ((node = walker.nextNode() as Text | null)) {
             const text = node.textContent?.trim();
-            if (text && text.length > 0) {
-                textNodes.push({ node, text });
+            if (!text || text.length === 0) continue;
+            // 祖先に SKIP_TAGS が含まれる場合はスキップ
+            let ancestor = node.parentElement;
+            let skip = false;
+            while (ancestor) {
+                if (SKIP_TAGS.has(ancestor.tagName)) { skip = true; break; }
+                ancestor = ancestor.parentElement;
             }
+            if (!skip) textNodes.push({ node, text });
         }
 
         if (textNodes.length === 0) {
             return html;
         }
 
-        // Combine all text with separator for batch translation
+        // Chrome Translator API の入力長制限に合わせてチャンク分割して翻訳
         const separator = '\n§§§\n';
-        const combinedText = textNodes.map(t => t.text).join(separator);
+        const CHUNK_CHAR_LIMIT = 4000;
+        const chunks: { nodes: typeof textNodes; text: string }[] = [];
+        let currentNodes: typeof textNodes = [];
+        let currentLen = 0;
 
-        // Translate combined text
-        const translatedCombined = await translateFn(combinedText);
-        const translatedTexts = translatedCombined.split(separator);
-
-        // Replace text nodes with translated text
-        textNodes.forEach((item, index) => {
-            if (translatedTexts[index]) {
-                item.node.textContent = translatedTexts[index];
+        for (const item of textNodes) {
+            const added = (currentLen > 0 ? separator.length : 0) + item.text.length;
+            if (currentLen + added > CHUNK_CHAR_LIMIT && currentNodes.length > 0) {
+                chunks.push({ nodes: currentNodes, text: currentNodes.map(n => n.text).join(separator) });
+                currentNodes = [];
+                currentLen = 0;
             }
-        });
+            currentNodes.push(item);
+            currentLen += (currentLen > 0 ? separator.length : 0) + item.text.length;
+        }
+        if (currentNodes.length > 0) {
+            chunks.push({ nodes: currentNodes, text: currentNodes.map(n => n.text).join(separator) });
+        }
+
+        // 各チャンクを翻訳してテキストノードを置換
+        for (const chunk of chunks) {
+            const translatedCombined = await translateFn(chunk.text);
+            const translatedTexts = translatedCombined.split(separator);
+            chunk.nodes.forEach((item, index) => {
+                if (translatedTexts[index]) {
+                    item.node.textContent = translatedTexts[index];
+                }
+            });
+        }
 
         return doc.body.innerHTML;
     };
