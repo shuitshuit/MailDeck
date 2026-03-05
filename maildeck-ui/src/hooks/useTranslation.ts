@@ -1,53 +1,62 @@
 import { useState, useCallback, useEffect } from 'react';
-import { translateText } from '../lib/api';
 
-export type ChromeApiStatus = 'available' | 'disabled' | 'unavailable';
-export type TranslationMethod = 'chrome' | 'deepl' | null;
+export type ChromeApiStatus = 'available' | 'downloadable' | 'disabled' | 'unavailable';
+
+export interface DownloadProgress {
+    loaded: number; // 0.0 ~ 1.0
+    total: number;  // 通常 1.0
+}
 
 interface UseTranslationReturn {
     translate: (text: string) => Promise<string>;
     isTranslating: boolean;
     chromeApiStatus: ChromeApiStatus;
-    translationMethod: TranslationMethod;
+    downloadProgress: DownloadProgress | null;
     error: string | null;
     clearError: () => void;
 }
 
-// Chrome Translator API types
-interface ChromeTranslator {
+// Chrome Translator API types (新 API: Translator in self)
+interface ChromeTranslatorInstance {
     translate(text: string): Promise<string>;
+    destroy(): void;
 }
 
-interface ChromeTranslation {
-    createTranslator(options: { sourceLanguage: string; targetLanguage: string }): Promise<ChromeTranslator>;
-    canTranslate(options: { sourceLanguage: string; targetLanguage: string }): Promise<'no' | 'readily' | 'after-download'>;
+interface DownloadProgressEvent extends Event {
+    loaded: number;
+    total: number;
+}
+
+interface TranslatorMonitor {
+    addEventListener(type: 'downloadprogress', listener: (e: DownloadProgressEvent) => void): void;
+}
+
+interface ChromeTranslatorCreateOptions {
+    sourceLanguage: string;
+    targetLanguage: string;
+    monitor?: (monitor: TranslatorMonitor) => void;
+}
+
+interface ChromeTranslatorConstructor {
+    availability(options: { sourceLanguage: string; targetLanguage: string }): Promise<'unavailable' | 'downloadable' | 'downloading' | 'available'>;
+    create(options: ChromeTranslatorCreateOptions): Promise<ChromeTranslatorInstance>;
 }
 
 declare global {
     interface Window {
-        translation?: ChromeTranslation;
+        Translator?: ChromeTranslatorConstructor;
+        // 旧 API (フォールバック用)
+        translation?: {
+            canTranslate(options: { sourceLanguage: string; targetLanguage: string }): Promise<'no' | 'readily' | 'after-download'>;
+            createTranslator(options: { sourceLanguage: string; targetLanguage: string }): Promise<{ translate(text: string): Promise<string> }>;
+        };
     }
 }
 
-/**
- * Get target language from browser settings
- * Returns language code in uppercase (e.g., "JA", "EN")
- */
-function getTargetLanguage(): string {
-    const browserLang = navigator.language.split('-')[0];
-    return browserLang.toUpperCase();
-}
-
-/**
- * Get target language in lowercase for Chrome API
- */
 function getTargetLanguageLowerCase(): string {
     return navigator.language.split('-')[0].toLowerCase();
 }
 
-/**
- * Check if running on Chrome desktop
- */
 function isChromeDesktop(): boolean {
     const ua = navigator.userAgent;
     const isChrome = /Chrome/.test(ua) && !/Edge|Edg|OPR/.test(ua);
@@ -55,108 +64,99 @@ function isChromeDesktop(): boolean {
     return isChrome && isDesktop;
 }
 
-/**
- * Check Chrome Translator API status
- */
 async function checkChromeTranslatorApi(): Promise<ChromeApiStatus> {
     if (!isChromeDesktop()) {
         return 'unavailable';
     }
 
-    // Check if translation API exists
+    // 新 API: Translator in self
+    if ('Translator' in self && typeof (self as unknown as { Translator: ChromeTranslatorConstructor }).Translator?.availability === 'function') {
+        try {
+            const Translator = (self as unknown as { Translator: ChromeTranslatorConstructor }).Translator;
+            const status = await Translator.availability({
+                sourceLanguage: 'en',
+                targetLanguage: getTargetLanguageLowerCase(),
+            });
+            if (status === 'available') return 'available';
+            if (status === 'downloadable' || status === 'downloading') return 'downloadable';
+        } catch {
+            // fall through
+        }
+    }
+
+    // 旧 API: window.translation (フォールバック)
     if (typeof window.translation !== 'undefined' && window.translation !== null) {
         try {
-            // Try to check if translation is possible
-            const canTranslate = await window.translation.canTranslate({
+            const can = await window.translation.canTranslate({
                 sourceLanguage: 'en',
-                targetLanguage: getTargetLanguageLowerCase()
+                targetLanguage: getTargetLanguageLowerCase(),
             });
-            if (canTranslate !== 'no') {
-                return 'available';
-            }
+            if (can !== 'no') return 'available';
         } catch {
-            // API exists but may not be fully functional
             return 'disabled';
         }
     }
 
-    // Chrome desktop but API not available - user needs to enable it
     return 'disabled';
 }
 
-/**
- * Translate using Chrome Translator API
- */
-async function translateWithChrome(text: string): Promise<string> {
-    if (!window.translation) {
-        throw new Error('Chrome Translator API not available');
-    }
-
+async function translateWithChrome(
+    text: string,
+    onProgress: (progress: DownloadProgress) => void
+): Promise<string> {
     const targetLang = getTargetLanguageLowerCase();
 
-    // Check availability first
-    const canTranslate = await window.translation.canTranslate({
-        sourceLanguage: 'en',
-        targetLanguage: targetLang
-    });
-
-    if (canTranslate === 'no') {
-        throw new Error('Translation not available for this language pair');
+    // 新 API
+    if ('Translator' in self) {
+        const Translator = (self as unknown as { Translator: ChromeTranslatorConstructor }).Translator!;
+        const translator = await Translator.create({
+            sourceLanguage: 'en',
+            targetLanguage: targetLang,
+            monitor(m) {
+                m.addEventListener('downloadprogress', (e) => {
+                    onProgress({ loaded: e.loaded, total: e.total || 1 });
+                });
+            },
+        });
+        const result = await translator.translate(text);
+        translator.destroy();
+        return result;
     }
 
-    // Create translator (this will trigger language pack download if needed)
-    const translator = await window.translation.createTranslator({
-        sourceLanguage: 'en',
-        targetLanguage: targetLang
-    });
+    // 旧 API フォールバック
+    if (window.translation) {
+        const translator = await window.translation.createTranslator({
+            sourceLanguage: 'en',
+            targetLanguage: targetLang,
+        });
+        return await translator.translate(text);
+    }
 
-    return await translator.translate(text);
-}
-
-/**
- * Translate using DeepL API (backend)
- */
-async function translateWithDeepL(text: string): Promise<string> {
-    const targetLang = getTargetLanguage();
-    const response = await translateText({ text, targetLang });
-    return response.translatedText;
+    throw new Error('Chrome Translator API not available');
 }
 
 export function useTranslation(): UseTranslationReturn {
     const [isTranslating, setIsTranslating] = useState(false);
     const [chromeApiStatus, setChromeApiStatus] = useState<ChromeApiStatus>('unavailable');
-    const [translationMethod, setTranslationMethod] = useState<TranslationMethod>(null);
+    const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    // Check Chrome API status on mount
     useEffect(() => {
         checkChromeTranslatorApi().then(setChromeApiStatus);
     }, []);
 
-    const clearError = useCallback(() => {
-        setError(null);
-    }, []);
+    const clearError = useCallback(() => setError(null), []);
 
     const translate = useCallback(async (text: string): Promise<string> => {
         setIsTranslating(true);
         setError(null);
+        setDownloadProgress(null);
 
         try {
-            // Try Chrome API first if available
-            if (chromeApiStatus === 'available') {
-                try {
-                    const result = await translateWithChrome(text);
-                    setTranslationMethod('chrome');
-                    return result;
-                } catch (chromeError) {
-                    console.warn('Chrome translation failed, falling back to DeepL:', chromeError);
-                    // Fall through to DeepL
-                }
-            }
-
-            // Use DeepL API
-            const result = await translateWithDeepL(text);
-            setTranslationMethod('deepl');
+            const result = await translateWithChrome(text, (progress) => {
+                setDownloadProgress(progress);
+            });
+            setDownloadProgress(null);
             return result;
         } catch (err) {
             const message = err instanceof Error ? err.message : '翻訳に失敗しました';
@@ -165,14 +165,14 @@ export function useTranslation(): UseTranslationReturn {
         } finally {
             setIsTranslating(false);
         }
-    }, [chromeApiStatus]);
+    }, []);
 
     return {
         translate,
         isTranslating,
         chromeApiStatus,
-        translationMethod,
+        downloadProgress,
         error,
-        clearError
+        clearError,
     };
 }

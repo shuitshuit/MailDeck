@@ -3,13 +3,12 @@ import { useState } from 'react';
 interface TranslatorApiGuideModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onUseDeepL: () => void;
+    onUseDeepL: () => void; // 後方互換のため残す（呼び出し側で使用）
 }
 
 export default function TranslatorApiGuideModal({
     isOpen,
     onClose,
-    onUseDeepL
 }: TranslatorApiGuideModalProps) {
     const [copied, setCopied] = useState(false);
 
@@ -23,7 +22,6 @@ export default function TranslatorApiGuideModal({
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         } catch {
-            // Fallback for older browsers
             const textArea = document.createElement('textarea');
             textArea.value = flagsUrl;
             document.body.appendChild(textArea);
@@ -33,11 +31,6 @@ export default function TranslatorApiGuideModal({
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         }
-    };
-
-    const handleUseDeepL = () => {
-        onUseDeepL();
-        onClose();
     };
 
     return (
@@ -61,7 +54,7 @@ export default function TranslatorApiGuideModal({
                 {/* Content */}
                 <div className="p-4 space-y-4">
                     <p className="text-sm text-gray-600">
-                        Chrome の実験的な翻訳機能を有効にすると、データをサーバーに送信せずにブラウザ内で翻訳できます。
+                        Chrome の翻訳機能を有効にすると、データをサーバーに送信せずにブラウザ内で翻訳できます。
                     </p>
 
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -103,27 +96,15 @@ export default function TranslatorApiGuideModal({
                             )}
                         </button>
                     </div>
-
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                        <p className="text-sm text-amber-800">
-                            <strong>注意:</strong> この機能は実験的なものです。有効にしなくても、DeepL翻訳を使用できます。
-                        </p>
-                    </div>
                 </div>
 
                 {/* Footer */}
-                <div className="flex justify-end gap-3 p-4 border-t bg-gray-50 rounded-b-xl">
-                    <button
-                        onClick={handleUseDeepL}
-                        className="px-4 py-2 text-sm font-medium text-brand-600 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition-colors"
-                    >
-                        DeepLで翻訳
-                    </button>
+                <div className="flex justify-end p-4 border-t bg-gray-50 rounded-b-xl">
                     <button
                         onClick={onClose}
                         className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                     >
-                        後で
+                        閉じる
                     </button>
                 </div>
             </div>

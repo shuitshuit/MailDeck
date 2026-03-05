@@ -52,7 +52,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
     const [showCustomActions, setShowCustomActions] = useState(true);
 
     // Translation state
-    const { translate, isTranslating, chromeApiStatus, translationMethod, error: translationError } = useTranslation();
+    const { translate, isTranslating, chromeApiStatus, downloadProgress, error: translationError } = useTranslation();
     const [translatedContent, setTranslatedContent] = useState<string | null>(null);
     const [showTranslation, setShowTranslation] = useState(false);
     const [showApiGuide, setShowApiGuide] = useState(false);
@@ -310,11 +310,12 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
     const handleTranslate = async () => {
         if (!message) return;
 
-        // If Chrome API is disabled on Chrome desktop, show guide
+        // Chrome API が無効な場合はガイドを表示
         if (chromeApiStatus === 'disabled') {
             setShowApiGuide(true);
             return;
         }
+        // downloadable の場合はそのまま続行 (monitor でダウンロード進捗を表示)
 
         try {
             if (message.bodyHtml) {
@@ -330,32 +331,15 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                 return;
             }
             setShowTranslation(true);
-            toast.success(`翻訳完了 (${translationMethod === 'chrome' ? 'Chrome' : 'DeepL'})`);
+            toast.success('翻訳完了 (Chrome)');
         } catch {
             toast.error(translationError || '翻訳に失敗しました');
         }
     };
 
-    // Handle DeepL translation from guide modal
+    // Handle translation from guide modal (Chrome のみ再試行)
     const handleUseDeepL = async () => {
-        if (!message) return;
-
-        try {
-            if (message.bodyHtml) {
-                const result = await translateHtmlContent(message.bodyHtml, translate);
-                setTranslatedContent(result);
-            } else if (message.bodyText) {
-                const result = await translate(message.bodyText);
-                setTranslatedContent(result);
-            } else {
-                toast.error('翻訳するテキストがありません');
-                return;
-            }
-            setShowTranslation(true);
-            toast.success('翻訳完了 (DeepL)');
-        } catch {
-            toast.error(translationError || '翻訳に失敗しました');
-        }
+        await handleTranslate();
     };
 
     // Reset translation when message changes
@@ -369,7 +353,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-0 md:p-4" onClick={handleBackdropClick}>
             <div ref={modalContentRef} className="bg-white md:rounded-lg shadow-xl w-full max-w-4xl h-full md:h-auto md:max-h-[90vh] flex flex-col">
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+                <div className="relative p-4 border-b border-gray-100 flex justify-between items-center">
                     <h2 className="text-xl font-semibold truncate flex-1 pr-4">{message?.subject || 'Loading...'}</h2>
                     <div className="flex items-center gap-2">
                         {/* Action buttons based on folder type */}
@@ -426,6 +410,24 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                 </svg>
                             )}
                         </button>
+
+                        {/* Download progress bar (Chrome model download) */}
+                        {downloadProgress !== null && (
+                            <div className="absolute top-full left-0 right-0 px-4 pt-1 pb-2 bg-white border-b border-gray-100 shadow-sm z-10">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-gray-500 whitespace-nowrap">翻訳モデルをダウンロード中...</span>
+                                    <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                                        <div
+                                            className="bg-brand-600 h-1.5 rounded-full transition-all duration-300"
+                                            style={{ width: `${Math.round((downloadProgress.loaded / downloadProgress.total) * 100)}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-xs text-gray-500 tabular-nums">
+                                        {Math.round((downloadProgress.loaded / downloadProgress.total) * 100)}%
+                                    </span>
+                                </div>
+                            </div>
+                        )}
                         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -549,9 +551,9 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                                 翻訳済み
                                             </button>
                                         </div>
-                                        {showTranslation && translationMethod && (
+                                        {showTranslation && (
                                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                                {translationMethod === 'chrome' ? 'Chrome翻訳' : 'DeepL翻訳'}
+                                                Chrome翻訳
                                             </span>
                                         )}
                                     </div>
