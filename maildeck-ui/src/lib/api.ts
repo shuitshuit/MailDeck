@@ -634,3 +634,28 @@ export async function recordConsent(termsOfService: boolean, privacyPolicy: bool
     });
     return await response.json();
 }
+
+// ============================================================================
+// Translation API
+// ============================================================================
+
+export interface TranslateRequest {
+    text: string;
+    targetLang: string;
+}
+
+export interface TranslateResponse {
+    translatedText: string;
+    detectedSourceLang: string;
+}
+
+/**
+ * Translate text using DeepL API (backend)
+ */
+export async function translateText(request: TranslateRequest): Promise<TranslateResponse> {
+    const response = await authFetch('/translate', {
+        method: 'POST',
+        body: JSON.stringify(request)
+    });
+    return await response.json();
+}

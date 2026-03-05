@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getMessage, getLabelsForMessage, addLabelToMessage, removeLabelFromMessage, createLabel, getCustomActionPatterns, moveToTrash, deleteFromTrash, restoreFromTrash } from '../lib/api';
 import { useModalClose } from '../hooks/useModalClose';
+import { useTranslation } from '../hooks/useTranslation';
 import type { Label } from '../types/label';
 import type { CustomActionPattern } from '../types/customAction';
 import LabelSelector from './LabelSelector';
 import LabelModal from './LabelModal';
 import EnhancedMailContent from './EnhancedMailContent';
+import TranslatorApiGuideModal from './TranslatorApiGuideModal';
 import { useToast } from '../contexts/ToastContext';
 import { useLabels } from '../contexts/LabelContext';
 
@@ -48,6 +50,12 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
     // Custom action patterns state
     const [patterns, setPatterns] = useState<CustomActionPattern[]>([]);
     const [showCustomActions, setShowCustomActions] = useState(true);
+
+    // Translation state
+    const { translate, isTranslating, chromeApiStatus, downloadProgress, error: translationError } = useTranslation();
+    const [translatedContent, setTranslatedContent] = useState<string | null>(null);
+    const [showTranslation, setShowTranslation] = useState(false);
+    const [showApiGuide, setShowApiGuide] = useState(false);
 
     // Check if HTML has external images
     const checkForImages = useMemo(() => {
@@ -260,12 +268,92 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
         }
     };
 
+    // Translate HTML while preserving structure
+    const translateHtmlContent = async (html: string, translateFn: (text: string) => Promise<string>): Promise<string> => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        // Collect all text nodes
+        const textNodes: { node: Text; text: string }[] = [];
+        const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, null);
+        let node: Text | null;
+        while ((node = walker.nextNode() as Text | null)) {
+            const text = node.textContent?.trim();
+            if (text && text.length > 0) {
+                textNodes.push({ node, text });
+            }
+        }
+
+        if (textNodes.length === 0) {
+            return html;
+        }
+
+        // Combine all text with separator for batch translation
+        const separator = '\n§§§\n';
+        const combinedText = textNodes.map(t => t.text).join(separator);
+
+        // Translate combined text
+        const translatedCombined = await translateFn(combinedText);
+        const translatedTexts = translatedCombined.split(separator);
+
+        // Replace text nodes with translated text
+        textNodes.forEach((item, index) => {
+            if (translatedTexts[index]) {
+                item.node.textContent = translatedTexts[index];
+            }
+        });
+
+        return doc.body.innerHTML;
+    };
+
+    // Handle translation
+    const handleTranslate = async () => {
+        if (!message) return;
+
+        // Chrome API が無効な場合はガイドを表示
+        if (chromeApiStatus === 'disabled') {
+            setShowApiGuide(true);
+            return;
+        }
+        // downloadable の場合はそのまま続行 (monitor でダウンロード進捗を表示)
+
+        try {
+            if (message.bodyHtml) {
+                // Translate HTML while preserving structure
+                const result = await translateHtmlContent(message.bodyHtml, translate);
+                setTranslatedContent(result);
+            } else if (message.bodyText) {
+                // Plain text translation
+                const result = await translate(message.bodyText);
+                setTranslatedContent(result);
+            } else {
+                toast.error('翻訳するテキストがありません');
+                return;
+            }
+            setShowTranslation(true);
+            toast.success('翻訳完了 (Chrome)');
+        } catch {
+            toast.error(translationError || '翻訳に失敗しました');
+        }
+    };
+
+    // Handle translation from guide modal (Chrome のみ再試行)
+    const handleUseDeepL = async () => {
+        await handleTranslate();
+    };
+
+    // Reset translation when message changes
+    useEffect(() => {
+        setTranslatedContent(null);
+        setShowTranslation(false);
+    }, [messageId]);
+
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-0 md:p-4" onClick={handleBackdropClick}>
             <div ref={modalContentRef} className="bg-white md:rounded-lg shadow-xl w-full max-w-4xl h-full md:h-auto md:max-h-[90vh] flex flex-col">
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+                <div className="relative p-4 border-b border-gray-100 flex justify-between items-center">
                     <h2 className="text-xl font-semibold truncate flex-1 pr-4">{message?.subject || 'Loading...'}</h2>
                     <div className="flex items-center gap-2">
                         {/* Action buttons based on folder type */}
@@ -303,6 +391,42 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
                                 </svg>
                             </button>
+                        )}
+                        {/* Translation button */}
+                        <button
+                            onClick={handleTranslate}
+                            disabled={isTranslating || !message}
+                            className="text-gray-500 hover:text-brand-600 hover:bg-brand-50 p-2 rounded-lg transition-colors disabled:opacity-50"
+                            title="翻訳"
+                        >
+                            {isTranslating ? (
+                                <svg className="w-5 h-5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 21l5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 016-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 01-3.827-5.802" />
+                                </svg>
+                            )}
+                        </button>
+
+                        {/* Download progress bar (Chrome model download) */}
+                        {downloadProgress !== null && (
+                            <div className="absolute top-full left-0 right-0 px-4 pt-1 pb-2 bg-white border-b border-gray-100 shadow-sm z-10">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-gray-500 whitespace-nowrap">翻訳モデルをダウンロード中...</span>
+                                    <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                                        <div
+                                            className="bg-brand-600 h-1.5 rounded-full transition-all duration-300"
+                                            style={{ width: `${Math.round((downloadProgress.loaded / downloadProgress.total) * 100)}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-xs text-gray-500 tabular-nums">
+                                        {Math.round((downloadProgress.loaded / downloadProgress.total) * 100)}%
+                                    </span>
+                                </div>
+                            </div>
                         )}
                         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
@@ -402,12 +526,55 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                     </div>
                                 )}
 
-                                <EnhancedMailContent
-                                    content={message.bodyHtml ? processedHtml : message.bodyText}
-                                    isHtml={!!message.bodyHtml}
-                                    patterns={showCustomActions ? patterns : []}
-                                    onCopy={(value) => toast.success(`コピーしました: ${value}`)}
-                                />
+                                {/* Translation toggle tabs */}
+                                {translatedContent && (
+                                    <div className="mb-4 flex items-center gap-2">
+                                        <div className="inline-flex rounded-lg border border-gray-200 p-1 bg-gray-50">
+                                            <button
+                                                onClick={() => setShowTranslation(false)}
+                                                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                                    !showTranslation
+                                                        ? 'bg-white text-gray-900 shadow-sm'
+                                                        : 'text-gray-500 hover:text-gray-700'
+                                                }`}
+                                            >
+                                                原文
+                                            </button>
+                                            <button
+                                                onClick={() => setShowTranslation(true)}
+                                                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                                    showTranslation
+                                                        ? 'bg-white text-gray-900 shadow-sm'
+                                                        : 'text-gray-500 hover:text-gray-700'
+                                                }`}
+                                            >
+                                                翻訳済み
+                                            </button>
+                                        </div>
+                                        {showTranslation && (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                Chrome翻訳
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Show translation or original content */}
+                                {showTranslation && translatedContent ? (
+                                    <EnhancedMailContent
+                                        content={translatedContent}
+                                        isHtml={!!message.bodyHtml}
+                                        patterns={showCustomActions ? patterns : []}
+                                        onCopy={(value) => toast.success(`コピーしました: ${value}`)}
+                                    />
+                                ) : (
+                                    <EnhancedMailContent
+                                        content={message.bodyHtml ? processedHtml : message.bodyText}
+                                        isHtml={!!message.bodyHtml}
+                                        patterns={showCustomActions ? patterns : []}
+                                        onCopy={(value) => toast.success(`コピーしました: ${value}`)}
+                                    />
+                                )}
                             </div>
                         </div>
                     ) : (
@@ -423,6 +590,13 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                 isOpen={isLabelModalOpen}
                 onClose={() => setIsLabelModalOpen(false)}
                 onSave={handleCreateLabel}
+            />
+
+            {/* Chrome Translator API guide modal */}
+            <TranslatorApiGuideModal
+                isOpen={showApiGuide}
+                onClose={() => setShowApiGuide(false)}
+                onUseDeepL={handleUseDeepL}
             />
         </div>
     );
