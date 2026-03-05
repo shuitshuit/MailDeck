@@ -297,36 +297,9 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
             return html;
         }
 
-        // Chrome Translator API の入力長制限に合わせてチャンク分割して翻訳
-        const separator = '\n§§§\n';
-        const CHUNK_CHAR_LIMIT = 4000;
-        const chunks: { nodes: typeof textNodes; text: string }[] = [];
-        let currentNodes: typeof textNodes = [];
-        let currentLen = 0;
-
+        // テキストノードを1件ずつ翻訳（セパレータ混入を防ぐ）
         for (const item of textNodes) {
-            const added = (currentLen > 0 ? separator.length : 0) + item.text.length;
-            if (currentLen + added > CHUNK_CHAR_LIMIT && currentNodes.length > 0) {
-                chunks.push({ nodes: currentNodes, text: currentNodes.map(n => n.text).join(separator) });
-                currentNodes = [];
-                currentLen = 0;
-            }
-            currentNodes.push(item);
-            currentLen += (currentLen > 0 ? separator.length : 0) + item.text.length;
-        }
-        if (currentNodes.length > 0) {
-            chunks.push({ nodes: currentNodes, text: currentNodes.map(n => n.text).join(separator) });
-        }
-
-        // 各チャンクを翻訳してテキストノードを置換
-        for (const chunk of chunks) {
-            const translatedCombined = await translateFn(chunk.text);
-            const translatedTexts = translatedCombined.split(separator);
-            chunk.nodes.forEach((item, index) => {
-                if (translatedTexts[index]) {
-                    item.node.textContent = translatedTexts[index];
-                }
-            });
+            item.node.textContent = await translateFn(item.text);
         }
 
         return doc.body.innerHTML;

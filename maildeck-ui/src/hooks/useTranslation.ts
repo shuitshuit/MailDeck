@@ -100,11 +100,18 @@ async function checkChromeTranslatorApi(): Promise<ChromeApiStatus> {
     return 'disabled';
 }
 
-async function translateWithChrome(
-    text: string,
+// Translator インスタンスをキャッシュして再利用（毎回 create するとモデル再ロードが走る）
+let cachedTranslator: ChromeTranslatorInstance | null = null;
+let cachedTargetLang = '';
+
+async function getOrCreateTranslator(
     onProgress: (progress: DownloadProgress) => void
-): Promise<string> {
+): Promise<ChromeTranslatorInstance> {
     const targetLang = getTargetLanguageLowerCase();
+
+    if (cachedTranslator && cachedTargetLang === targetLang) {
+        return cachedTranslator;
+    }
 
     // 新 API
     if ('Translator' in self) {
@@ -118,9 +125,9 @@ async function translateWithChrome(
                 });
             },
         });
-        const result = await translator.translate(text);
-        translator.destroy();
-        return result;
+        cachedTranslator = translator;
+        cachedTargetLang = targetLang;
+        return translator;
     }
 
     // 旧 API フォールバック
@@ -129,10 +136,21 @@ async function translateWithChrome(
             sourceLanguage: 'en',
             targetLanguage: targetLang,
         });
-        return await translator.translate(text);
+        // 旧 API は destroy なし
+        cachedTranslator = { translate: (t) => translator.translate(t), destroy: () => {} };
+        cachedTargetLang = targetLang;
+        return cachedTranslator;
     }
 
     throw new Error('Chrome Translator API not available');
+}
+
+async function translateWithChrome(
+    text: string,
+    onProgress: (progress: DownloadProgress) => void
+): Promise<string> {
+    const translator = await getOrCreateTranslator(onProgress);
+    return await translator.translate(text);
 }
 
 export function useTranslation(): UseTranslationReturn {
