@@ -160,18 +160,20 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
             // Check if we're loading a custom folder
             if (customFolderPath) {
                 if (activeTab === 'all') {
-                    // Fetch from all accounts
+                    // 全アカウントから page*pageSize 件取得してフロントでマージ・ソート・スライス
+                    const fetchSize = page * pageSize;
                     const promises = accounts.map(acc =>
-                        getInboxFolder(acc.id, customFolderPath, page).then(res => ({
+                        getInboxFolder(acc.id, customFolderPath, 1, fetchSize).then(res => ({
                             messages: (res.messages || []).map((m: any) => ({ ...m, configId: acc.id })),
                             total: res.total || 0
-                        })).catch(() => ({ messages: [], total: 0 })) // Ignore errors for accounts that don't have this folder
+                        })).catch(() => ({ messages: [], total: 0 }))
                     );
                     const results = await Promise.all(promises);
                     const allMails = results.flatMap(r => r.messages || []);
                     const total = results.reduce((sum, r) => sum + r.total, 0);
                     allMails.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                    setMails(allMails);
+                    const start = (page - 1) * pageSize;
+                    setMails(allMails.slice(start, start + pageSize));
                     setTotalCount(total);
                 } else {
                     const data = await getInboxFolder(activeTab, customFolderPath, page);
@@ -183,17 +185,18 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                 const apiFunc = getFolderApi(folderType);
 
                 if (activeTab === 'all') {
-                    // Fetch all and merge
-                    const promises = accounts.map(acc => apiFunc(acc.id, page).then(res => ({
+                    // 全アカウントから page*pageSize 件取得してフロントでマージ・ソート・スライス
+                    const fetchSize = page * pageSize;
+                    const promises = accounts.map(acc => apiFunc(acc.id, 1, fetchSize).then(res => ({
                         messages: (res.messages || []).map((m: any) => ({ ...m, configId: acc.id })),
                         total: res.total || 0
                     })));
                     const results = await Promise.all(promises);
                     const allMails = results.flatMap(r => r.messages || []);
                     const total = results.reduce((sum, r) => sum + r.total, 0);
-                    // Sort by date desc
                     allMails.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                    setMails(allMails);
+                    const start = (page - 1) * pageSize;
+                    setMails(allMails.slice(start, start + pageSize));
                     setTotalCount(total);
                 } else {
                     const data = await apiFunc(activeTab, page);

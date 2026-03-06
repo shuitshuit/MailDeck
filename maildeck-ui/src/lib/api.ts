@@ -60,16 +60,20 @@ export async function getServerConfigs() {
 /**
  * Get inbox messages
  */
-export async function getInbox(configId: string, page = 1) {
-    const response = await authFetch(`/mail/inbox?configId=${configId}&page=${page}`);
+export async function getInbox(configId: string, page = 1, pageSize?: number) {
+    const params = new URLSearchParams({ configId, page: String(page) });
+    if (pageSize !== undefined) params.set('pageSize', String(pageSize));
+    const response = await authFetch(`/mail/inbox?${params}`);
     return await response.json();
 }
 
 /**
  * Get messages from a specific folder
  */
-export async function getInboxFolder(configId: string, folderName: string, page = 1) {
-    const response = await authFetch(`/mail/inbox/${encodeURIComponent(folderName)}?configId=${configId}&page=${page}`);
+export async function getInboxFolder(configId: string, folderName: string, page = 1, pageSize?: number) {
+    const params = new URLSearchParams({ configId, page: String(page) });
+    if (pageSize !== undefined) params.set('pageSize', String(pageSize));
+    const response = await authFetch(`/mail/inbox/${encodeURIComponent(folderName)}?${params}`);
     return await response.json();
 }
 
@@ -121,8 +125,10 @@ export async function syncFolders(configId: string) {
 /**
  * Get drafts
  */
-export async function getDrafts(configId: string, page = 1) {
-    const response = await authFetch(`/mail/drafts?configId=${configId}&page=${page}`);
+export async function getDrafts(configId: string, page = 1, pageSize?: number) {
+    const params = new URLSearchParams({ configId, page: String(page) });
+    if (pageSize !== undefined) params.set('pageSize', String(pageSize));
+    const response = await authFetch(`/mail/drafts?${params}`);
     return await response.json();
 }
 
@@ -178,16 +184,20 @@ export async function sendDraft(configId: string, draftId: number) {
 /**
  * Get spam messages
  */
-export async function getSpam(configId: string, page = 1) {
-    const response = await authFetch(`/mail/spam?configId=${configId}&page=${page}`);
+export async function getSpam(configId: string, page = 1, pageSize?: number) {
+    const params = new URLSearchParams({ configId, page: String(page) });
+    if (pageSize !== undefined) params.set('pageSize', String(pageSize));
+    const response = await authFetch(`/mail/spam?${params}`);
     return await response.json();
 }
 
 /**
  * Get trash messages
  */
-export async function getTrash(configId: string, page = 1) {
-    const response = await authFetch(`/mail/trash?configId=${configId}&page=${page}`);
+export async function getTrash(configId: string, page = 1, pageSize?: number) {
+    const params = new URLSearchParams({ configId, page: String(page) });
+    if (pageSize !== undefined) params.set('pageSize', String(pageSize));
+    const response = await authFetch(`/mail/trash?${params}`);
     return await response.json();
 }
 
