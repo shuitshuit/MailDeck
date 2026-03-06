@@ -95,6 +95,15 @@ export async function deleteMessage(configId: string, messageId: number) {
 }
 
 /**
+ * Mark a message as read on the IMAP server
+ */
+export async function markAsRead(configId: string, messageId: number) {
+    await authFetch(`/mail/message/${messageId}/mark-read?configId=${configId}`, {
+        method: 'PUT'
+    });
+}
+
+/**
  * Move a message to trash
  */
 export async function moveToTrash(configId: string, messageId: number) {

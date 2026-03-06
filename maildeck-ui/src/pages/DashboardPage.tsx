@@ -6,7 +6,7 @@ import ComposeModal from '../components/ComposeModal';
 import MailDetailModal from '../components/MailDetailModal';
 import LabelBadge from '../components/LabelBadge';
 import SearchBar from '../components/SearchBar';
-import { getInbox, getInboxFolder, getServerConfigs, getDrafts, getSpam, getTrash, emptyTrash, bulkMoveToTrash, bulkDeleteFromTrash, bulkRestoreFromTrash } from '../lib/api';
+import { getInbox, getInboxFolder, getServerConfigs, getDrafts, getSpam, getTrash, emptyTrash, bulkMoveToTrash, bulkDeleteFromTrash, bulkRestoreFromTrash, markAsRead } from '../lib/api';
 import type { Label } from '../types/label';
 import { useToast } from '../contexts/ToastContext';
 import { useLabels } from '../contexts/LabelContext';
@@ -318,6 +318,18 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
     }, [mails, selectedLabelId, parsedSearchQuery]);
 
     // 検索ハンドラー
+    const openMail = (mail: Email) => {
+        setSelectedMail(mail);
+        if (!mail.isRead) {
+            setMails(prev => prev.map(m =>
+                m.id === mail.id && m.configId === mail.configId ? { ...m, isRead: true } : m
+            ));
+            markAsRead(mail.configId, parseInt(mail.id)).catch(err =>
+                console.error('Failed to mark as read:', err)
+            );
+        }
+    };
+
     const handleSearch = (queryString: string) => {
         // 検索履歴に保存（空でない場合のみ）
         if (queryString.trim()) {
@@ -507,6 +519,29 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         }
     };
 
+    // Bulk mark as read
+    const handleBulkMarkAsRead = async () => {
+        if (selectedMessages.size === 0) return;
+        setBulkActionLoading(true);
+        try {
+            const messagesByConfig = getSelectedMessagesByConfig();
+            for (const [configId, messageIds] of messagesByConfig) {
+                await Promise.all(messageIds.map(id => markAsRead(configId, id)));
+            }
+            setMails(prev => prev.map(m => {
+                const key = `${m.configId}::${m.id}`;
+                return selectedMessages.has(key) ? { ...m, isRead: true } : m;
+            }));
+            toast.success(`${selectedMessages.size}件を既読にしました`);
+            clearSelection();
+        } catch (error) {
+            console.error('Failed to bulk mark as read', error);
+            toast.error('既読への変更に失敗しました');
+        } finally {
+            setBulkActionLoading(false);
+        }
+    };
+
     const handleSendMail = async (to: string, subject: string, body: string, configId: string) => {
         if (!configId) {
             toast.warning('アカウントを選択してください');
@@ -626,6 +661,16 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                         {selectedMessages.size}件選択中
                     </span>
                     <div className="flex gap-2 flex-wrap">
+                        <button
+                            onClick={handleBulkMarkAsRead}
+                            disabled={bulkActionLoading}
+                            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 9v.906a2.25 2.25 0 01-1.183 1.981l-6.478 3.488M2.25 9v.906a2.25 2.25 0 001.183 1.981l6.478 3.488m8.839 2.51l-4.66-2.51m0 0l-1.023-.55a2.25 2.25 0 00-2.134 0l-1.022.55m0 0l-4.661 2.51m16.5 1.615a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V8.844a2.25 2.25 0 011.183-1.981l7.5-4.039a2.25 2.25 0 012.134 0l7.5 4.039a2.25 2.25 0 011.183 1.98V19.5z" />
+                            </svg>
+                            既読にする
+                        </button>
                         {folderType === 'trash' ? (
                             <>
                                 <button
@@ -698,7 +743,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                 return (
                                     <div
                                         key={`mobile-${mailKey}`}
-                                        className={`p-4 active:bg-gray-50 cursor-pointer flex gap-3 ${!mail.isRead ? 'font-semibold bg-blue-50/30' : ''} ${isSelected ? 'bg-brand-50' : ''}`}
+                                        className={`p-4 active:bg-gray-50 cursor-pointer flex gap-3 ${!mail.isRead ? 'font-semibold bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'} ${isSelected ? 'bg-brand-50' : ''}`}
                                     >
                                         <div
                                             className="flex items-start pt-1"
@@ -711,9 +756,9 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                                 className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
                                             />
                                         </div>
-                                        <div className="flex-1 min-w-0" onClick={() => setSelectedMail(mail)}>
+                                        <div className="flex-1 min-w-0" onClick={() => openMail(mail)}>
                                             <div className="flex justify-between items-start mb-1">
-                                                <div className="text-sm font-medium text-gray-900 truncate flex-1 pr-2">{mail.from}</div>
+                                                <div className={`text-sm truncate flex-1 pr-2 ${!mail.isRead ? 'font-bold text-gray-950' : 'font-medium text-gray-900'}`}>{mail.from}</div>
                                                 <div className="text-xs text-gray-500 whitespace-nowrap">
                                                     {new Date(mail.date).toLocaleDateString()}
                                                 </div>
@@ -756,7 +801,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                     return (
                                         <tr
                                             key={mailKey}
-                                            className={`hover:bg-gray-50 cursor-pointer transition-colors ${!mail.isRead ? 'font-semibold bg-blue-50/30' : ''} ${isSelected ? 'bg-brand-50' : ''}`}
+                                            className={`hover:bg-gray-50 cursor-pointer transition-colors ${!mail.isRead ? 'font-semibold bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'} ${isSelected ? 'bg-brand-50' : ''}`}
                                         >
                                             <td className="p-4" onClick={(e) => toggleMessageSelection(mailKey, index, e)}>
                                                 <input
@@ -766,10 +811,10 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                                     className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
                                                 />
                                             </td>
-                                            <td className="p-4 text-gray-900 truncate" title={mail.from} onClick={() => setSelectedMail(mail)}>{mail.from}</td>
-                                            <td className="p-4" onClick={() => setSelectedMail(mail)}>
+                                            <td className={`p-4 truncate ${!mail.isRead ? 'text-gray-950 font-bold' : 'text-gray-900'}`} title={mail.from} onClick={() => openMail(mail)}>{mail.from}</td>
+                                            <td className="p-4" onClick={() => openMail(mail)}>
                                                 <div className="flex flex-col gap-1">
-                                                    <span className="text-gray-900 truncate">{mail.subject || '(件名なし)'}</span>
+                                                    <span className={`truncate ${!mail.isRead ? 'text-gray-950' : 'text-gray-900'}`}>{mail.subject || '(件名なし)'}</span>
                                                     {mail.labels && mail.labels.length > 0 && (
                                                         <div className="flex flex-wrap gap-1">
                                                             {mail.labels.map(label => (
@@ -779,7 +824,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="p-4 text-right text-gray-500 text-sm whitespace-nowrap" onClick={() => setSelectedMail(mail)}>
+                                            <td className="p-4 text-right text-gray-500 text-sm whitespace-nowrap" onClick={() => openMail(mail)}>
                                                 {new Date(mail.date).toLocaleString()}
                                             </td>
                                         </tr>
