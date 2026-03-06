@@ -448,6 +448,42 @@ public class MailController : BaseAuthController
         }
     }
 
+    [HttpPut("message/{id}/mark-read")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> MarkMessageAsRead(string id, Guid configId)
+    {
+        var userId = GetUserId();
+
+        try
+        {
+            await _db.OpenAsync();
+            var configs = await _db.GetMultipleAsync<Models.UserServerConfig>(new { id = configId, user_id = userId });
+            var config = configs.FirstOrDefault();
+            if (config == null) return NotFound("Configuration not found");
+            if (!uint.TryParse(id, out var uidVal)) return BadRequest("Invalid Message ID");
+            var uid = new UniqueId(uidVal);
+            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
+            using (var client = new ImapClient())
+            {
+                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
+                await client.AuthenticateAsync(config.ImapUsername, password);
+                var inbox = client.Inbox;
+                await inbox.OpenAsync(FolderAccess.ReadWrite);
+                await inbox.AddFlagsAsync(uid, MessageFlags.Seen, true);
+                await client.DisconnectAsync(true);
+                return Ok(new { success = true });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogErrorWithSql(ex, "Failed to mark message as read");
+            return StatusCode(500, "Failed to mark message as read: " + ex.Message);
+        }
+    }
+
     [HttpPost("send")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
