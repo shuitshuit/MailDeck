@@ -16,7 +16,7 @@ public class KmsEncryptionService : IEncryptionService
     private readonly IAmazonKeyManagementService _kmsClient;
     private readonly IConfiguration _configuration;
     private readonly MemoryCache _cache = new(new MemoryCacheOptions());
-    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(60);
 
     public KmsEncryptionService(IAmazonKeyManagementService kmsClient, IConfiguration configuration)
     {
