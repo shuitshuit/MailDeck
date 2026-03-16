@@ -98,6 +98,7 @@ export default function CustomActionsPage() {
         patternName: string;
         patternType: string;
         regexPattern: string;
+        regexPatterns: { patterns: import('../types/customAction').RegexPatternEntry[] };
         actionType: string;
         priority: number;
         isEnabled: boolean;
@@ -115,6 +116,7 @@ export default function CustomActionsPage() {
                     patternName: patternData.patternName,
                     patternType: patternData.patternType,
                     regexPattern: patternData.regexPattern,
+                    regexPatterns: patternData.regexPatterns,
                     actionType: patternData.actionType,
                     priority: patternData.priority,
                     description: patternData.description,

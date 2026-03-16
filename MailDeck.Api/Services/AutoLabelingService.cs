@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FirebaseAdmin.Messaging;
 using MailDeck.Api.Models;
 using MailDeck.Api.Extensions;
@@ -284,8 +285,27 @@ public class AutoLabelingService : BackgroundService
             "endswith" => value.EndsWith(conditionValue, StringComparison.OrdinalIgnoreCase),
             "notcontains" => !value.Contains(conditionValue, StringComparison.OrdinalIgnoreCase),
             "notequals" => !value.Equals(conditionValue, StringComparison.OrdinalIgnoreCase),
+            "matches" => EvaluateRegexMatch(value, conditionValue),
+            "notmatches" => !EvaluateRegexMatch(value, conditionValue),
             _ => false
         };
+    }
+
+    /// <summary>
+    /// Evaluate a regex match with timeout protection
+    /// </summary>
+    private bool EvaluateRegexMatch(string value, string pattern)
+    {
+        if (string.IsNullOrEmpty(pattern)) return false;
+        try
+        {
+            return Regex.IsMatch(value, pattern, RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
+        }
+        catch (Exception ex) when (ex is ArgumentException or RegexMatchTimeoutException)
+        {
+            _logger.LogWarning("Regex evaluation failed for pattern '{Pattern}': {Message}", pattern, ex.Message);
+            return false;
+        }
     }
 
     /// <summary>

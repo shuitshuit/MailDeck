@@ -104,10 +104,23 @@ public class AutoLabelingRulesController : BaseAuthController
                 return BadRequest("Each condition must have an operator.");
             }
 
-            var validOperators = new[] { "contains", "equals", "startswith", "endswith", "notcontains", "notequals" };
+            var validOperators = new[] { "contains", "equals", "startswith", "endswith", "notcontains", "notequals", "matches", "notmatches" };
             if (!validOperators.Contains(condition.Operator.ToLowerInvariant()))
             {
                 return BadRequest($"Invalid operator '{condition.Operator}'.");
+            }
+
+            // For regex operators, validate the regex pattern
+            if (condition.Operator.ToLowerInvariant() is "matches" or "notmatches")
+            {
+                try
+                {
+                    var _ = new System.Text.RegularExpressions.Regex(condition.Value, System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
+                }
+                catch (ArgumentException)
+                {
+                    return BadRequest($"Condition {i}: Invalid regular expression '{condition.Value}'.");
+                }
             }
 
             // Validate nextOperator (only for conditions that are not the last one)
@@ -213,10 +226,23 @@ public class AutoLabelingRulesController : BaseAuthController
                 return BadRequest("Each condition must have an operator.");
             }
 
-            var validOperators = new[] { "contains", "equals", "startswith", "endswith", "notcontains", "notequals" };
+            var validOperators = new[] { "contains", "equals", "startswith", "endswith", "notcontains", "notequals", "matches", "notmatches" };
             if (!validOperators.Contains(condition.Operator.ToLowerInvariant()))
             {
                 return BadRequest($"Invalid operator '{condition.Operator}'.");
+            }
+
+            // For regex operators, validate the regex pattern
+            if (condition.Operator.ToLowerInvariant() is "matches" or "notmatches")
+            {
+                try
+                {
+                    var _ = new System.Text.RegularExpressions.Regex(condition.Value, System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
+                }
+                catch (ArgumentException)
+                {
+                    return BadRequest($"Condition {i}: Invalid regular expression '{condition.Value}'.");
+                }
             }
 
             // Validate nextOperator (only for conditions that are not the last one)

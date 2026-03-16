@@ -36,10 +36,19 @@ public class CustomActionPattern
     public string PatternType { get; set; } = string.Empty;
 
     /// <summary>
-    /// Regular expression pattern to match
+    /// Regular expression pattern to match (legacy single pattern, kept for backward compatibility)
     /// </summary>
     [Name("regex_pattern")]
     public string RegexPattern { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Multiple regex patterns with AND/OR logic.
+    /// When non-empty, this takes precedence over RegexPattern.
+    /// Structure: { "patterns": [{ "regex": "...", "nextOperator": "AND"|"OR"|null }, ...] }
+    /// </summary>
+    [Name("regex_patterns")]
+    [Jsonb]
+    public RegexPatterns RegexPatterns { get; set; } = new();
 
     /// <summary>
     /// Action to perform when pattern matches: copy, link, highlight
@@ -93,6 +102,34 @@ public class CustomActionPattern
     /// </summary>
     [Name("updated_at")]
     public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Represents multiple regex patterns with AND/OR logic
+/// </summary>
+public class RegexPatterns
+{
+    [JsonPropertyName("patterns")]
+    public List<RegexPatternEntry> Patterns { get; set; } = new();
+}
+
+/// <summary>
+/// A single regex pattern entry in a multi-pattern group
+/// </summary>
+public class RegexPatternEntry
+{
+    /// <summary>
+    /// The regular expression string
+    /// </summary>
+    [JsonPropertyName("regex")]
+    public string Regex { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Logical operator to use with the NEXT pattern (AND or OR).
+    /// If this is the last pattern, this field is ignored.
+    /// </summary>
+    [JsonPropertyName("nextOperator")]
+    public string? NextOperator { get; set; }
 }
 
 /// <summary>
