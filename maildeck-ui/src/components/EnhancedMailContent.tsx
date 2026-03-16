@@ -8,7 +8,7 @@
 
 import { useMemo, useRef, useEffect, useCallback } from 'react';
 import DOMPurify from 'dompurify';
-import type { CustomActionPattern, PatternMatch } from '../types/customAction';
+import type { CustomActionPattern, PatternMatch, EmailContext } from '../types/customAction';
 import { findPatternMatches } from '../utils/patternMatcher';
 import CopyButton from './CopyButton';
 import { recordPatternUsage } from '../lib/api';
@@ -22,6 +22,9 @@ interface EnhancedMailContentProps {
 
   /** Custom action patterns to apply */
   patterns: CustomActionPattern[];
+
+  /** Email context for condition evaluation (from, subject, body) */
+  emailContext?: EmailContext;
 
   /** Optional CSS class name */
   className?: string;
@@ -40,6 +43,7 @@ export default function EnhancedMailContent({
   content,
   isHtml = false,
   patterns,
+  emailContext,
   className = '',
   onCopy,
   onLinkClick
@@ -54,8 +58,15 @@ export default function EnhancedMailContent({
 
     // For HTML content, extract text content for matching
     const textContent = isHtml ? extractTextFromHtml(content) : content;
-    return findPatternMatches(textContent, patterns);
-  }, [content, patterns, isHtml]);
+    const ctx: EmailContext = emailContext ?? { from: '', subject: '', body: textContent };
+    const result = findPatternMatches(textContent, patterns, {}, ctx);
+    if (result.length > 0) {
+      console.log(`[CustomAction] 合計 ${result.length} 件のマッチ (${patterns.filter(p => p.isEnabled).length} パターン評価)`);
+    } else {
+      console.log(`[CustomAction] マッチなし (${patterns.filter(p => p.isEnabled).length} パターン評価)`);
+    }
+    return result;
+  }, [content, patterns, isHtml, emailContext]);
 
   // Get unique match values for highlighting in HTML
   const matchValues = useMemo(() => {
