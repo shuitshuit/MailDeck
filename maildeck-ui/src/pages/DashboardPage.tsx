@@ -6,7 +6,7 @@ import ComposeModal from '../components/ComposeModal';
 import MailDetailModal from '../components/MailDetailModal';
 import LabelBadge from '../components/LabelBadge';
 import SearchBar from '../components/SearchBar';
-import { getInbox, getInboxFolder, getServerConfigs, getDrafts, getSpam, getTrash, emptyTrash, bulkMoveToTrash, bulkDeleteFromTrash, bulkRestoreFromTrash, markAsRead } from '../lib/api';
+import { getInbox, getInboxFolder, getServerConfigs, getDrafts, getSpam, getTrash, emptyTrash, bulkMoveToTrash, bulkDeleteFromTrash, bulkRestoreFromTrash, markAsRead, bulkMarkAsRead } from '../lib/api';
 import type { Label } from '../types/label';
 import { useToast } from '../contexts/ToastContext';
 import { useLabels } from '../contexts/LabelContext';
@@ -526,7 +526,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         try {
             const messagesByConfig = getSelectedMessagesByConfig();
             for (const [configId, messageIds] of messagesByConfig) {
-                await Promise.all(messageIds.map(id => markAsRead(configId, id)));
+                await bulkMarkAsRead(configId, messageIds.map(String));
             }
             setMails(prev => prev.map(m => {
                 const key = `${m.configId}::${m.id}`;

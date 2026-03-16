@@ -68,7 +68,7 @@ public class MailController : BaseAuthController
                 IList<IMessageSummary> summaries;
 
                 summaries = await inbox.FetchAsync(start, end, MessageSummaryItems.Envelope |
-                    MessageSummaryItems.InternalDate | MessageSummaryItems.UniqueId);
+                    MessageSummaryItems.InternalDate | MessageSummaryItems.UniqueId | MessageSummaryItems.Flags);
 
                 var messages = new List<MailMessageResponse>();
                 var hiddenCount = 0;
@@ -168,7 +168,7 @@ public class MailController : BaseAuthController
                 if (start > end) return Ok(new { messages = new List<object>(), total });
                 IList<IMessageSummary> summaries;
                 summaries = await folder.FetchAsync(start, end, MessageSummaryItems.Envelope |
-                    MessageSummaryItems.InternalDate | MessageSummaryItems.UniqueId);
+                    MessageSummaryItems.InternalDate | MessageSummaryItems.UniqueId | MessageSummaryItems.Flags);
                 var messages = new List<MailMessageResponse>();
                 foreach (var s in summaries)
                 {
@@ -481,6 +481,48 @@ public class MailController : BaseAuthController
         {
             _logger.LogErrorWithSql(ex, "Failed to mark message as read");
             return StatusCode(500, "Failed to mark message as read: " + ex.Message);
+        }
+    }
+
+    [HttpPut("messages/mark-read")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> MarkMessagesAsRead([FromBody] BulkMarkReadRequest request)
+    {
+        var userId = GetUserId();
+
+        try
+        {
+            await _db.OpenAsync();
+            var configs = await _db.GetMultipleAsync<Models.UserServerConfig>(new { id = request.ConfigId, user_id = userId });
+            var config = configs.FirstOrDefault();
+            if (config == null) return NotFound("Configuration not found");
+
+            var uids = new List<UniqueId>();
+            foreach (var id in request.MessageIds)
+            {
+                if (!uint.TryParse(id, out var uidVal)) return BadRequest($"Invalid Message ID: {id}");
+                uids.Add(new UniqueId(uidVal));
+            }
+
+            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
+            using (var client = new ImapClient())
+            {
+                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
+                await client.AuthenticateAsync(config.ImapUsername, password);
+                var inbox = client.Inbox;
+                await inbox.OpenAsync(FolderAccess.ReadWrite);
+                await inbox.AddFlagsAsync(uids, MessageFlags.Seen, true);
+                await client.DisconnectAsync(true);
+                return Ok(new { success = true, count = uids.Count });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogErrorWithSql(ex, "Failed to bulk mark messages as read");
+            return StatusCode(500, "Failed to bulk mark messages as read: " + ex.Message);
         }
     }
 
@@ -835,7 +877,7 @@ public class MailController : BaseAuthController
                 if (start > end) return Ok(new { messages = new List<object>(), total });
                 IList<IMessageSummary> summaries;
                 summaries = await draftsFolder.FetchAsync(start, end, MessageSummaryItems.Envelope |
-                    MessageSummaryItems.InternalDate | MessageSummaryItems.UniqueId);
+                    MessageSummaryItems.InternalDate | MessageSummaryItems.UniqueId | MessageSummaryItems.Flags);
                 var messages = new List<MailMessageResponse>();
                 foreach (var s in summaries)
                 {
@@ -899,7 +941,7 @@ public class MailController : BaseAuthController
                 if (start > end) return Ok(new { messages = new List<object>(), total });
                 IList<IMessageSummary> summaries;
                 summaries = await spamFolder.FetchAsync(start, end, MessageSummaryItems.Envelope |
-                    MessageSummaryItems.InternalDate | MessageSummaryItems.UniqueId);
+                    MessageSummaryItems.InternalDate | MessageSummaryItems.UniqueId | MessageSummaryItems.Flags);
                 var messages = new List<MailMessageResponse>();
                 foreach (var s in summaries)
                 {
@@ -1008,7 +1050,7 @@ public class MailController : BaseAuthController
                 if (start > end) return Ok(new { messages = new List<object>(), total });
                 IList<IMessageSummary> summaries;
                 summaries = await trashFolder.FetchAsync(start, end, MessageSummaryItems.Envelope |
-                    MessageSummaryItems.InternalDate | MessageSummaryItems.UniqueId);
+                    MessageSummaryItems.InternalDate | MessageSummaryItems.UniqueId | MessageSummaryItems.Flags);
                 var messages = new List<MailMessageResponse>();
                 foreach (var s in summaries)
                 {
