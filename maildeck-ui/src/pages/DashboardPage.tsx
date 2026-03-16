@@ -716,6 +716,54 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                 </div>
             )}
 
+            {/* Pagination (Top) */}
+            {totalCount > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-2 px-2">
+                    <div className="text-sm text-gray-600">
+                        {totalCount}件中 {Math.min((page - 1) * pageSize + 1, totalCount)}〜{Math.min(page * pageSize, totalCount)}件を表示
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setPage(1)}
+                            disabled={page === 1 || loading}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="最初のページ"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5" />
+                            </svg>
+                        </button>
+                        <button
+                            onClick={() => setPage(p => Math.max(1, p - 1))}
+                            disabled={page === 1 || loading}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            前へ
+                        </button>
+                        <span className="px-3 py-1.5 text-sm text-gray-700">
+                            {page} / {Math.ceil(totalCount / pageSize)}
+                        </span>
+                        <button
+                            onClick={() => setPage(p => Math.min(Math.ceil(totalCount / pageSize), p + 1))}
+                            disabled={page >= Math.ceil(totalCount / pageSize) || loading}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            次へ
+                        </button>
+                        <button
+                            onClick={() => setPage(Math.ceil(totalCount / pageSize))}
+                            disabled={page >= Math.ceil(totalCount / pageSize) || loading}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="最後のページ"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 4.5l7.5 7.5-7.5 7.5m6-15l7.5 7.5-7.5 7.5" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            )}
+
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[400px]">
                 {loading ? (
                     <div className="p-8 text-center text-gray-500">読み込み中...</div>

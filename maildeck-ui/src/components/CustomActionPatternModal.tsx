@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useModalClose } from '../hooks/useModalClose';
 import { useToast } from '../contexts/ToastContext';
-import type { CustomActionPattern } from '../types/customAction';
-import { validateRegexPattern, testRegexPattern } from '../utils/patternMatcher';
+import type { CustomActionPattern, RegexPatternEntry } from '../types/customAction';
+import { validateRegexPattern, testRegexPattern, testMultiRegexPattern } from '../utils/patternMatcher';
 
 interface CustomActionPatternModalProps {
     isOpen: boolean;
@@ -11,6 +11,7 @@ interface CustomActionPatternModalProps {
         patternName: string;
         patternType: string;
         regexPattern: string;
+        regexPatterns: { patterns: RegexPatternEntry[] };
         actionType: string;
         priority: number;
         isEnabled: boolean;
@@ -28,7 +29,8 @@ export default function CustomActionPatternModal({
 }: CustomActionPatternModalProps) {
     const [patternName, setPatternName] = useState('');
     const [patternType, setPatternType] = useState<string>('otp');
-    const [regexPattern, setRegexPattern] = useState('');
+    // Multi-regex patterns: at least one entry
+    const [regexEntries, setRegexEntries] = useState<RegexPatternEntry[]>([{ regex: '', nextOperator: undefined }]);
     const [actionType, setActionType] = useState<string>('copy');
     const [linkTemplate, setLinkTemplate] = useState('');
     const [priority, setPriority] = useState(0);
@@ -39,8 +41,11 @@ export default function CustomActionPatternModal({
     // Test preview
     const [testText, setTestText] = useState('');
     const [testResults, setTestResults] = useState<string[]>([]);
-    const [regexError, setRegexError] = useState<string | null>(null);
+    const [regexErrors, setRegexErrors] = useState<(string | null)[]>([null]);
     const [linkTemplateError, setLinkTemplateError] = useState<string | null>(null);
+
+    // Computed: first error (for link preview check)
+    const regexError = regexErrors[0] ?? null;
 
     const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
     const toast = useToast();
@@ -50,7 +55,12 @@ export default function CustomActionPatternModal({
             if (initialData) {
                 setPatternName(initialData.patternName);
                 setPatternType(initialData.patternType);
-                setRegexPattern(initialData.regexPattern);
+                // Load multi-regex or fall back to single regex
+                const entries = (initialData.regexPatterns?.patterns?.length ?? 0) > 0
+                    ? initialData.regexPatterns!.patterns
+                    : [{ regex: initialData.regexPattern, nextOperator: undefined as undefined }];
+                setRegexEntries(entries);
+                setRegexErrors(entries.map(() => null));
                 setActionType(initialData.actionType);
                 setLinkTemplate(initialData.linkTemplate || '');
                 setPriority(initialData.priority);
@@ -59,7 +69,8 @@ export default function CustomActionPatternModal({
             } else {
                 setPatternName('');
                 setPatternType('otp');
-                setRegexPattern('');
+                setRegexEntries([{ regex: '', nextOperator: undefined }]);
+                setRegexErrors([null]);
                 setActionType('copy');
                 setLinkTemplate('');
                 setPriority(0);
@@ -68,20 +79,17 @@ export default function CustomActionPatternModal({
             }
             setTestText('');
             setTestResults([]);
-            setRegexError(null);
             setLinkTemplateError(null);
         }
     }, [isOpen, initialData]);
 
-    // Validate regex pattern on change
+    // Validate all regex patterns on change
     useEffect(() => {
-        if (regexPattern) {
-            const error = validateRegexPattern(regexPattern);
-            setRegexError(error);
-        } else {
-            setRegexError(null);
-        }
-    }, [regexPattern]);
+        const errors = regexEntries.map(entry =>
+            entry.regex ? validateRegexPattern(entry.regex) : null
+        );
+        setRegexErrors(errors);
+    }, [regexEntries]);
 
     // Validate link template on change
     useEffect(() => {
@@ -102,15 +110,28 @@ export default function CustomActionPatternModal({
         }
     }, [actionType, linkTemplate]);
 
-    // Run test when test text or regex pattern changes
+    // Run test when test text or regex patterns change
     useEffect(() => {
-        if (testText && regexPattern && !regexError) {
-            const results = testRegexPattern(regexPattern, testText);
-            setTestResults(results);
+        const validEntries = regexEntries
+            .map((e, i) => ({ ...e, _idx: i }))
+            .filter(e => e.regex.trim() !== '');
+        const hasErrors = validEntries.some(e => regexErrors[e._idx] !== null && regexErrors[e._idx] !== undefined);
+        if (testText && validEntries.length > 0 && !hasErrors) {
+            // Rebuild nextOperator chain for valid entries
+            const entries = validEntries.map((e, i) => ({
+                regex: e.regex,
+                nextOperator: i < validEntries.length - 1 ? (e.nextOperator ?? 'AND') : undefined
+            }));
+            if (entries.length === 1) {
+                setTestResults(testRegexPattern(entries[0].regex, testText));
+            } else {
+                // Apply AND/OR logic: extract from first pattern only if conditions pass
+                setTestResults(testMultiRegexPattern(entries, testText));
+            }
         } else {
             setTestResults([]);
         }
-    }, [testText, regexPattern, regexError]);
+    }, [testText, regexEntries, regexErrors]);
 
     if (!isOpen) return null;
 
@@ -123,13 +144,14 @@ export default function CustomActionPatternModal({
             return;
         }
 
-        if (!regexPattern.trim()) {
-            toast.error('正規表現パターンを入力してください。');
+        const validEntries = regexEntries.filter(e => e.regex.trim() !== '');
+        if (validEntries.length === 0) {
+            toast.error('正規表現パターンを1つ以上入力してください。');
             return;
         }
 
-        if (regexError) {
-            toast.error('正規表現パターンが無効です。');
+        if (regexErrors.some(e => e !== null)) {
+            toast.error('無効な正規表現パターンがあります。');
             return;
         }
 
@@ -138,12 +160,19 @@ export default function CustomActionPatternModal({
             return;
         }
 
+        // Normalize: last entry has no nextOperator
+        const normalizedEntries = validEntries.map((e, i) => ({
+            regex: e.regex,
+            nextOperator: i < validEntries.length - 1 ? (e.nextOperator ?? 'AND') : undefined
+        }));
+
         setIsSaving(true);
         try {
             await onSave({
                 patternName,
                 patternType,
-                regexPattern,
+                regexPattern: normalizedEntries[0].regex,
+                regexPatterns: { patterns: normalizedEntries },
                 actionType,
                 priority,
                 isEnabled,
@@ -266,26 +295,93 @@ export default function CustomActionPatternModal({
                         </div>
                     )}
 
-                    {/* Regex Pattern */}
+                    {/* Regex Patterns (multi) */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
                             正規表現パターン <span className="text-red-500">*</span>
                         </label>
-                        <input
-                            type="text"
-                            value={regexPattern}
-                            onChange={(e) => setRegexPattern(e.target.value)}
-                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all font-mono text-sm ${
-                                regexError ? 'border-red-500' : ''
-                            }`}
-                            placeholder="例: \\b\\d{6}\\b"
-                            required
-                        />
-                        {regexError && (
-                            <p className="text-sm text-red-600 mt-1">{regexError}</p>
-                        )}
+                        <div className="space-y-2">
+                            {regexEntries.map((entry, idx) => (
+                                <div key={idx}>
+                                    <div className="flex items-start space-x-2">
+                                        <input
+                                            type="text"
+                                            value={entry.regex}
+                                            onChange={(e) => {
+                                                const updated = [...regexEntries];
+                                                updated[idx] = { ...updated[idx], regex: e.target.value };
+                                                setRegexEntries(updated);
+                                            }}
+                                            className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all font-mono text-sm ${
+                                                regexErrors[idx] ? 'border-red-500' : ''
+                                            }`}
+                                            placeholder={idx === 0 ? '例: \\b\\d{6}\\b' : '追加パターン...'}
+                                            required={idx === 0}
+                                        />
+                                        {regexEntries.length > 1 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const updated = regexEntries.filter((_, i) => i !== idx);
+                                                    // Clear nextOperator from new last entry
+                                                    if (updated.length > 0) updated[updated.length - 1] = { ...updated[updated.length - 1], nextOperator: undefined };
+                                                    setRegexEntries(updated);
+                                                }}
+                                                className="flex-shrink-0 p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                title="削除"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>
+                                        )}
+                                    </div>
+                                    {regexErrors[idx] && (
+                                        <p className="text-xs text-red-600 mt-0.5">{regexErrors[idx]}</p>
+                                    )}
+                                    {/* AND/OR toggle between entries */}
+                                    {idx < regexEntries.length - 1 && (
+                                        <div className="flex justify-center py-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const updated = [...regexEntries];
+                                                    const current = updated[idx].nextOperator ?? 'AND';
+                                                    updated[idx] = { ...updated[idx], nextOperator: current === 'AND' ? 'OR' : 'AND' };
+                                                    setRegexEntries(updated);
+                                                }}
+                                                className={`px-4 py-1 rounded-full text-xs font-bold transition-all hover:scale-105 ${
+                                                    (entry.nextOperator ?? 'AND') === 'AND'
+                                                        ? 'bg-blue-500 text-white shadow-md'
+                                                        : 'bg-amber-500 text-white shadow-md'
+                                                }`}
+                                                title="クリックして切り替え"
+                                            >
+                                                {(entry.nextOperator ?? 'AND') === 'AND' ? 'AND (すべてに含む)' : 'OR (いずれかに含む)'}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const updated = [...regexEntries];
+                                // Set nextOperator on current last entry
+                                if (updated.length > 0) updated[updated.length - 1] = { ...updated[updated.length - 1], nextOperator: 'AND' };
+                                setRegexEntries([...updated, { regex: '', nextOperator: undefined }]);
+                                setRegexErrors([...regexErrors, null]);
+                            }}
+                            className="mt-2 flex items-center space-x-1 text-brand-600 hover:bg-brand-50 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            <span>パターンを追加</span>
+                        </button>
                         <p className="text-xs text-gray-500 mt-1">
-                            JavaScriptの正規表現構文を使用します。例: \b\d{'{6}'}\b は6桁の数字にマッチします。
+                            JavaScriptの正規表現構文。AND: 本文が全パターンに含む、OR: いずれかに含む。例: \b\d{'{6}'}\b は6桁の数字。
                         </p>
                     </div>
 
@@ -382,7 +478,7 @@ export default function CustomActionPatternModal({
                         </button>
                         <button
                             type="submit"
-                            disabled={isSaving || !!regexError || !!linkTemplateError}
+                            disabled={isSaving || regexErrors.some(e => !!e) || !!linkTemplateError}
                             className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isSaving ? '保存中...' : initialData ? '更新' : '作成'}

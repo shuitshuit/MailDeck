@@ -78,19 +78,53 @@ public class CustomActionPatternsController : BaseAuthController
             return BadRequest("Pattern name is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(pattern.RegexPattern))
+        // Validate regex pattern(s)
+        var hasMultiplePatterns = pattern.RegexPatterns?.Patterns?.Count > 0;
+        if (!hasMultiplePatterns && string.IsNullOrWhiteSpace(pattern.RegexPattern))
         {
             return BadRequest("Regex pattern is required.");
         }
 
-        // Validate regex pattern
-        try
+        if (hasMultiplePatterns)
         {
-            var _ = new Regex(pattern.RegexPattern, RegexOptions.None, TimeSpan.FromSeconds(1));
+            var validLogicalOps = new[] { "AND", "OR" };
+            for (int i = 0; i < pattern.RegexPatterns!.Patterns.Count; i++)
+            {
+                var entry = pattern.RegexPatterns.Patterns[i];
+                if (string.IsNullOrWhiteSpace(entry.Regex))
+                    return BadRequest($"Regex pattern at index {i} is empty.");
+                try
+                {
+                    var _ = new Regex(entry.Regex, RegexOptions.None, TimeSpan.FromSeconds(1));
+                }
+                catch (ArgumentException)
+                {
+                    return BadRequest($"Invalid regular expression at index {i}: '{entry.Regex}'.");
+                }
+                if (i < pattern.RegexPatterns.Patterns.Count - 1 && !string.IsNullOrWhiteSpace(entry.NextOperator))
+                {
+                    if (!validLogicalOps.Contains(entry.NextOperator.ToUpperInvariant()))
+                        return BadRequest($"Invalid nextOperator '{entry.NextOperator}' at index {i}. Must be 'AND' or 'OR'.");
+                }
+            }
+            // Keep regex_pattern in sync with first entry for backward compatibility
+            pattern.RegexPattern = pattern.RegexPatterns.Patterns[0].Regex;
         }
-        catch (ArgumentException)
+        else
         {
-            return BadRequest("Invalid regular expression pattern.");
+            try
+            {
+                var _ = new Regex(pattern.RegexPattern, RegexOptions.None, TimeSpan.FromSeconds(1));
+            }
+            catch (ArgumentException)
+            {
+                return BadRequest("Invalid regular expression pattern.");
+            }
+            // Normalize to multi-pattern structure
+            pattern.RegexPatterns = new RegexPatterns
+            {
+                Patterns = [new RegexPatternEntry { Regex = pattern.RegexPattern }]
+            };
         }
 
         // Validate pattern type
@@ -210,19 +244,51 @@ public class CustomActionPatternsController : BaseAuthController
             return BadRequest("Pattern name is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(updatedPattern.RegexPattern))
+        // Validate regex pattern(s)
+        var hasMultiplePatternsUpd = updatedPattern.RegexPatterns?.Patterns?.Count > 0;
+        if (!hasMultiplePatternsUpd && string.IsNullOrWhiteSpace(updatedPattern.RegexPattern))
         {
             return BadRequest("Regex pattern is required.");
         }
 
-        // Validate regex pattern
-        try
+        if (hasMultiplePatternsUpd)
         {
-            var _ = new Regex(updatedPattern.RegexPattern, RegexOptions.None, TimeSpan.FromSeconds(1));
+            var validLogicalOpsUpd = new[] { "AND", "OR" };
+            for (int i = 0; i < updatedPattern.RegexPatterns!.Patterns.Count; i++)
+            {
+                var entry = updatedPattern.RegexPatterns.Patterns[i];
+                if (string.IsNullOrWhiteSpace(entry.Regex))
+                    return BadRequest($"Regex pattern at index {i} is empty.");
+                try
+                {
+                    var _ = new Regex(entry.Regex, RegexOptions.None, TimeSpan.FromSeconds(1));
+                }
+                catch (ArgumentException)
+                {
+                    return BadRequest($"Invalid regular expression at index {i}: '{entry.Regex}'.");
+                }
+                if (i < updatedPattern.RegexPatterns.Patterns.Count - 1 && !string.IsNullOrWhiteSpace(entry.NextOperator))
+                {
+                    if (!validLogicalOpsUpd.Contains(entry.NextOperator.ToUpperInvariant()))
+                        return BadRequest($"Invalid nextOperator '{entry.NextOperator}' at index {i}. Must be 'AND' or 'OR'.");
+                }
+            }
+            updatedPattern.RegexPattern = updatedPattern.RegexPatterns.Patterns[0].Regex;
         }
-        catch (ArgumentException)
+        else
         {
-            return BadRequest("Invalid regular expression pattern.");
+            try
+            {
+                var _ = new Regex(updatedPattern.RegexPattern, RegexOptions.None, TimeSpan.FromSeconds(1));
+            }
+            catch (ArgumentException)
+            {
+                return BadRequest("Invalid regular expression pattern.");
+            }
+            updatedPattern.RegexPatterns = new RegexPatterns
+            {
+                Patterns = [new RegexPatternEntry { Regex = updatedPattern.RegexPattern }]
+            };
         }
 
         // Validate pattern type
@@ -314,6 +380,7 @@ public class CustomActionPatternsController : BaseAuthController
             existingPattern.PatternName = updatedPattern.PatternName;
             existingPattern.PatternType = updatedPattern.PatternType;
             existingPattern.RegexPattern = updatedPattern.RegexPattern;
+            existingPattern.RegexPatterns = updatedPattern.RegexPatterns;
             existingPattern.ActionType = updatedPattern.ActionType;
             existingPattern.LinkTemplate = updatedPattern.LinkTemplate;
             existingPattern.Priority = updatedPattern.Priority;

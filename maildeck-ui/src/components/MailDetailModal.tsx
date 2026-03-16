@@ -126,6 +126,20 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
     }, [checkForImages, showImages]);
 
 
+    // Fetch custom action patterns once when modal opens
+    useEffect(() => {
+        if (!isOpen) return;
+        const fetchPatterns = async () => {
+            try {
+                const data = await getCustomActionPatterns();
+                setPatterns(data.filter((p: CustomActionPattern) => p.isEnabled));
+            } catch (err) {
+                console.error('Failed to fetch custom action patterns', err);
+            }
+        };
+        fetchPatterns();
+    }, [isOpen]);
+
     // Fetch message and its labels
     useEffect(() => {
         setShowImages(false);
@@ -158,20 +172,8 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
             }
         };
 
-        const fetchPatterns = async () => {
-            try {
-                const data = await getCustomActionPatterns();
-                // Only use enabled patterns
-                setPatterns(data.filter((p: CustomActionPattern) => p.isEnabled));
-            } catch (err) {
-                console.error('Failed to fetch custom action patterns', err);
-                // Silently fail - custom actions are optional
-            }
-        };
-
         fetchMessage();
         fetchMessageLabels();
-        fetchPatterns();
     }, [isOpen, configId, messageId]);
 
     // Handle add label
@@ -564,6 +566,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                         content={translatedContent}
                                         isHtml={!!message.bodyHtml}
                                         patterns={showCustomActions ? patterns : []}
+                                        emailContext={{ from: message.from, subject: message.subject, body: message.bodyText }}
                                         onCopy={(value) => toast.success(`コピーしました: ${value}`)}
                                     />
                                 ) : (
@@ -571,6 +574,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                         content={message.bodyHtml ? processedHtml : message.bodyText}
                                         isHtml={!!message.bodyHtml}
                                         patterns={showCustomActions ? patterns : []}
+                                        emailContext={{ from: message.from, subject: message.subject, body: message.bodyText }}
                                         onCopy={(value) => toast.success(`コピーしました: ${value}`)}
                                     />
                                 )}

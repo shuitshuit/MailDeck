@@ -12,7 +12,7 @@ export interface AutoLabelingRule {
 
 export interface RuleCondition {
   field: 'from' | 'subject' | 'body';
-  operator: 'contains' | 'equals' | 'startswith' | 'endswith' | 'notcontains' | 'notequals';
+  operator: 'contains' | 'equals' | 'startswith' | 'endswith' | 'notcontains' | 'notequals' | 'matches' | 'notmatches';
   value: string;
   nextOperator?: 'AND' | 'OR'; // Operator to use with the next condition
 }

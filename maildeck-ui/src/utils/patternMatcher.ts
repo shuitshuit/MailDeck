@@ -8,7 +8,10 @@
 import type {
   CustomActionPattern,
   PatternMatch,
-  PatternMatcherConfig
+  PatternMatcherConfig,
+  EmailContext,
+  PatternCondition,
+  PatternConditions
 } from '../types/customAction';
 
 /**
@@ -31,12 +34,14 @@ const DEFAULT_CONFIG: Required<PatternMatcherConfig> = {
  * @param text - The text to search for patterns
  * @param patterns - The patterns to match against
  * @param config - Optional configuration
+ * @param emailContext - Email context for condition evaluation (from, subject, body)
  * @returns Array of pattern matches sorted by start index
  */
 export function findPatternMatches(
   text: string,
   patterns: CustomActionPattern[],
-  config: PatternMatcherConfig = {}
+  config: PatternMatcherConfig = {},
+  emailContext?: EmailContext
 ): PatternMatch[] {
   const finalConfig = { ...DEFAULT_CONFIG, ...config };
 
@@ -51,8 +56,58 @@ export function findPatternMatches(
 
   for (const pattern of enabledPatterns) {
     try {
-      const regex = getCompiledRegex(pattern.regexPattern, finalConfig.cacheRegex);
+      // Evaluate conditions before running regex
+      if (pattern.conditions && pattern.conditions.rules.length > 0) {
+        const ctx: EmailContext = emailContext ?? { from: '', subject: '', body: text };
+        const conditionResult = evaluateConditions(pattern.conditions, ctx);
+        if (!conditionResult) {
+          console.log(
+            `[CustomAction] パターン "${pattern.patternName}" はconditions不一致のためスキップ`,
+            { conditions: pattern.conditions, emailContext: ctx }
+          );
+          continue;
+        }
+      }
+
+      // regexPatterns (multi-regex) takes precedence over regexPattern (legacy single)
+      const entries = pattern.regexPatterns?.patterns;
+      const useMulti = entries && entries.length > 0;
+      const extractRegex = useMulti ? entries[0].regex : pattern.regexPattern;
+
+      if (useMulti && entries!.length > 1) {
+        // Evaluate AND/OR chain: all entries must pass before extracting
+        let chainResult = (() => {
+          try { return new RegExp(entries![0].regex, 'gi').test(text); } catch { return false; }
+        })();
+        for (let i = 1; i < entries!.length; i++) {
+          const op = entries![i - 1].nextOperator?.toUpperCase() ?? 'AND';
+          let current = false;
+          try { current = new RegExp(entries![i].regex, 'gi').test(text); } catch { /* noop */ }
+          chainResult = op === 'OR' ? chainResult || current : chainResult && current;
+        }
+        if (!chainResult) {
+          console.log(
+            `[CustomAction] パターン "${pattern.patternName}" はmulti-regex不一致のためスキップ`,
+            entries!.map(e => e.regex)
+          );
+          continue;
+        }
+      }
+
+      const regex = getCompiledRegex(extractRegex, finalConfig.cacheRegex);
       const patternMatches = matchPattern(text, pattern, regex, matchedRanges);
+      if (patternMatches.length > 0) {
+        console.log(
+          `[CustomAction] パターン "${pattern.patternName}" がマッチ: ${patternMatches.length}件`,
+          patternMatches.map(m => ({
+            value: m.value,
+            startIndex: m.startIndex,
+            endIndex: m.endIndex,
+            regex: extractRegex,
+            actionType: pattern.actionType,
+          }))
+        );
+      }
       matches.push(...patternMatches);
     } catch (error) {
       console.error(`Failed to match pattern "${pattern.patternName}":`, error);
@@ -62,6 +117,59 @@ export function findPatternMatches(
 
   // Sort matches by start index
   return matches.sort((a, b) => a.startIndex - b.startIndex);
+}
+
+/**
+ * Evaluate pattern conditions against email context
+ */
+function evaluateConditions(conditions: PatternConditions, ctx: EmailContext): boolean {
+  if (conditions.rules.length === 0) return true;
+
+  let result = evaluateSingleCondition(conditions.rules[0], ctx);
+
+  for (let i = 1; i < conditions.rules.length; i++) {
+    const op = conditions.rules[i - 1].nextOperator?.toUpperCase() ?? 'AND';
+    const current = evaluateSingleCondition(conditions.rules[i], ctx);
+    if (op === 'OR') {
+      result = result || current;
+    } else {
+      result = result && current;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Evaluate a single condition against email context
+ */
+function evaluateSingleCondition(condition: PatternCondition, ctx: EmailContext): boolean {
+  const fieldValue = (() => {
+    switch (condition.field) {
+      case 'from': return ctx.from;
+      case 'subject': return ctx.subject;
+      case 'body': return ctx.body;
+      default: return '';
+    }
+  })();
+
+  const val = condition.value ?? '';
+
+  switch (condition.operator) {
+    case 'contains': return fieldValue.toLowerCase().includes(val.toLowerCase());
+    case 'notcontains': return !fieldValue.toLowerCase().includes(val.toLowerCase());
+    case 'equals': return fieldValue.toLowerCase() === val.toLowerCase();
+    case 'notequals': return fieldValue.toLowerCase() !== val.toLowerCase();
+    case 'startswith': return fieldValue.toLowerCase().startsWith(val.toLowerCase());
+    case 'endswith': return fieldValue.toLowerCase().endsWith(val.toLowerCase());
+    case 'matches': {
+      try { return new RegExp(val, 'i').test(fieldValue); } catch { return false; }
+    }
+    case 'notmatches': {
+      try { return !new RegExp(val, 'i').test(fieldValue); } catch { return false; }
+    }
+    default: return false;
+  }
 }
 
 /**
@@ -195,6 +303,49 @@ export function validateRegexPattern(pattern: string): string | null {
     }
     return 'Invalid regular expression';
   }
+}
+
+/**
+ * Evaluate multi-regex AND/OR logic against text.
+ * Returns extracted values from the first pattern if all AND/OR conditions pass.
+ *
+ * @param entries - Array of regex entries with nextOperator
+ * @param text - The text to evaluate
+ * @returns Array of matched strings from the first pattern, or [] if conditions not met
+ */
+export function testMultiRegexPattern(
+  entries: Array<{ regex: string; nextOperator?: string }>,
+  text: string
+): string[] {
+  if (entries.length === 0) return [];
+
+  // Evaluate AND/OR chain
+  let result = true;
+  try {
+    result = new RegExp(entries[0].regex, 'i').test(text);
+  } catch {
+    return [];
+  }
+
+  for (let i = 1; i < entries.length; i++) {
+    const op = entries[i - 1].nextOperator?.toUpperCase() ?? 'AND';
+    let current = false;
+    try {
+      current = new RegExp(entries[i].regex, 'i').test(text);
+    } catch {
+      current = false;
+    }
+    if (op === 'OR') {
+      result = result || current;
+    } else {
+      result = result && current;
+    }
+  }
+
+  if (!result) return [];
+
+  // Extract values from the first pattern
+  return testRegexPattern(entries[0].regex, text);
 }
 
 /**

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import type { RuleCondition, RuleConditions } from '../types/autoLabeling';
 
 interface RuleConditionBuilderProps {
@@ -18,8 +19,31 @@ export default function RuleConditionBuilder({ conditions, onChange }: RuleCondi
         { value: 'equals', label: '一致する (equals)' },
         { value: 'notequals', label: '一致しない (not equals)' },
         { value: 'startswith', label: 'で始まる (starts with)' },
-        { value: 'endswith', label: 'で終わる (ends with)' }
+        { value: 'endswith', label: 'で終わる (ends with)' },
+        { value: 'matches', label: '正規表現にマッチ (matches regex)' },
+        { value: 'notmatches', label: '正規表現にマッチしない (not matches regex)' }
     ];
+
+    const isRegexOperator = (op: string) => op === 'matches' || op === 'notmatches';
+
+    const [regexErrors, setRegexErrors] = useState<Record<number, string | null>>({});
+
+    useEffect(() => {
+        const errors: Record<number, string | null> = {};
+        conditions.rules.forEach((rule, idx) => {
+            if (isRegexOperator(rule.operator) && rule.value) {
+                try {
+                    new RegExp(rule.value);
+                    errors[idx] = null;
+                } catch {
+                    errors[idx] = '無効な正規表現です';
+                }
+            } else {
+                errors[idx] = null;
+            }
+        });
+        setRegexErrors(errors);
+    }, [conditions.rules]);
 
     const handleAddCondition = () => {
         const newRules = [...conditions.rules];
@@ -98,14 +122,19 @@ export default function RuleConditionBuilder({ conditions, onChange }: RuleCondi
                             </select>
 
                             {/* Value Input */}
-                            <input
-                                type="text"
-                                value={condition.value}
-                                onChange={(e) => handleConditionChange(index, 'value', e.target.value)}
-                                placeholder="値を入力"
-                                className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
-                                required
-                            />
+                            <div className="flex-1 flex flex-col">
+                                <input
+                                    type="text"
+                                    value={condition.value}
+                                    onChange={(e) => handleConditionChange(index, 'value', e.target.value)}
+                                    placeholder={isRegexOperator(condition.operator) ? '正規表現 (例: ^info@.*\\.com$)' : '値を入力'}
+                                    className={`px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none ${isRegexOperator(condition.operator) ? 'font-mono text-sm' : ''} ${regexErrors[index] ? 'border-red-500' : ''}`}
+                                    required
+                                />
+                                {regexErrors[index] && (
+                                    <span className="text-xs text-red-600 mt-0.5">{regexErrors[index]}</span>
+                                )}
+                            </div>
 
                             {/* Remove Button */}
                             <button

@@ -22,6 +22,10 @@ public class SystemPresetPattern
     [Name("regex_pattern")]
     public string RegexPattern { get; set; } = string.Empty;
 
+    [Name("regex_patterns")]
+    [Jsonb]
+    public RegexPatterns RegexPatterns { get; set; } = new();
+
     [Name("action_type")]
     public string ActionType { get; set; } = string.Empty;
 

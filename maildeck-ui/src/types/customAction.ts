@@ -16,7 +16,7 @@ export type ConditionField = 'from' | 'subject' | 'body';
 /**
  * Condition operator types (same as auto-labeling)
  */
-export type ConditionOperator = 'contains' | 'equals' | 'startswith' | 'endswith' | 'notcontains' | 'notequals';
+export type ConditionOperator = 'contains' | 'equals' | 'startswith' | 'endswith' | 'notcontains' | 'notequals' | 'matches' | 'notmatches';
 
 /**
  * Logical operator for combining conditions
@@ -41,6 +41,21 @@ export interface PatternConditions {
 }
 
 /**
+ * A single regex pattern entry in a multi-pattern group
+ */
+export interface RegexPatternEntry {
+  regex: string;
+  nextOperator?: 'AND' | 'OR';
+}
+
+/**
+ * Multiple regex patterns with AND/OR logic
+ */
+export interface RegexPatterns {
+  patterns: RegexPatternEntry[];
+}
+
+/**
  * Represents a custom action pattern stored in the database
  */
 export interface CustomActionPattern {
@@ -48,7 +63,10 @@ export interface CustomActionPattern {
   userId: string;
   patternName: string;
   patternType: PatternType;
+  /** Legacy single regex pattern (kept for backward compatibility) */
   regexPattern: string;
+  /** Multiple regex patterns with AND/OR logic. Takes precedence when non-empty. */
+  regexPatterns?: RegexPatterns;
   actionType: ActionType;
   priority: number; // 0-999
   isEnabled: boolean;
@@ -75,6 +93,7 @@ export interface CreatePatternRequest {
   patternName: string;
   patternType: PatternType;
   regexPattern: string;
+  regexPatterns?: RegexPatterns;
   actionType: ActionType;
   priority: number;
   description?: string;
@@ -89,6 +108,7 @@ export interface UpdatePatternRequest {
   patternName: string;
   patternType: PatternType;
   regexPattern: string;
+  regexPatterns?: RegexPatterns;
   actionType: ActionType;
   priority: number;
   isEnabled: boolean;
