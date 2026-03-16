@@ -104,6 +104,17 @@ export async function markAsRead(configId: string, messageId: number) {
 }
 
 /**
+ * Mark multiple messages as read in a single IMAP connection
+ */
+export async function bulkMarkAsRead(configId: string, messageIds: string[]) {
+    await authFetch(`/mail/messages/mark-read`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ configId, messageIds })
+    });
+}
+
+/**
  * Move a message to trash
  */
 export async function moveToTrash(configId: string, messageId: number) {
@@ -492,6 +503,7 @@ export async function createCustomActionPattern(pattern: {
     patternName: string;
     patternType: string;
     regexPattern: string;
+    regexPatterns?: { patterns: { regex: string; nextOperator?: string }[] };
     actionType: string;
     priority: number;
     description?: string;
@@ -511,6 +523,7 @@ export async function updateCustomActionPattern(id: string, pattern: {
     patternName: string;
     patternType: string;
     regexPattern: string;
+    regexPatterns?: { patterns: { regex: string; nextOperator?: string }[] };
     actionType: string;
     priority: number;
     isEnabled: boolean;
