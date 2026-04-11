@@ -196,27 +196,26 @@ public class EmailCheckBackgroundService : BackgroundService
                     {
                         var mimeMessages = await FetchMessageAsync(config, password, uidsToFetch, stoppingToken);
                         var (fetchedMessages, messages) = mimeMessages;
-                        foreach (var msg in fetchedMessages)
+                        for (int i = 0; i < fetchedMessages.Count; i++)
                         {
+                            var msg = fetchedMessages[i];
+                            var mimeMessage = messages[i];
                             currentMsgID = (int)msg.UniqueId.Id;
-                            foreach (var mimeMessage in messages)
-                            {
-                                var bodyText = mimeMessage.TextBody ?? mimeMessage.HtmlBody ?? "";
+                            var bodyText = mimeMessage.TextBody ?? mimeMessage.HtmlBody ?? "";
 
-                                var notification = new NewEmailNotification(
-                                    UserId: config.UserId,
-                                    ConfigId: config.Id.ToString(),
-                                    MessageId: (int)msg.UniqueId.Id,
-                                    From: msg.Envelope.From.ToString(),
-                                    Subject: msg.Envelope.Subject ?? "",
-                                    BodyText: bodyText
-                                );
-                                await _channelService.EnqueueAsync(notification, stoppingToken);
-                                _logger.LogDebug(
-                                    "Enqueued new email for auto-labeling: UID={Uid}, From={From}, Subject={Subject}",
-                                    msg.UniqueId.Id, msg.Envelope.From, msg.Envelope.Subject
-                                );
-                            }
+                            var notification = new NewEmailNotification(
+                                UserId: config.UserId,
+                                ConfigId: config.Id.ToString(),
+                                MessageId: (int)msg.UniqueId.Id,
+                                From: msg.Envelope.From.ToString(),
+                                Subject: msg.Envelope.Subject ?? "",
+                                BodyText: bodyText
+                            );
+                            await _channelService.EnqueueAsync(notification, stoppingToken);
+                            _logger.LogDebug(
+                                "Enqueued new email for auto-labeling: UID={Uid}, From={From}, Subject={Subject}",
+                                msg.UniqueId.Id, msg.Envelope.From, msg.Envelope.Subject
+                            );
                         }
                     }
                     catch (Exception ex)
