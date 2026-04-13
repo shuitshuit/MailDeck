@@ -73,6 +73,7 @@ public class WebPushController : BaseAuthController
                 Id = Guid.NewGuid(),
                 UserId = userId,
                 Token = request.Token,
+                Platform = request.Platform,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };

@@ -15,6 +15,10 @@ public class WebPushSubscription
     [Name("token")]
     public string Token { get; set; } = string.Empty;
 
+    /// <summary>"web" or "android"</summary>
+    [Name("platform")]
+    public string Platform { get; set; } = "web";
+
     [Name("created_at")]
     public DateTime CreatedAt { get; set; }
 

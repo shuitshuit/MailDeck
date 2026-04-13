@@ -48,3 +48,13 @@ tmpclaude*
 
 maildeck-*.json
 .claude/settings.local.json
+
+# Tauri
+maildeck-ui/src-tauri/target/
+maildeck-ui/src-tauri/gen/android/.tauri/
+maildeck-ui/src-tauri/gen/android/local.properties
+maildeck-ui/src-tauri/gen/android/app/google-services.json
+maildeck-ui/src-tauri/gen/android/app/build/
+maildeck-ui/src-tauri/gen/android/build/
+maildeck-ui/src-tauri/gen/android/.gradle/
+maildeck-ui/src-tauri/gen/android/app/.cxx/

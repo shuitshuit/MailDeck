@@ -155,6 +155,15 @@ try
                 .AllowAnyMethod()
                 .AllowAnyHeader()
                 .AllowCredentials();
+            // Tauri Android
+            policy.WithOrigins("https://tauri.localhost")
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .AllowCredentials();
+            policy.WithOrigins("http://tauri.localhost")
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .AllowCredentials();
         });
     });
 

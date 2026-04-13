@@ -22,3 +22,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Tauri
+src-tauri/target/
+src-tauri/gen/schemas/
+src-tauri/gen/android/.tauri/
+src-tauri/gen/android/local.properties
+src-tauri/gen/android/app/google-services.json

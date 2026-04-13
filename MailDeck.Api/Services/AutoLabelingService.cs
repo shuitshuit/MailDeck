@@ -168,9 +168,7 @@ public class AutoLabelingService : BackgroundService
             var subscriptions = await db.AsQueryable<WebPushSubscription>()
                 .Where(s => s.UserId == notification.UserId)
                 .ToListAsync();
-            var tokens = subscriptions.Select(s => s.Token).Distinct().ToList();
-
-            if (tokens.Count == 0)
+            if (subscriptions.Count == 0)
             {
                 _logger.LogDebug("No push subscriptions found for user {UserId}", notification.UserId);
                 return;
@@ -182,22 +180,44 @@ public class AutoLabelingService : BackgroundService
                 messageBody += "\n" + notification.BodyText[..Math.Min(50, notification.BodyText.Length)];
             }
 
-            foreach (var token in tokens)
+            foreach (var sub in subscriptions)
             {
-                var message = new Message()
+                Message message;
+                if (sub.Platform == "android")
                 {
-                    Notification = new Notification
+                    // Androidネイティブ: data messageで送信 (KotlinのFirebaseMessagingServiceが処理)
+                    message = new Message()
                     {
-                        Title = notification.From,
-                        Body = messageBody
-                    },
-                    Token = token,
-                };
+                        Data = new Dictionary<string, string>
+                        {
+                            ["title"] = notification.From ?? "",
+                            ["body"] = messageBody
+                        },
+                        Token = sub.Token,
+                        Android = new AndroidConfig
+                        {
+                            Priority = Priority.High
+                        }
+                    };
+                }
+                else
+                {
+                    // Web: 通常のnotification message
+                    message = new Message()
+                    {
+                        Notification = new Notification
+                        {
+                            Title = notification.From,
+                            Body = messageBody
+                        },
+                        Token = sub.Token,
+                    };
+                }
                 await messaging.SendAsync(message, ct);
             }
 
             _logger.LogDebug("Sent push notification for message {MessageId} to {Count} devices",
-                notification.MessageId, tokens.Count);
+                notification.MessageId, subscriptions.Count);
         }
         catch (Exception ex)
         {
