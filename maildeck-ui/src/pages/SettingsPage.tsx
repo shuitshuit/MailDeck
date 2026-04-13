@@ -102,13 +102,13 @@ export default function SettingsPage() {
 
             {/* Tabs */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                <div className="border-b border-gray-200 overflow-x-auto">
-                    <nav className="flex -mb-px min-w-max">
+                <div className="border-b border-gray-200">
+                    <nav className="flex -mb-px">
                         {tabs.map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`flex-1 py-3 px-4 text-center border-b-2 font-medium text-sm transition-colors flex items-center justify-center gap-1.5 min-h-[52px] min-w-[72px] ${
+                                className={`flex-1 py-3 px-2 text-center border-b-2 font-medium text-sm transition-colors flex items-center justify-center gap-1 min-h-[52px] ${
                                     activeTab === tab.id
                                         ? 'border-brand-600 text-brand-600'
                                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -117,7 +117,7 @@ export default function SettingsPage() {
                                 <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" d={tab.icon} />
                                 </svg>
-                                <span className="text-xs md:text-sm">{tab.label}</span>
+                                <span className="hidden sm:inline text-xs md:text-sm">{tab.label}</span>
                             </button>
                         ))}
                     </nav>
