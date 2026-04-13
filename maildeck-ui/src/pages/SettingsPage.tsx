@@ -95,52 +95,52 @@ export default function SettingsPage() {
     ];
 
     return (
-        <div className="max-w-5xl mx-auto p-4 md:p-8">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">設定</h1>
+        <div className="max-w-5xl mx-auto p-3 md:p-8">
+            <div className="flex justify-between items-center mb-4">
+                <h1 className="text-xl md:text-2xl font-bold">設定</h1>
             </div>
 
             {/* Tabs */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                <div className="border-b border-gray-200">
-                    <nav className="flex -mb-px">
+                <div className="border-b border-gray-200 overflow-x-auto">
+                    <nav className="flex -mb-px min-w-max">
                         {tabs.map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`flex-1 py-4 px-6 text-center border-b-2 font-medium text-sm transition-colors flex items-center justify-center gap-2 ${
+                                className={`flex-1 py-3 px-4 text-center border-b-2 font-medium text-sm transition-colors flex items-center justify-center gap-1.5 min-h-[52px] min-w-[72px] ${
                                     activeTab === tab.id
                                         ? 'border-brand-600 text-brand-600'
                                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                 }`}
                             >
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" d={tab.icon} />
                                 </svg>
-                                {tab.label}
+                                <span className="text-xs md:text-sm">{tab.label}</span>
                             </button>
                         ))}
                     </nav>
                 </div>
 
                 {/* Tab Content */}
-                <div className="p-6">
+                <div className="p-3 md:p-6">
                     {/* Accounts Tab */}
                     {activeTab === 'accounts' && (
                         <div>
-                            <div className="flex justify-between items-center mb-6">
+                            <div className="flex justify-between items-center mb-4 gap-3">
                                 <div>
-                                    <h2 className="text-lg font-semibold text-gray-800">メールアカウント</h2>
-                                    <p className="text-sm text-gray-500 mt-1">接続されているメールアカウントを管理</p>
+                                    <h2 className="text-base md:text-lg font-semibold text-gray-800">メールアカウント</h2>
+                                    <p className="text-xs md:text-sm text-gray-500 mt-0.5">接続されているメールアカウントを管理</p>
                                 </div>
                                 <button
                                     onClick={handleOpenCreateModal}
-                                    className="bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 shadow-sm font-medium flex items-center gap-2"
+                                    className="bg-brand-600 text-white px-3 py-2.5 rounded-lg hover:bg-brand-700 shadow-sm font-medium flex items-center gap-1.5 shrink-0 text-sm"
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                                     </svg>
-                                    アカウント追加
+                                    追加
                                 </button>
                             </div>
 
@@ -162,10 +162,10 @@ export default function SettingsPage() {
                                     {accounts.map((account) => account.id && (
                                         <div
                                             key={account.id}
-                                            className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-brand-300 hover:bg-gray-50 transition-all group"
+                                            className="flex items-center justify-between p-3 md:p-4 border border-gray-200 rounded-lg hover:border-brand-300 hover:bg-gray-50 transition-all group"
                                         >
-                                            <div className="flex items-center gap-4 flex-1">
-                                                <div className="w-12 h-12 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
+                                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
                                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-brand-600">
                                                         <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
                                                     </svg>
@@ -177,16 +177,16 @@ export default function SettingsPage() {
                                                     <p className="text-sm text-gray-500 truncate">
                                                         {account.imapUsername}
                                                     </p>
-                                                    <div className="flex gap-4 mt-1 text-xs text-gray-400">
-                                                        <span>IMAP: {account.imapHost}:{account.imapPort}</span>
-                                                        <span>SMTP: {account.smtpHost}:{account.smtpPort}</span>
+                                                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-gray-400">
+                                                        <span>IMAP: {account.imapHost}</span>
+                                                        <span>SMTP: {account.smtpHost}</span>
                                                     </div>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <button
                                                     onClick={() => handleOpenEditModal(account)}
-                                                    className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                                                    className="p-2.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                                                     title="編集"
                                                 >
                                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -195,7 +195,7 @@ export default function SettingsPage() {
                                                 </button>
                                                 <button
                                                     onClick={() => account.id && handleDelete(account.id)}
-                                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                    className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                                                     title="削除"
                                                 >
                                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -239,26 +239,28 @@ export default function SettingsPage() {
                                         <div className="text-sm text-gray-500">新着メールのプッシュ通知を受け取る</div>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={async () => {
-                                        if (!('serviceWorker' in navigator)) {
-                                            toast.error('このブラウザはService Workerに対応していません。');
-                                            return;
-                                        }
-                                        try {
-                                            const { registerServiceWorker, subscribeToPush } = await import('../lib/webpush');
-                                            await registerServiceWorker();
-                                            await subscribeToPush();
-                                            toast.success('通知を有効化しました！');
-                                        } catch (err) {
-                                            console.error(err);
-                                            toast.error('通知の有効化に失敗しました。コンソールを確認してください。');
-                                        }
-                                    }}
-                                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium transition-colors"
-                                >
-                                    通知を有効化
-                                </button>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={async () => {
+                                            const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+                                            if (!isTauri && !('serviceWorker' in navigator)) {
+                                                toast.error('このブラウザはService Workerに対応していません。');
+                                                return;
+                                            }
+                                            try {
+                                                const { subscribeToPush } = await import('../lib/webpush');
+                                                await subscribeToPush();
+                                                toast.success('通知を有効化しました！');
+                                            } catch (err) {
+                                                console.error(err);
+                                                toast.error('通知の有効化に失敗しました。コンソールを確認してください。');
+                                            }
+                                        }}
+                                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                                    >
+                                        通知を有効化
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}

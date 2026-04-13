@@ -200,21 +200,21 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4">
-            <div className="bg-white md:rounded-xl shadow-xl w-full max-w-3xl relative z-10 flex flex-col h-full md:h-auto md:max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
+            <div className="bg-white rounded-t-2xl md:rounded-xl shadow-xl w-full max-w-3xl relative z-10 flex flex-col h-[95dvh] md:h-auto md:max-h-[90vh]">
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 md:p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between px-4 py-3 md:p-6 border-b border-gray-200 shrink-0">
                     <div>
-                        <h2 className="text-xl font-bold text-gray-800">
+                        <h2 className="text-base md:text-xl font-bold text-gray-800">
                             {mode === 'edit' ? 'メールアカウント編集' : '新規メールアカウント追加'}
                         </h2>
                         {mode === 'edit' && (
-                            <p className="text-sm text-gray-500 mt-1">アカウント設定を変更します</p>
+                            <p className="text-xs md:text-sm text-gray-500 mt-0.5">アカウント設定を変更します</p>
                         )}
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                        className="text-gray-400 hover:text-gray-600 p-2.5 rounded-full hover:bg-gray-100 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -224,7 +224,7 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
 
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
-                    <div className="p-4 md:p-6 space-y-6 overflow-y-auto flex-1">
+                    <div className="p-4 md:p-6 space-y-4 md:space-y-6 overflow-y-auto flex-1">
                         {/* Easy Setup for Create Mode */}
                         {mode === 'create' && !showManualConfig && (
                             <div className="max-w-md mx-auto text-center py-8">
@@ -473,18 +473,18 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
 
                     {/* Footer */}
                     {(mode === 'edit' || showManualConfig) && (
-                    <div className="p-4 md:p-6 border-t bg-gray-50 flex justify-end gap-3">
+                    <div className="px-4 py-3 md:p-6 border-t bg-gray-50 flex gap-3 shrink-0">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-6 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors font-medium text-sm"
+                            className="flex-1 py-3 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors font-medium text-sm border border-gray-300"
                         >
                             キャンセル
                         </button>
                         <button
                             type="submit"
                             disabled={isSaving}
-                            className="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-bold shadow-sm flex items-center gap-2"
+                            className="flex-1 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-bold shadow-sm flex items-center justify-center gap-2"
                         >
                             {isSaving ? (
                                 <>

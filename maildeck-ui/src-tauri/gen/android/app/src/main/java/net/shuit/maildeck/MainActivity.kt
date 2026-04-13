@@ -38,6 +38,7 @@ class MainActivity : TauriActivity() {
     }
   }
 
+
   // FCMトークンをJavaScript側から読み取れるよう公開
   fun getFcmToken(): String? {
     val prefs = getSharedPreferences("maildeck_fcm", Context.MODE_PRIVATE)

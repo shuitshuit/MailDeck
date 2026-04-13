@@ -8,10 +8,13 @@
 
 import { useMemo, useRef, useEffect, useCallback } from 'react';
 import DOMPurify from 'dompurify';
+import { loadDefaultJapaneseParser } from 'budoux';
 import type { CustomActionPattern, PatternMatch, EmailContext } from '../types/customAction';
 import { findPatternMatches } from '../utils/patternMatcher';
 import CopyButton from './CopyButton';
 import { recordPatternUsage } from '../lib/api';
+
+const budouXParser = loadDefaultJapaneseParser();
 
 interface EnhancedMailContentProps {
   /** The email body content (plain text or HTML) */
@@ -115,9 +118,9 @@ export default function EnhancedMailContent({
     if (matches.length === 0) {
       // No matches, render content as-is
       if (isHtml) {
-        return <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }} />;
+        return <div className="maildeck-html-body overflow-x-hidden break-words" dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }} />;
       }
-      return <pre className="whitespace-pre-wrap font-sans">{content}</pre>;
+      return <pre className="whitespace-pre-wrap font-sans break-words" dangerouslySetInnerHTML={{ __html: applyBudouXToPlainText(content) }} />;
     }
 
     // For plain text, insert copy buttons inline
@@ -148,11 +151,40 @@ export default function EnhancedMailContent({
         {/* HTML content with inline highlights */}
         <div
           ref={htmlContainerRef}
+          className="maildeck-html-body overflow-x-hidden break-words"
           dangerouslySetInnerHTML={{ __html: enhancedHtml }}
         />
 
-        {/* Styles for highlights */}
+        {/* Styles for highlights and mail layout */}
         <style>{`
+          .maildeck-html-body {
+            overflow-wrap: break-word;
+            word-break: break-word;
+            word-wrap: break-word;
+          }
+          .maildeck-html-body * {
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+            overflow-wrap: break-word;
+            word-break: break-word;
+          }
+          .maildeck-html-body table {
+            width: 100% !important;
+            table-layout: fixed !important;
+          }
+          .maildeck-html-body td, .maildeck-html-body th {
+            overflow-wrap: break-word;
+            word-break: break-word;
+          }
+          .maildeck-html-body img {
+            height: auto !important;
+          }
+          .maildeck-html-body a {
+            word-break: break-all;
+          }
+          .maildeck-html-body p, .maildeck-html-body div, .maildeck-html-body span {
+            white-space: normal !important;
+          }
           .${HIGHLIGHT_CLASS} {
             background-color: #dbeafe;
             color: #1d4ed8;
@@ -194,7 +226,7 @@ export default function EnhancedMailContent({
     );
   }, [content, isHtml, matches, onCopy, onLinkClick, enhancedHtml]);
 
-  return <div className={className}>{enhancedContent}</div>;
+  return <div className={`min-w-0 overflow-x-hidden break-words ${className}`}>{enhancedContent}</div>;
 }
 
 /**
@@ -352,14 +384,101 @@ function extractTextFromHtml(html: string): string {
  * Sanitize HTML content using DOMPurify
  */
 function sanitizeHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
+  const clean = DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [
       'p', 'br', 'div', 'span', 'a', 'strong', 'em', 'u', 'ul', 'ol', 'li',
       'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'code',
-      'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img'
+      'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img', 'wbr'
     ],
     ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'style']
   });
+  return applyBudouXToHtml(stripLayoutStyles(clean));
+}
+
+/**
+ * DOM を走査して折り返しを妨げるインラインスタイルを除去する
+ */
+function stripLayoutStyles(html: string): string {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const elements = doc.body.querySelectorAll<HTMLElement>('[style]');
+  for (const el of elements) {
+    const s = el.style;
+    // 固定幅・最小幅を削除
+    s.removeProperty('width');
+    s.removeProperty('min-width');
+    s.removeProperty('max-width');
+    // 折り返し禁止を解除
+    s.removeProperty('white-space');
+    // 固定高さがあると内容が見切れる場合があるので除去
+    s.removeProperty('height');
+    s.removeProperty('min-height');
+  }
+  return doc.body.innerHTML;
+}
+
+/**
+ * プレーンテキストの日本語に <wbr> を挿入した HTML 文字列を返す
+ */
+function applyBudouXToPlainText(text: string): string {
+  // XSS対策: テキストをエスケープした上で行ごとに処理
+  return text
+    .split('\n')
+    .map(line => {
+      const escaped = line
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      if (!/[\u3000-\u9fff\uff00-\uffef]/.test(line)) return escaped;
+      const chunks = budouXParser.parse(line);
+      return chunks.map(c => c.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')).join('<wbr>');
+    })
+    .join('\n');
+}
+
+/**
+ * テキストノードを走査し、日本語チャンクの間に <wbr> を挿入する
+ */
+function applyBudouXToHtml(html: string): string {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+
+  // インライン要素・コード・リンクは除外
+  const skipTags = new Set(['SCRIPT', 'STYLE', 'CODE', 'PRE', 'A']);
+
+  const walker = document.createTreeWalker(
+    doc.body,
+    NodeFilter.SHOW_TEXT,
+    null
+  );
+
+  const textNodes: Text[] = [];
+  let node: Text | null;
+  while ((node = walker.nextNode() as Text | null)) {
+    const parent = node.parentElement;
+    if (parent && skipTags.has(parent.tagName)) continue;
+    if (!node.textContent?.trim()) continue;
+    // 日本語文字が含まれる場合のみ処理
+    if (!/[\u3000-\u9fff\uff00-\uffef]/.test(node.textContent)) continue;
+    textNodes.push(node);
+  }
+
+  for (const textNode of textNodes) {
+    const text = textNode.textContent || '';
+    const chunks = budouXParser.parse(text);
+    if (chunks.length <= 1) continue;
+
+    const fragment = doc.createDocumentFragment();
+    for (let i = 0; i < chunks.length; i++) {
+      fragment.appendChild(doc.createTextNode(chunks[i]));
+      if (i < chunks.length - 1) {
+        fragment.appendChild(doc.createElement('wbr'));
+      }
+    }
+    textNode.parentNode?.replaceChild(fragment, textNode);
+  }
+
+  return doc.body.innerHTML;
 }
 
 /**

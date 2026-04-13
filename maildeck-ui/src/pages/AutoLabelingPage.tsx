@@ -145,24 +145,24 @@ export default function AutoLabelingPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
+        <div className="min-h-screen bg-gray-50 p-3 md:p-6">
             <div className="max-w-5xl mx-auto">
                 {/* Header */}
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex items-start justify-between mb-4 gap-3">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-800">自動ラベリングルール</h1>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <h1 className="text-xl md:text-2xl font-bold text-gray-800">自動ラベリングルール</h1>
+                        <p className="text-xs md:text-sm text-gray-600 mt-0.5">
                             新着メールに自動的にラベルを付与するルールを管理します。
                         </p>
                     </div>
                     <button
                         onClick={handleCreateRule}
-                        className="flex items-center space-x-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors shrink-0 text-sm"
                     >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                         </svg>
-                        <span>新規ルール作成</span>
+                        <span>新規作成</span>
                     </button>
                 </div>
 

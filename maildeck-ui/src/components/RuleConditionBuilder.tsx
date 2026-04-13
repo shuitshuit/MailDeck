@@ -98,55 +98,62 @@ export default function RuleConditionBuilder({ conditions, onChange }: RuleCondi
                 {conditions.rules.map((condition, index) => (
                     <div key={index}>
                         {/* Condition Row */}
-                        <div className="flex items-start space-x-2 p-3 bg-gray-50 rounded-lg">
-                            {/* Field Select */}
-                            <select
-                                value={condition.field}
-                                onChange={(e) => handleConditionChange(index, 'field', e.target.value)}
-                                className="flex-shrink-0 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white"
-                            >
-                                {fieldOptions.map(opt => (
-                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                ))}
-                            </select>
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-start gap-2">
+                                <div className="flex-1 flex flex-col gap-2 min-w-0">
+                                    {/* Field + Operator row */}
+                                    <div className="flex gap-2">
+                                        {/* Field Select */}
+                                        <select
+                                            value={condition.field}
+                                            onChange={(e) => handleConditionChange(index, 'field', e.target.value)}
+                                            className="flex-1 min-w-0 px-2 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white"
+                                        >
+                                            {fieldOptions.map(opt => (
+                                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                            ))}
+                                        </select>
 
-                            {/* Operator Select */}
-                            <select
-                                value={condition.operator}
-                                onChange={(e) => handleConditionChange(index, 'operator', e.target.value)}
-                                className="flex-shrink-0 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white"
-                            >
-                                {operatorOptions.map(opt => (
-                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                ))}
-                            </select>
+                                        {/* Operator Select */}
+                                        <select
+                                            value={condition.operator}
+                                            onChange={(e) => handleConditionChange(index, 'operator', e.target.value)}
+                                            className="flex-1 min-w-0 px-2 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white"
+                                        >
+                                            {operatorOptions.map(opt => (
+                                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
 
-                            {/* Value Input */}
-                            <div className="flex-1 flex flex-col">
-                                <input
-                                    type="text"
-                                    value={condition.value}
-                                    onChange={(e) => handleConditionChange(index, 'value', e.target.value)}
-                                    placeholder={isRegexOperator(condition.operator) ? '正規表現 (例: ^info@.*\\.com$)' : '値を入力'}
-                                    className={`px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none ${isRegexOperator(condition.operator) ? 'font-mono text-sm' : ''} ${regexErrors[index] ? 'border-red-500' : ''}`}
-                                    required
-                                />
-                                {regexErrors[index] && (
-                                    <span className="text-xs text-red-600 mt-0.5">{regexErrors[index]}</span>
-                                )}
+                                    {/* Value Input */}
+                                    <div className="flex flex-col">
+                                        <input
+                                            type="text"
+                                            value={condition.value}
+                                            onChange={(e) => handleConditionChange(index, 'value', e.target.value)}
+                                            placeholder={isRegexOperator(condition.operator) ? '正規表現 (例: ^info@.*\\.com$)' : '値を入力'}
+                                            className={`w-full px-3 py-2 text-base border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none ${isRegexOperator(condition.operator) ? 'font-mono text-sm' : ''} ${regexErrors[index] ? 'border-red-500' : ''}`}
+                                            required
+                                        />
+                                        {regexErrors[index] && (
+                                            <span className="text-xs text-red-600 mt-0.5">{regexErrors[index]}</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Remove Button */}
+                                <button
+                                    type="button"
+                                    onClick={() => handleRemoveCondition(index)}
+                                    className="flex-shrink-0 p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    disabled={conditions.rules.length === 1}
+                                >
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
                             </div>
-
-                            {/* Remove Button */}
-                            <button
-                                type="button"
-                                onClick={() => handleRemoveCondition(index)}
-                                className="flex-shrink-0 p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                disabled={conditions.rules.length === 1}
-                            >
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                            </button>
                         </div>
 
                         {/* Logical Operator between conditions */}
