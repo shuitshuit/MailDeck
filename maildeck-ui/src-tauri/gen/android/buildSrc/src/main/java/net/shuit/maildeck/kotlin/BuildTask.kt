@@ -17,27 +17,31 @@ open class BuildTask : DefaultTask() {
     @TaskAction
     fun assemble() {
         if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-            // Windowsではフルパスで直接試す
-            val windowsCandidates = listOf(
-                "C:\\Program Files\\nodejs\\npm.cmd",
-                "C:\\Program Files\\nodejs\\npm.bat",
-                "npm.cmd",
-                "npm.bat",
-                "npm",
-            )
-            var lastException: Exception? = null
-            for (candidate in windowsCandidates) {
-                try {
-                    runTauriCli(candidate)
-                    return
-                } catch (e: Exception) {
-                    lastException = e
-                }
-            }
-            throw lastException!!
+            runTauriCliWindows()
         } else {
             runTauriCli("npm")
         }
+    }
+
+    fun runTauriCliWindows() {
+        val rootDirRel = rootDirRel ?: throw GradleException("rootDirRel cannot be null")
+        val target = target ?: throw GradleException("target cannot be null")
+        val release = release ?: throw GradleException("release cannot be null")
+        val npmArgs = listOf("npm", "run", "--", "tauri", "android", "android-studio-script")
+        val args = mutableListOf<String>().apply {
+            addAll(npmArgs)
+            if (project.logger.isEnabled(LogLevel.DEBUG)) add("-vv")
+            else if (project.logger.isEnabled(LogLevel.INFO)) add("-v")
+            if (release) add("--release")
+            addAll(listOf("--target", target))
+        }
+
+        // Windows では cmd /c 経由で実行することで .cmd スクリプトを解決できる
+        project.exec {
+            workingDir(File(project.projectDir, rootDirRel))
+            executable("cmd")
+            args(listOf("/c") + args)
+        }.assertNormalExitValue()
     }
 
     fun runTauriCli(executable: String) {

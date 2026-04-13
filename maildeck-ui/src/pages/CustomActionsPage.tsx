@@ -231,30 +231,28 @@ export default function CustomActionsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
+        <div className="min-h-screen bg-gray-50 p-3 md:p-6">
             <div className="max-w-5xl mx-auto">
                 {/* Header */}
-                <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-800 mb-2">
-                                カスタムアクション
-                            </h1>
-                            <p className="text-gray-600">
-                                メール本文中の特定のパターン（OTPコード、追跡番号など）を検出し、
-                                コピーボタンを表示します。
-                            </p>
-                        </div>
-                        <button
-                            onClick={handleCreatePattern}
-                            className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors flex items-center space-x-2"
-                        >
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
-                            <span>新規パターン</span>
-                        </button>
+                <div className="flex items-start justify-between mb-4 gap-3">
+                    <div>
+                        <h1 className="text-xl md:text-2xl font-bold text-gray-800">
+                            カスタムアクション
+                        </h1>
+                        <p className="text-xs md:text-sm text-gray-600 mt-0.5">
+                            メール本文中の特定のパターン（OTPコード、追跡番号など）を検出し、
+                            コピーボタンを表示します。
+                        </p>
                     </div>
+                    <button
+                        onClick={handleCreatePattern}
+                        className="flex items-center gap-1.5 px-3 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors shrink-0 text-sm"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span>新規作成</span>
+                    </button>
                 </div>
 
                 {/* Info Box */}
@@ -276,30 +274,30 @@ export default function CustomActionsPage() {
                 </div>
 
                 {/* Quick Actions */}
-                <div className="flex space-x-4 mb-6">
+                <div className="flex flex-wrap gap-2 mb-4">
                     <button
                         onClick={() => setShowPresets(!showPresets)}
-                        className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 ${
+                        className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg font-medium transition-colors text-sm ${
                             showPresets
                                 ? 'bg-indigo-100 text-indigo-700'
                                 : 'bg-white text-gray-700 hover:bg-gray-50 border'
                         }`}
                     >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                         </svg>
-                        <span>プリセットからインポート</span>
+                        <span>プリセット</span>
                     </button>
 
                     <button
                         onClick={() => setShowStats(!showStats)}
-                        className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 ${
+                        className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg font-medium transition-colors text-sm ${
                             showStats
                                 ? 'bg-green-100 text-green-700'
                                 : 'bg-white text-gray-700 hover:bg-gray-50 border'
                         }`}
                     >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                         </svg>
                         <span>使用統計</span>
@@ -308,7 +306,7 @@ export default function CustomActionsPage() {
 
                 {/* Preset Import Section */}
                 {showPresets && (
-                    <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+                    <div className="bg-white rounded-xl shadow-sm p-4 md:p-6 mb-4 md:mb-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-lg font-semibold text-gray-800">プリセットパターン</h2>
                             <div className="flex items-center space-x-2">
@@ -432,7 +430,7 @@ export default function CustomActionsPage() {
 
                 {/* Stats Section */}
                 {showStats && stats && (
-                    <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+                    <div className="bg-white rounded-xl shadow-sm p-4 md:p-6 mb-4 md:mb-6">
                         <h2 className="text-lg font-semibold text-gray-800 mb-4">使用統計 (過去30日間)</h2>
 
                         {/* Summary Cards */}

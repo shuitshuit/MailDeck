@@ -577,9 +577,9 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
     };
 
     return (
-        <div className="p-4 md:p-8">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                <h1 className="text-2xl font-bold">{displayTitle}</h1>
+        <div className="p-3 md:p-8">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3">
+                <h1 className="text-xl md:text-2xl font-bold">{displayTitle}</h1>
                 <div className="flex gap-2 w-full md:w-auto">
                     <button
                         onClick={() => loadInbox()}
@@ -791,29 +791,29 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                 return (
                                     <div
                                         key={`mobile-${mailKey}`}
-                                        className={`p-4 active:bg-gray-50 cursor-pointer flex gap-3 ${!mail.isRead ? 'font-semibold bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'} ${isSelected ? 'bg-brand-50' : ''}`}
+                                        className={`py-3 px-3 active:bg-gray-100 cursor-pointer flex gap-3 ${!mail.isRead ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'} ${isSelected ? 'bg-brand-50' : ''}`}
                                     >
                                         <div
-                                            className="flex items-start pt-1"
+                                            className="flex items-center justify-center w-10 h-10 shrink-0"
                                             onClick={(e) => toggleMessageSelection(mailKey, index, e)}
                                         >
                                             <input
                                                 type="checkbox"
                                                 checked={isSelected}
                                                 onChange={() => {}}
-                                                className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                                                className="w-5 h-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
                                             />
                                         </div>
                                         <div className="flex-1 min-w-0" onClick={() => openMail(mail)}>
-                                            <div className="flex justify-between items-start mb-1">
-                                                <div className={`text-sm truncate flex-1 pr-2 ${!mail.isRead ? 'font-bold text-gray-950' : 'font-medium text-gray-900'}`}>{mail.from}</div>
-                                                <div className="text-xs text-gray-500 whitespace-nowrap">
-                                                    {new Date(mail.date).toLocaleDateString()}
+                                            <div className="flex justify-between items-baseline mb-0.5">
+                                                <div className={`text-sm truncate flex-1 pr-2 ${!mail.isRead ? 'font-bold text-gray-950' : 'font-medium text-gray-700'}`}>{mail.from}</div>
+                                                <div className="text-xs text-gray-400 whitespace-nowrap shrink-0">
+                                                    {new Date(mail.date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
                                                 </div>
                                             </div>
-                                            <div className="text-sm text-gray-800 mb-1 truncate">{mail.subject || '(件名なし)'}</div>
+                                            <div className={`text-sm mb-0.5 truncate ${!mail.isRead ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{mail.subject || '(件名なし)'}</div>
                                             {mail.labels && mail.labels.length > 0 && (
-                                                <div className="flex flex-wrap gap-1 mt-2">
+                                                <div className="flex flex-wrap gap-1 mt-1">
                                                     {mail.labels.map(label => (
                                                         <LabelBadge key={label.id} label={label} />
                                                     ))}

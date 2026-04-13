@@ -88,4 +88,5 @@ public class WebPushController : BaseAuthController
             return StatusCode(500, "Failed to save subscription");
         }
     }
+
 }

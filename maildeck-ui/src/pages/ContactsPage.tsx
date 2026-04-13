@@ -137,14 +137,14 @@ export default function ContactsPage() {
     };
 
     return (
-        <div className="p-8">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">連絡先</h1>
+        <div className="p-3 md:p-8">
+            <div className="flex justify-between items-center mb-4">
+                <h1 className="text-xl md:text-2xl font-bold">連絡先</h1>
                 <button
                     onClick={openCreateModal}
-                    className="bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 shadow-sm font-medium flex items-center gap-2"
+                    className="bg-brand-600 text-white px-3 py-2.5 rounded-lg hover:bg-brand-700 shadow-sm font-medium flex items-center gap-1.5 text-sm"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                     </svg>
                     追加
@@ -162,59 +162,48 @@ export default function ContactsPage() {
                         </button>
                     </div>
                 ) : (
-                    <table className="w-full">
-                        <thead className="bg-gray-50/50 border-b border-gray-100">
-                            <tr>
-                                <th className="text-left p-4 font-medium text-gray-500 text-sm">名前</th>
-                                <th className="text-left p-4 font-medium text-gray-500 text-sm">メールアドレス</th>
-                                <th className="text-right p-4 font-medium text-gray-500 text-sm">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {contacts.map(contact => (
-                                <tr key={contact.id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="p-4 font-medium text-gray-900">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-bold text-xs">
-                                                {contact.name[0]}
-                                            </div>
-                                            {contact.name}
-                                        </div>
-                                    </td>
-                                    <td className="p-4 text-gray-600">{contact.email}</td>
-                                    <td className="p-4 text-right">
-                                        <button
-                                            onClick={() => openEditModal(contact)}
-                                            className="text-gray-400 hover:text-brand-600 transition-colors p-2 rounded-full hover:bg-brand-50 mr-1"
-                                            title="編集"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                                            </svg>
-                                        </button>
-                                        <button
-                                            onClick={() => openCompose(contact.email)}
-                                            className="text-gray-400 hover:text-brand-600 transition-colors p-2 rounded-full hover:bg-brand-50 mr-1"
-                                            title="メール送信"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-                                            </svg>
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(contact.id)}
-                                            className="text-gray-400 hover:text-red-600 transition-colors p-2 rounded-full hover:bg-red-50"
-                                            title="削除"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                                            </svg>
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    <div className="divide-y divide-gray-100">
+                        {contacts.map(contact => (
+                            <div key={contact.id} className="flex items-center gap-3 p-3 md:p-4 hover:bg-gray-50 transition-colors">
+                                <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold text-sm shrink-0">
+                                    {contact.name[0]?.toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="font-medium text-gray-900 truncate">{contact.name}</div>
+                                    <div className="text-sm text-gray-500 truncate">{contact.email}</div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                        onClick={() => openEditModal(contact)}
+                                        className="text-gray-400 hover:text-brand-600 transition-colors p-2.5 rounded-full hover:bg-brand-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                        title="編集"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                                        </svg>
+                                    </button>
+                                    <button
+                                        onClick={() => openCompose(contact.email)}
+                                        className="text-gray-400 hover:text-brand-600 transition-colors p-2.5 rounded-full hover:bg-brand-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                        title="メール送信"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                                        </svg>
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(contact.id)}
+                                        className="text-gray-400 hover:text-red-600 transition-colors p-2.5 rounded-full hover:bg-red-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                        title="削除"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 )}
             </div>
 

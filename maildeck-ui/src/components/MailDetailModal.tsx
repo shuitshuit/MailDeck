@@ -352,10 +352,10 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-0 md:p-4" onClick={handleBackdropClick}>
-            <div ref={modalContentRef} className="bg-white md:rounded-lg shadow-xl w-full max-w-4xl h-full md:h-auto md:max-h-[90vh] flex flex-col">
-                <div className="relative p-4 border-b border-gray-100 flex justify-between items-center">
-                    <h2 className="text-xl font-semibold truncate flex-1 pr-4">{message?.subject || 'Loading...'}</h2>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-0 md:p-4" onClick={handleBackdropClick}>
+            <div ref={modalContentRef} className="bg-white md:rounded-lg shadow-xl w-full max-w-4xl h-[95dvh] md:h-auto md:max-h-[90vh] flex flex-col rounded-t-2xl md:rounded-lg">
+                <div className="relative px-3 py-3 md:p-4 border-b border-gray-100 flex justify-between items-center shrink-0">
+                    <h2 className="text-base md:text-xl font-semibold truncate flex-1 pr-2">{message?.subject || 'Loading...'}</h2>
                     <div className="flex items-center gap-2">
                         {/* Action buttons based on folder type */}
                         {folderType === 'trash' ? (
@@ -363,7 +363,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                 <button
                                     onClick={handleRestore}
                                     disabled={actionLoading}
-                                    className="text-green-600 hover:text-green-800 hover:bg-green-50 p-2 rounded-lg transition-colors disabled:opacity-50"
+                                    className="text-green-600 hover:text-green-800 hover:bg-green-50 p-2.5 rounded-lg transition-colors disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
                                     title="受信トレイに復元"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -373,7 +373,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                 <button
                                     onClick={handleDeletePermanently}
                                     disabled={actionLoading}
-                                    className="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded-lg transition-colors disabled:opacity-50"
+                                    className="text-red-600 hover:text-red-800 hover:bg-red-50 p-2.5 rounded-lg transition-colors disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
                                     title="完全に削除"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -385,7 +385,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                             <button
                                 onClick={handleMoveToTrash}
                                 disabled={actionLoading}
-                                className="text-gray-500 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors disabled:opacity-50"
+                                className="text-gray-500 hover:text-red-600 hover:bg-red-50 p-2.5 rounded-lg transition-colors disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
                                 title="ゴミ箱に移動"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -397,7 +397,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                         <button
                             onClick={handleTranslate}
                             disabled={isTranslating || !message}
-                            className="text-gray-500 hover:text-brand-600 hover:bg-brand-50 p-2 rounded-lg transition-colors disabled:opacity-50"
+                            className="text-gray-500 hover:text-brand-600 hover:bg-brand-50 p-2.5 rounded-lg transition-colors disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
                             title="翻訳"
                         >
                             {isTranslating ? (
@@ -429,7 +429,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                 </div>
                             </div>
                         )}
-                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2">
+                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                             </svg>
@@ -437,30 +437,30 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                     </div>
                 </div>
 
-                <div className="overflow-auto flex-1 p-6">
+                <div className="overflow-x-hidden overflow-y-auto flex-1 p-3 md:p-6 min-w-0">
                     {loading ? (
                         <div className="flex justify-center items-center h-40">
                             <div className="text-gray-500">読み込み中...</div>
                         </div>
                     ) : message ? (
                         <div>
-                            <div className="mb-6 space-y-2 text-sm text-gray-600 bg-gray-50 p-4 rounded-lg">
-                                <div className="grid grid-cols-[auto,1fr] gap-x-4">
-                                    <span className="font-medium">From:</span>
-                                    <span>{message.from}</span>
+                            <div className="mb-4 space-y-1.5 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                                <div className="grid grid-cols-[auto,1fr] gap-x-3 min-w-0">
+                                    <span className="font-medium shrink-0">From:</span>
+                                    <span className="break-all min-w-0">{message.from}</span>
 
-                                    <span className="font-medium">To:</span>
-                                    <span>{message.to}</span>
+                                    <span className="font-medium shrink-0">To:</span>
+                                    <span className="break-all min-w-0">{message.to}</span>
 
                                     {message.cc && (
                                         <>
-                                            <span className="font-medium">Cc:</span>
-                                            <span>{message.cc}</span>
+                                            <span className="font-medium shrink-0">Cc:</span>
+                                            <span className="break-all min-w-0">{message.cc}</span>
                                         </>
                                     )}
 
-                                    <span className="font-medium">Date:</span>
-                                    <span>{new Date(message.date).toLocaleString()}</span>
+                                    <span className="font-medium shrink-0">Date:</span>
+                                    <span className="min-w-0">{new Date(message.date).toLocaleString()}</span>
                                 </div>
                             </div>
 
@@ -498,7 +498,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                             )}
 
                             {/* Labels section */}
-                            <div className="mb-6 pb-6 border-b border-gray-200">
+                            <div className="mb-4 pb-4 border-b border-gray-200">
                                 <div className="flex items-center gap-2 mb-2">
                                     <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
@@ -514,7 +514,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                 />
                             </div>
 
-                            <div className="prose max-w-none">
+                            <div className="prose max-w-none min-w-0 overflow-x-hidden break-words">
                                 {hasBlockedImages && (
                                     <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800 flex items-center justify-between">
                                         <span>プライバシー保護のため、外部画像はブロックされています。</span>
@@ -533,7 +533,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                         <div className="inline-flex rounded-lg border border-gray-200 p-1 bg-gray-50">
                                             <button
                                                 onClick={() => setShowTranslation(false)}
-                                                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors min-h-[40px] ${
                                                     !showTranslation
                                                         ? 'bg-white text-gray-900 shadow-sm'
                                                         : 'text-gray-500 hover:text-gray-700'
@@ -543,7 +543,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                             </button>
                                             <button
                                                 onClick={() => setShowTranslation(true)}
-                                                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors min-h-[40px] ${
                                                     showTranslation
                                                         ? 'bg-white text-gray-900 shadow-sm'
                                                         : 'text-gray-500 hover:text-gray-700'
