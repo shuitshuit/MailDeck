@@ -207,8 +207,8 @@ public class EmailCheckBackgroundService : BackgroundService
                                 UserId: config.UserId,
                                 ConfigId: config.Id.ToString(),
                                 MessageId: (int)msg.UniqueId.Id,
-                                From: msg.Envelope.From.ToString(),
-                                Subject: msg.Envelope.Subject ?? "",
+                                From: msg.Envelope!.From.ToString(),
+                                Subject: msg.Envelope!.Subject ?? "",
                                 BodyText: bodyText
                             );
                             await _channelService.EnqueueAsync(notification, stoppingToken);
@@ -250,6 +250,7 @@ public class EmailCheckBackgroundService : BackgroundService
         await client.AuthenticateAsync(config.ImapUsername, password, stoppingToken);
 
         var inbox = client.Inbox;
+        if (inbox == null) return 0;
         await inbox.OpenAsync(FolderAccess.ReadOnly, stoppingToken);
 
         // Get appropriate max UID
@@ -275,6 +276,7 @@ public class EmailCheckBackgroundService : BackgroundService
         await client.ConnectAsync(config.ImapHost, config.ImapPort, options, stoppingToken);
         await client.AuthenticateAsync(config.ImapUsername, password, stoppingToken);
         var inbox = client.Inbox;
+        if (inbox == null) return new MessageFetchResult([], []);
         await inbox.OpenAsync(FolderAccess.ReadOnly, stoppingToken);
         var messages = new List<MimeMessage>();
         foreach (var uid in uids)

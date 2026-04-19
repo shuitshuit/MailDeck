@@ -54,8 +54,10 @@ public class MailController : BaseAuthController
                 await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
                 
                 await client.AuthenticateAsync(config.ImapUsername, password);
-               
+
                 var inbox = client.Inbox;
+
+                if (inbox == null) return NotFound("Inbox folder not found");
 
                 await inbox.OpenAsync(FolderAccess.ReadOnly);
 
@@ -119,8 +121,8 @@ public class MailController : BaseAuthController
                     messages.Add(new MailMessageResponse
                     {
                         Id = s.UniqueId.Id,
-                        Subject = s.Envelope.Subject,
-                        From = s.Envelope.From.ToString(),
+                        Subject = s.Envelope!.Subject ?? string.Empty,
+                        From = s.Envelope!.From.ToString(),
                         Date = s.InternalDate ?? s.Date.DateTime,
                         IsRead = s.Flags?.HasFlag(MessageFlags.Seen) ?? false,
                         Labels = labels
@@ -202,7 +204,7 @@ public class MailController : BaseAuthController
                     messages.Add(new MailMessageResponse
                     {
                         Id = s.UniqueId.Id,
-                        Subject = s.Envelope.Subject,
+                        Subject = s.Envelope!.Subject ?? string.Empty,
                         From = s.Envelope.From.ToString(),
                         Date = s.InternalDate ?? s.Date.DateTime,
                         IsRead = s.Flags?.HasFlag(MessageFlags.Seen) ?? false,
@@ -381,6 +383,8 @@ public class MailController : BaseAuthController
 
                 var inbox = client.Inbox;
 
+                if (inbox == null) return NotFound("Inbox folder not found");
+
                 await inbox.OpenAsync(FolderAccess.ReadOnly);
 
                 MimeMessage message;
@@ -390,7 +394,7 @@ public class MailController : BaseAuthController
                 var result = new MailMessageDetailResponse
                 {
                     Id = uid.Id.ToString(),
-                    Subject = message.Subject,
+                    Subject = message.Subject ?? string.Empty,
                     From = message.From.ToString(),
                     To = message.To.ToString(),
                     Cc = message.Cc.ToString(),
@@ -434,6 +438,7 @@ public class MailController : BaseAuthController
                 await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
                 await client.AuthenticateAsync(config.ImapUsername, password);
                 var inbox = client.Inbox;
+                if (inbox == null) return NotFound("Inbox folder not found");
                 await inbox.OpenAsync(FolderAccess.ReadWrite);
                 await inbox.AddFlagsAsync(uid, MessageFlags.Deleted, true);
                 await inbox.ExpungeAsync();
@@ -471,6 +476,7 @@ public class MailController : BaseAuthController
                 await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
                 await client.AuthenticateAsync(config.ImapUsername, password);
                 var inbox = client.Inbox;
+                if (inbox == null) return NotFound("Inbox folder not found");
                 await inbox.OpenAsync(FolderAccess.ReadWrite);
                 await inbox.AddFlagsAsync(uid, MessageFlags.Seen, true);
                 await client.DisconnectAsync(true);
@@ -513,6 +519,7 @@ public class MailController : BaseAuthController
                 await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
                 await client.AuthenticateAsync(config.ImapUsername, password);
                 var inbox = client.Inbox;
+                if (inbox == null) return NotFound("Inbox folder not found");
                 await inbox.OpenAsync(FolderAccess.ReadWrite);
                 await inbox.AddFlagsAsync(uids, MessageFlags.Seen, true);
                 await client.DisconnectAsync(true);
@@ -669,7 +676,7 @@ public class MailController : BaseAuthController
                 var result = new MailMessageDetailResponse
                 {
                     Id = uid.Id.ToString(),
-                    Subject = message.Subject,
+                    Subject = message.Subject ?? string.Empty,
                     From = message.From.ToString(),
                     To = message.To.ToString(),
                     Cc = message.Cc.ToString(),
@@ -884,7 +891,7 @@ public class MailController : BaseAuthController
                     messages.Add(new MailMessageResponse
                     {
                         Id = s.UniqueId.Id,
-                        Subject = s.Envelope.Subject,
+                        Subject = s.Envelope!.Subject ?? string.Empty,
                         From = s.Envelope.From.ToString(),
                         Date = s.InternalDate ?? s.Date.DateTime,
                         IsRead = s.Flags?.HasFlag(MessageFlags.Seen) ?? false
@@ -948,7 +955,7 @@ public class MailController : BaseAuthController
                     messages.Add(new MailMessageResponse
                     {
                         Id = s.UniqueId.Id,
-                        Subject = s.Envelope.Subject,
+                        Subject = s.Envelope!.Subject ?? string.Empty,
                         From = s.Envelope.From.ToString(),
                         Date = s.InternalDate ?? s.Date.DateTime,
                         IsRead = s.Flags?.HasFlag(MessageFlags.Seen) ?? false
@@ -1001,6 +1008,7 @@ public class MailController : BaseAuthController
                 await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
                 await client.AuthenticateAsync(config.ImapUsername, password);
                 var inbox = client.Inbox;
+                if (inbox == null) return NotFound("Inbox folder not found");
                 await inbox.OpenAsync(FolderAccess.ReadWrite);
                 var trashFolder = await client.GetFolderAsync(trashFolderPath);
                 await inbox.MoveToAsync(uid, trashFolder);
@@ -1057,7 +1065,7 @@ public class MailController : BaseAuthController
                     messages.Add(new MailMessageResponse
                     {
                         Id = s.UniqueId.Id,
-                        Subject = s.Envelope.Subject,
+                        Subject = s.Envelope!.Subject ?? string.Empty,
                         From = s.Envelope.From.ToString(),
                         Date = s.InternalDate ?? s.Date.DateTime,
                         IsRead = s.Flags?.HasFlag(MessageFlags.Seen) ?? false
@@ -1164,6 +1172,7 @@ public class MailController : BaseAuthController
             await trashFolder.OpenAsync(FolderAccess.ReadWrite);
 
             var inbox = client.Inbox;
+            if (inbox == null) return NotFound("Inbox folder not found");
             await trashFolder.MoveToAsync(uid, inbox);
 
             await client.DisconnectAsync(true);
@@ -1275,15 +1284,10 @@ public class MailController : BaseAuthController
             await client.AuthenticateAsync(config.ImapUsername, password);
 
             // Get source folder (default to INBOX if not specified)
-            IMailFolder sourceFolder;
-            if (!string.IsNullOrEmpty(request.SourceFolder) && request.SourceFolder != "INBOX")
-            {
-                sourceFolder = await client.GetFolderAsync(request.SourceFolder);
-            }
-            else
-            {
-                sourceFolder = client.Inbox;
-            }
+            IMailFolder? sourceFolder = !string.IsNullOrEmpty(request.SourceFolder) && request.SourceFolder != "INBOX"
+                ? await client.GetFolderAsync(request.SourceFolder)
+                : client.Inbox;
+            if (sourceFolder == null) return NotFound("Inbox folder not found");
             await sourceFolder.OpenAsync(FolderAccess.ReadWrite);
 
             var trashFolder = await client.GetFolderAsync(trashFolderPath);
@@ -1392,7 +1396,7 @@ public class MailController : BaseAuthController
             await trashFolder.OpenAsync(FolderAccess.ReadWrite);
 
             var inbox = client.Inbox;
-
+            if (inbox == null) return NotFound("Inbox folder not found");
             var uids = request.MessageIds.Select(id => new UniqueId((uint)id)).ToList();
             await trashFolder.MoveToAsync(uids, inbox);
 

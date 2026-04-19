@@ -28,6 +28,7 @@ build/
 .env.test.local
 .env.production.local
 appsettings.Development.json
+android-build.env
 
 # OS
 .DS_Store
@@ -58,3 +59,4 @@ maildeck-ui/src-tauri/gen/android/app/build/
 maildeck-ui/src-tauri/gen/android/build/
 maildeck-ui/src-tauri/gen/android/.gradle/
 maildeck-ui/src-tauri/gen/android/app/.cxx/
+*.keystore
