@@ -59,4 +59,10 @@ maildeck-ui/src-tauri/gen/android/app/build/
 maildeck-ui/src-tauri/gen/android/build/
 maildeck-ui/src-tauri/gen/android/.gradle/
 maildeck-ui/src-tauri/gen/android/app/.cxx/
+maildeck-ui/src-tauri/gen/android/buildSrc/.kotlin/
+maildeck-ui/src-tauri/icons/ios/
+maildeck-ui/src-tauri/icons/icon_padded.png
+maildeck-ui/src-tauri/icons/icon_original.png
+maildeck-ui/app-icon.png
+maildeck-ui/android-build.env
 *.keystore
