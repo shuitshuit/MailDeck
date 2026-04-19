@@ -58,3 +58,4 @@ maildeck-ui/src-tauri/gen/android/app/build/
 maildeck-ui/src-tauri/gen/android/build/
 maildeck-ui/src-tauri/gen/android/.gradle/
 maildeck-ui/src-tauri/gen/android/app/.cxx/
+*.keystore
