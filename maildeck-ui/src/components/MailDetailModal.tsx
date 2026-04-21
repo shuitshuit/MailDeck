@@ -14,6 +14,14 @@ import { useLabels } from '../contexts/LabelContext';
 
 type FolderType = 'inbox' | 'drafts' | 'spam' | 'trash';
 
+interface ReplyData {
+    to: string;
+    subject: string;
+    body: string;
+    configId: string;
+    replyTo: string;
+}
+
 interface MailDetailModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -21,6 +29,7 @@ interface MailDetailModalProps {
     messageId: number;
     folderType?: FolderType;
     onMessageDeleted?: () => void;
+    onReply?: (replyData: ReplyData) => void;
 }
 
 interface MessageDetail {
@@ -34,7 +43,7 @@ interface MessageDetail {
     bodyText: string;
 }
 
-export default function MailDetailModal({ isOpen, onClose, configId, messageId, folderType = 'inbox', onMessageDeleted }: MailDetailModalProps) {
+export default function MailDetailModal({ isOpen, onClose, configId, messageId, folderType = 'inbox', onMessageDeleted, onReply }: MailDetailModalProps) {
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState<MessageDetail | null>(null);
     const [showImages, setShowImages] = useState(false);
@@ -271,6 +280,29 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
         }
     };
 
+    // Handle reply
+    const handleReply = () => {
+        if (!message || !onReply) return;
+
+        const replySubject = message.subject.startsWith('Re: ')
+            ? message.subject
+            : `Re: ${message.subject}`;
+
+        const fromMatch = message.from.match(/<(.+?)>/);
+        const toAddress = fromMatch ? fromMatch[1] : message.from.trim();
+
+        const dateStr = new Date(message.date).toLocaleString('ja-JP');
+        const quotedBody = [
+            '',
+            `--- ${dateStr} ${message.from} の返信 ---`,
+            message.bodyText
+                ? message.bodyText.split('\n').map(line => `> ${line}`).join('\n')
+                : '（本文なし）'
+        ].join('\n');
+
+        onReply({ to: toAddress, subject: replySubject, body: quotedBody, configId, replyTo: message.from });
+    };
+
     // Translate HTML while preserving structure
     const translateHtmlContent = async (html: string, translateFn: (text: string) => Promise<string>): Promise<string> => {
         const parser = new DOMParser();
@@ -358,6 +390,19 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                 <div className="relative px-3 py-3 md:p-4 border-b border-gray-100 flex justify-between items-center shrink-0">
                     <h2 className="text-base md:text-xl font-semibold truncate flex-1 pr-2">{message?.subject || 'Loading...'}</h2>
                     <div className="flex items-center gap-2">
+                        {/* Reply button */}
+                        {folderType !== 'trash' && folderType !== 'drafts' && onReply && (
+                            <button
+                                onClick={handleReply}
+                                disabled={!message || actionLoading}
+                                className="text-gray-500 hover:text-brand-600 hover:bg-brand-50 p-2.5 rounded-lg transition-colors disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                title="返信"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                </svg>
+                            </button>
+                        )}
                         {/* Action buttons based on folder type */}
                         {folderType === 'trash' ? (
                             <>
