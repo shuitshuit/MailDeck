@@ -7,6 +7,7 @@ import type { CustomActionPattern } from '../types/customAction';
 import LabelSelector from './LabelSelector';
 import LabelModal from './LabelModal';
 import EnhancedMailContent from './EnhancedMailContent';
+import HtmlMailFrame from './HtmlMailFrame';
 import TranslatorApiGuideModal from './TranslatorApiGuideModal';
 import { useToast } from '../contexts/ToastContext';
 import { useLabels } from '../contexts/LabelContext';
@@ -113,7 +114,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
             link.setAttribute('rel', 'noopener noreferrer');
         });
 
-        return doc.body.innerHTML;
+        return `<!DOCTYPE html>${doc.documentElement.outerHTML}`;
     }, [message?.bodyHtml, showImages]);
 
     // Update hasBlockedImages state based on checkForImages
@@ -304,7 +305,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
             item.node.textContent = await translateFn(item.text);
         }
 
-        return doc.body.innerHTML;
+        return `<!DOCTYPE html>${doc.documentElement.outerHTML}`;
     };
 
     // Handle translation
@@ -562,17 +563,44 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
 
                                 {/* Show translation or original content */}
                                 {showTranslation && translatedContent ? (
-                                    <EnhancedMailContent
-                                        content={translatedContent}
-                                        isHtml={!!message.bodyHtml}
-                                        patterns={showCustomActions ? patterns : []}
-                                        emailContext={{ from: message.from, subject: message.subject, body: message.bodyText }}
-                                        onCopy={(value) => toast.success(`コピーしました: ${value}`)}
-                                    />
+                                    message.bodyHtml ? (
+                                        <>
+                                            <EnhancedMailContent
+                                                content={message.bodyText || ''}
+                                                isHtml={false}
+                                                patterns={showCustomActions ? patterns : []}
+                                                emailContext={{ from: message.from, subject: message.subject, body: message.bodyText }}
+                                                onCopy={(value) => toast.success(`コピーしました: ${value}`)}
+                                                className="mb-2"
+                                            />
+                                            <HtmlMailFrame html={translatedContent} />
+                                        </>
+                                    ) : (
+                                        <EnhancedMailContent
+                                            content={translatedContent}
+                                            isHtml={false}
+                                            patterns={showCustomActions ? patterns : []}
+                                            emailContext={{ from: message.from, subject: message.subject, body: message.bodyText }}
+                                            onCopy={(value) => toast.success(`コピーしました: ${value}`)}
+                                        />
+                                    )
+                                ) : message.bodyHtml ? (
+                                    <>
+                                        {/* Pattern matching on plain text; HTML rendered in isolated iframe */}
+                                        <EnhancedMailContent
+                                            content={message.bodyText || ''}
+                                            isHtml={false}
+                                            patterns={showCustomActions ? patterns : []}
+                                            emailContext={{ from: message.from, subject: message.subject, body: message.bodyText }}
+                                            onCopy={(value) => toast.success(`コピーしました: ${value}`)}
+                                            className="mb-2"
+                                        />
+                                        <HtmlMailFrame html={processedHtml} />
+                                    </>
                                 ) : (
                                     <EnhancedMailContent
-                                        content={message.bodyHtml ? processedHtml : message.bodyText}
-                                        isHtml={!!message.bodyHtml}
+                                        content={message.bodyText}
+                                        isHtml={false}
                                         patterns={showCustomActions ? patterns : []}
                                         emailContext={{ from: message.from, subject: message.subject, body: message.bodyText }}
                                         onCopy={(value) => toast.success(`コピーしました: ${value}`)}
