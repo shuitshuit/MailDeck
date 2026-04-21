@@ -549,6 +549,13 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         setIsComposeOpen(true);
     };
 
+    const handleFilterByAddress = (address: string) => {
+        const params = new URLSearchParams(searchParams);
+        params.set('search', `from:${address}`);
+        setSearchParams(params);
+        setSelectedMail(null);
+    };
+
     const handleSendMail = async (to: string, subject: string, body: string, configId: string, cc?: string, bcc?: string, replyTo?: string) => {
         if (!configId) {
             toast.warning('アカウントを選択してください');
@@ -966,6 +973,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     folderType={folderType}
                     onMessageDeleted={loadInbox}
                     onReply={handleReply}
+                    onFilterByAddress={handleFilterByAddress}
                 />
             )}
         </div>

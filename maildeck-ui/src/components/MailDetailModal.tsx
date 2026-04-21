@@ -30,6 +30,7 @@ interface MailDetailModalProps {
     folderType?: FolderType;
     onMessageDeleted?: () => void;
     onReply?: (replyData: ReplyData) => void;
+    onFilterByAddress?: (address: string) => void;
 }
 
 interface MessageDetail {
@@ -43,7 +44,16 @@ interface MessageDetail {
     bodyText: string;
 }
 
-export default function MailDetailModal({ isOpen, onClose, configId, messageId, folderType = 'inbox', onMessageDeleted, onReply }: MailDetailModalProps) {
+function extractEmailAddresses(str: string): { display: string; email: string }[] {
+    const parts = str.split(/,\s*/);
+    return parts.map(part => {
+        const match = part.match(/<(.+?)>/);
+        const email = match ? match[1].trim() : part.trim();
+        return { display: part.trim(), email };
+    }).filter(p => p.email.includes('@'));
+}
+
+export default function MailDetailModal({ isOpen, onClose, configId, messageId, folderType = 'inbox', onMessageDeleted, onReply, onFilterByAddress }: MailDetailModalProps) {
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState<MessageDetail | null>(null);
     const [showImages, setShowImages] = useState(false);
@@ -493,15 +503,54 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                             <div className="mb-4 space-y-1.5 text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
                                 <div className="grid grid-cols-[auto,1fr] gap-x-3 min-w-0">
                                     <span className="font-medium shrink-0">From:</span>
-                                    <span className="break-all min-w-0">{message.from}</span>
+                                    <span className="break-all min-w-0">
+                                        {extractEmailAddresses(message.from).map((addr, i) => (
+                                            <span key={i}>
+                                                {i > 0 && ', '}
+                                                {onFilterByAddress ? (
+                                                    <button
+                                                        onClick={() => onFilterByAddress(addr.email)}
+                                                        className="text-blue-600 hover:underline cursor-pointer"
+                                                        title={`"${addr.email}" で絞り込む`}
+                                                    >{addr.display}</button>
+                                                ) : addr.display}
+                                            </span>
+                                        ))}
+                                    </span>
 
                                     <span className="font-medium shrink-0">To:</span>
-                                    <span className="break-all min-w-0">{message.to}</span>
+                                    <span className="break-all min-w-0">
+                                        {extractEmailAddresses(message.to).map((addr, i) => (
+                                            <span key={i}>
+                                                {i > 0 && ', '}
+                                                {onFilterByAddress ? (
+                                                    <button
+                                                        onClick={() => onFilterByAddress(addr.email)}
+                                                        className="text-blue-600 hover:underline cursor-pointer"
+                                                        title={`"${addr.email}" で絞り込む`}
+                                                    >{addr.display}</button>
+                                                ) : addr.display}
+                                            </span>
+                                        ))}
+                                    </span>
 
                                     {message.cc && (
                                         <>
                                             <span className="font-medium shrink-0">Cc:</span>
-                                            <span className="break-all min-w-0">{message.cc}</span>
+                                            <span className="break-all min-w-0">
+                                                {extractEmailAddresses(message.cc).map((addr, i) => (
+                                                    <span key={i}>
+                                                        {i > 0 && ', '}
+                                                        {onFilterByAddress ? (
+                                                            <button
+                                                                onClick={() => onFilterByAddress(addr.email)}
+                                                                className="text-blue-600 hover:underline cursor-pointer"
+                                                                title={`"${addr.email}" で絞り込む`}
+                                                            >{addr.display}</button>
+                                                        ) : addr.display}
+                                                    </span>
+                                                ))}
+                                            </span>
                                         </>
                                     )}
 
