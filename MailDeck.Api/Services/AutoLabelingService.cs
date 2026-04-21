@@ -213,7 +213,17 @@ public class AutoLabelingService : BackgroundService
                         Token = sub.Token,
                     };
                 }
-                await messaging.SendAsync(message, ct);
+                try
+                {
+                    await messaging.SendAsync(message, ct);
+                }
+                catch (FirebaseMessagingException fex)
+                    when (fex.MessagingErrorCode is MessagingErrorCode.Unregistered
+                        or MessagingErrorCode.InvalidArgument)
+                {
+                    _logger.LogWarning("FCM token invalid for subscription {SubId}, removing", sub.Id);
+                    await db.DeleteAsync<WebPushSubscription>(sub.Id);
+                }
             }
 
             _logger.LogDebug("Sent push notification for message {MessageId} to {Count} devices",
