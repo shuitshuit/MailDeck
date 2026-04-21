@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getContacts } from '../lib/api';
 import { useModalClose } from '../hooks/useModalClose';
 import { useToast } from '../contexts/ToastContext';
+import EmailChipInput from './EmailChipInput';
 
 export interface Account {
     id: string;
@@ -11,17 +12,24 @@ export interface Account {
 interface ComposeModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSend: (to: string, subject: string, body: string, configId: string) => Promise<void>;
+    onSend: (to: string, subject: string, body: string, configId: string, cc?: string, bcc?: string, replyTo?: string) => Promise<void>;
     accounts: Account[];
     initialTo?: string;
+    initialSubject?: string;
+    initialBody?: string;
+    initialConfigId?: string;
+    initialReplyTo?: string;
 }
 
-export default function ComposeModal({ isOpen, onClose, onSend, accounts, initialTo = '' }: ComposeModalProps) {
-    const [to, setTo] = useState(initialTo);
+export default function ComposeModal({ isOpen, onClose, onSend, accounts, initialTo = '', initialSubject = '', initialBody = '', initialConfigId, initialReplyTo = '' }: ComposeModalProps) {
+    const [toChips, setToChips] = useState<string[]>(initialTo ? [initialTo] : []);
     // Initialize with the first account ID if available
     const [configId, setConfigId] = useState<string | undefined>(undefined);
-    const [subject, setSubject] = useState('');
-    const [body, setBody] = useState('');
+    const [ccChips, setCcChips] = useState<string[]>([]);
+    const [bccChips, setBccChips] = useState<string[]>([]);
+    const [replyTo, setReplyTo] = useState(initialReplyTo);
+    const [subject, setSubject] = useState(initialSubject);
+    const [body, setBody] = useState(initialBody);
     const [isSending, setIsSending] = useState(false);
     const [contacts, setContacts] = useState<{ name: string, email: string }[]>([]);
     const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
@@ -33,16 +41,22 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
 
     useEffect(() => {
         if (isOpen) {
-            setTo(initialTo);
-            // If no account selected, or selected account not in list, select first one
-            if (accounts.length > 0) {
+            setToChips(initialTo ? [initialTo] : []);
+            setCcChips([]);
+            setBccChips([]);
+            setReplyTo(initialReplyTo);
+            setSubject(initialSubject);
+            setBody(initialBody);
+            if (initialConfigId) {
+                setConfigId(initialConfigId);
+            } else if (accounts.length > 0) {
                 const isValid = configId !== undefined && accounts.some(a => a.id === configId);
                 if (!isValid) {
                     setConfigId(accounts[0].id);
                 }
             }
         }
-    }, [isOpen, initialTo, accounts, configId]);
+    }, [isOpen, initialTo, initialSubject, initialBody, initialConfigId, initialReplyTo, accounts, configId]);
 
     if (!isOpen) return null;
 
@@ -52,11 +66,26 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
             toast.warning('アカウントを選択してください');
             return;
         }
+        if (toChips.length === 0) {
+            toast.warning('宛先を入力してください');
+            return;
+        }
         setIsSending(true);
         try {
-            await onSend(to, subject, body, configId);
+            await onSend(
+                toChips.join(', '),
+                subject,
+                body,
+                configId,
+                ccChips.length > 0 ? ccChips.join(', ') : undefined,
+                bccChips.length > 0 ? bccChips.join(', ') : undefined,
+                replyTo || undefined
+            );
             // Reset form
-            setTo('');
+            setToChips([]);
+            setCcChips([]);
+            setBccChips([]);
+            setReplyTo('');
             setSubject('');
             setBody('');
             onClose();
@@ -72,7 +101,7 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4" onClick={handleBackdropClick}>
             <div ref={modalContentRef} className="bg-white rounded-t-2xl md:rounded-xl shadow-xl w-full max-w-2xl relative z-10 flex flex-col h-[92dvh] md:h-auto md:max-h-[90vh]">
                 <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
-                    <h2 className="text-base font-bold text-gray-800">新規メール作成</h2>
+                    <h2 className="text-base font-bold text-gray-800">{initialSubject.startsWith('Re:') ? '返信' : '新規メール作成'}</h2>
                     <button
                         onClick={onClose}
                         className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 min-w-[44px] min-h-[44px] flex items-center justify-center"
@@ -89,8 +118,9 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
                             <select
                                 value={configId || ''}
                                 onChange={(e) => setConfigId(e.target.value)}
-                                className="w-full px-3 py-3 border-b border-gray-200 focus:outline-none focus:border-brand-500 transition-colors bg-transparent text-base"
+                                className="w-full px-3 py-3 border-b border-gray-200 focus:outline-none focus:border-brand-500 transition-colors bg-transparent text-base disabled:opacity-60 disabled:cursor-not-allowed"
                                 required
+                                disabled={!!initialConfigId}
                             >
                                 {accounts.map(account => (
                                     <option key={account.id} value={account.id}>
@@ -99,21 +129,34 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
                                 ))}
                             </select>
                         </div>
+                        <EmailChipInput
+                            label="To"
+                            chips={toChips}
+                            onChange={setToChips}
+                            contacts={contacts}
+                            required
+                        />
+                        <EmailChipInput
+                            label="Cc"
+                            chips={ccChips}
+                            onChange={setCcChips}
+                            contacts={contacts}
+                        />
+                        <EmailChipInput
+                            label="Bcc"
+                            chips={bccChips}
+                            onChange={setBccChips}
+                            contacts={contacts}
+                        />
                         <div>
                             <input
                                 type="email"
-                                placeholder="宛先"
-                                value={to}
-                                onChange={(e) => setTo(e.target.value)}
+                                placeholder="返信先 (Reply-To)"
+                                value={replyTo}
+                                onChange={(e) => setReplyTo(e.target.value)}
                                 className="w-full px-3 py-3 border-b border-gray-200 focus:outline-none focus:border-brand-500 transition-colors text-base"
-                                required
-                                list="contacts-list"
+                                disabled={!!initialConfigId}
                             />
-                            <datalist id="contacts-list">
-                                {contacts.map(c => (
-                                    <option key={c.email} value={c.email}>{c.name} &lt;{c.email}&gt;</option>
-                                ))}
-                            </datalist>
                         </div>
                         <div>
                             <input
@@ -125,12 +168,12 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
                                 required
                             />
                         </div>
-                        <div className="flex-1 min-h-[160px]">
+                        <div className="min-h-[160px]">
                             <textarea
                                 placeholder="本文を入力..."
                                 value={body}
                                 onChange={(e) => setBody(e.target.value)}
-                                className="w-full h-full p-3 resize-none focus:outline-none text-base"
+                                className="w-full p-3 resize-y focus:outline-none text-base min-h-[160px]"
                                 required
                             />
                         </div>

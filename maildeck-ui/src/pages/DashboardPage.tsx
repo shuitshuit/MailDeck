@@ -47,6 +47,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
     const [mails, setMails] = useState<Email[]>([]);
     const [loading, setLoading] = useState(false);
     const [isComposeOpen, setIsComposeOpen] = useState(false);
+    const [replyData, setReplyData] = useState<{ to: string; subject: string; body: string; configId: string; replyTo: string } | null>(null);
     const [activeTab, setActiveTab] = useState<string | null>(null);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [page, setPage] = useState(1);
@@ -542,7 +543,13 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         }
     };
 
-    const handleSendMail = async (to: string, subject: string, body: string, configId: string) => {
+    const handleReply = (data: { to: string; subject: string; body: string; configId: string; replyTo: string }) => {
+        setSelectedMail(null);
+        setReplyData(data);
+        setIsComposeOpen(true);
+    };
+
+    const handleSendMail = async (to: string, subject: string, body: string, configId: string, cc?: string, bcc?: string, replyTo?: string) => {
         if (!configId) {
             toast.warning('アカウントを選択してください');
             return;
@@ -559,6 +566,9 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         try {
             await axios.post(`${API_BASE}/mail/send`, {
                 to,
+                cc: cc ?? '',
+                bcc: bcc ?? '',
+                replyTo: replyTo ?? '',
                 subject,
                 body,
                 configId
@@ -934,9 +944,17 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
 
             <ComposeModal
                 isOpen={isComposeOpen}
-                onClose={() => setIsComposeOpen(false)}
+                onClose={() => {
+                    setIsComposeOpen(false);
+                    setReplyData(null);
+                }}
                 onSend={handleSendMail}
                 accounts={accounts}
+                initialTo={replyData?.to ?? ''}
+                initialSubject={replyData?.subject ?? ''}
+                initialBody={replyData?.body ?? ''}
+                initialConfigId={replyData?.configId}
+                initialReplyTo={replyData?.replyTo ?? ''}
             />
 
             {selectedMail && (
@@ -947,6 +965,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     messageId={parseInt(selectedMail.id)}
                     folderType={folderType}
                     onMessageDeleted={loadInbox}
+                    onReply={handleReply}
                 />
             )}
         </div>

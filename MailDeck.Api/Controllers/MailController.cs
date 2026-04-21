@@ -556,6 +556,14 @@ public class MailController : BaseAuthController
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress(config.AccountName.Split('@')[0], config.AccountName));
             message.To.Add(new MailboxAddress("", request.To));
+            if (!string.IsNullOrWhiteSpace(request.Cc))
+                foreach (var addr in request.Cc.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    message.Cc.Add(new MailboxAddress("", addr));
+            if (!string.IsNullOrWhiteSpace(request.Bcc))
+                foreach (var addr in request.Bcc.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    message.Bcc.Add(new MailboxAddress("", addr));
+            if (!string.IsNullOrWhiteSpace(request.ReplyTo))
+                message.ReplyTo.Add(new MailboxAddress("", request.ReplyTo));
             message.Subject = request.Subject;
 
             message.Body = new TextPart("plain")
