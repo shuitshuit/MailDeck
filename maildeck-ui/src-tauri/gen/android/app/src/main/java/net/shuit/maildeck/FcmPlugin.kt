@@ -19,4 +19,16 @@ class FcmPlugin(private val activity: Activity) : Plugin(activity) {
         result.put("token", token)
         invoke.resolve(result)
     }
+
+    @Command
+    fun getPendingNavigation(invoke: Invoke) {
+        val prefs = activity.getSharedPreferences("maildeck_fcm", Context.MODE_PRIVATE)
+        val configId = prefs.getString("pending_configId", null)
+        val messageId = prefs.getString("pending_messageId", null)
+        prefs.edit().remove("pending_configId").remove("pending_messageId").apply()
+        val result = JSObject()
+        result.put("configId", configId)
+        result.put("messageId", messageId)
+        invoke.resolve(result)
+    }
 }

@@ -99,6 +99,15 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         }
     }, [searchParams]);
 
+    // URLにmessageId/configIdがあれば自動でモーダルを開く
+    useEffect(() => {
+        const messageId = searchParams.get('messageId');
+        const configId = searchParams.get('configId');
+        if (messageId && configId) {
+            setSelectedMail({ id: messageId, configId, from: '', subject: '', date: '', isRead: true });
+        }
+    }, []);
+
     const loadConfigs = async () => {
         try {
             const configs = await getServerConfigs();
@@ -967,7 +976,14 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
             {selectedMail && (
                 <MailDetailModal
                     isOpen={!!selectedMail}
-                    onClose={() => setSelectedMail(null)}
+                    onClose={() => {
+                        setSelectedMail(null);
+                        setSearchParams(prev => {
+                            prev.delete('messageId');
+                            prev.delete('configId');
+                            return prev;
+                        });
+                    }}
                     configId={selectedMail.configId}
                     messageId={parseInt(selectedMail.id)}
                     folderType={folderType}

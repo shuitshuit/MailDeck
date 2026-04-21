@@ -17,13 +17,32 @@ const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
-  // Customize notification here
-  const notificationTitle = payload.notification.title;
+  const notificationTitle = payload.notification?.title ?? 'New Mail';
   const notificationOptions = {
-    body: payload.notification.body,
-    icon: '/firebase-logo.png'
+    body: payload.notification?.body ?? '',
+    icon: '/firebase-logo.png',
+    data: payload.data ?? {}
   };
 
-  self.registration.showNotification(notificationTitle,
-    notificationOptions);
+  self.registration.showNotification(notificationTitle, notificationOptions);
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const { configId, messageId } = event.notification.data ?? {};
+  const url = configId && messageId
+    ? `/inbox?configId=${configId}&messageId=${messageId}`
+    : '/inbox';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.navigate(url);
+          return client.focus();
+        }
+      }
+      return clients.openWindow(url);
+    })
+  );
 });

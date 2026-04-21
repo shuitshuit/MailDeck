@@ -2,6 +2,7 @@ package net.shuit.maildeck
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -20,6 +21,21 @@ class MainActivity : TauriActivity() {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     requestNotificationPermission()
+    handleNotificationIntent(intent)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    handleNotificationIntent(intent)
+  }
+
+  private fun handleNotificationIntent(intent: Intent?) {
+    val configId = intent?.getStringExtra("configId") ?: return
+    val messageId = intent.getStringExtra("messageId") ?: return
+    getSharedPreferences("maildeck_fcm", Context.MODE_PRIVATE).edit()
+      .putString("pending_configId", configId)
+      .putString("pending_messageId", messageId)
+      .apply()
   }
 
   // Android 13 (API 33) 以上で通知パーミッションを実行時に要求
