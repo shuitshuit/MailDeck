@@ -33,11 +33,13 @@ class MailDeckMessagingService : FirebaseMessagingService() {
         val body = message.notification?.body
             ?: message.data["body"]
             ?: "新着メールがあります"
+        val configId = message.data["configId"]
+        val messageId = message.data["messageId"]
 
-        showNotification(title, body)
+        showNotification(title, body, configId, messageId)
     }
 
-    private fun showNotification(title: String, body: String) {
+    private fun showNotification(title: String, body: String, configId: String?, messageId: String?) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         // Android 8+ 用チャンネル作成
@@ -50,6 +52,10 @@ class MailDeckMessagingService : FirebaseMessagingService() {
 
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            if (configId != null && messageId != null) {
+                putExtra("configId", configId)
+                putExtra("messageId", messageId)
+            }
         }
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent,

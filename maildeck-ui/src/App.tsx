@@ -1,5 +1,5 @@
 import { useAuthenticator } from '@aws-amplify/ui-react';
-import { Link, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/auth/LoginPage';
 import SignUpPage from './pages/auth/SignUpPage';
@@ -30,10 +30,21 @@ interface ServerConfig {
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { authStatus } = useAuthenticator(context => [context.authStatus]);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    if (authStatus === 'authenticated') {
-      syncUser();
+    if (authStatus !== 'authenticated') return;
+    syncUser();
+    if ('__TAURI__' in window) {
+      import('@tauri-apps/api/core').then(({ invoke }) => {
+        invoke<{ configId: string | null; messageId: string | null }>('plugin:fcm|getPendingNavigation')
+          .then(({ configId, messageId }) => {
+            if (configId && messageId) {
+              navigate(`/inbox?configId=${configId}&messageId=${messageId}`);
+            }
+          })
+          .catch(() => {});
+      });
     }
   }, [authStatus]);
 

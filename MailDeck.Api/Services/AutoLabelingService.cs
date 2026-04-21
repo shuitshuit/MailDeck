@@ -210,6 +210,11 @@ public class AutoLabelingService : BackgroundService
                             Title = notification.From,
                             Body = messageBody
                         },
+                        Data = new Dictionary<string, string>
+                        {
+                            ["configId"] = notification.ConfigId,
+                            ["messageId"] = notification.MessageId.ToString()
+                        },
                         Token = sub.Token,
                     };
                 }
