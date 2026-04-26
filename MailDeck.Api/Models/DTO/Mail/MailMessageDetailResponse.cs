@@ -10,4 +10,7 @@ public class MailMessageDetailResponse
     public DateTime Date { get; set; }
     public string? BodyHtml { get; set; }
     public string? BodyText { get; set; }
+    public string? ListUnsubscribeUrl { get; set; }
+    public string? ListUnsubscribeMailto { get; set; }
+    public bool ListUnsubscribeOneClick { get; set; }
 }

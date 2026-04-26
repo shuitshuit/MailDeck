@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getMessage, getLabelsForMessage, addLabelToMessage, removeLabelFromMessage, createLabel, getCustomActionPatterns, moveToTrash, deleteFromTrash, restoreFromTrash } from '../lib/api';
+import { getMessage, getLabelsForMessage, addLabelToMessage, removeLabelFromMessage, createLabel, getCustomActionPatterns, moveToTrash, deleteFromTrash, restoreFromTrash, sendMail } from '../lib/api';
 import { useModalClose } from '../hooks/useModalClose';
 import { useTranslation } from '../hooks/useTranslation';
 import type { Label } from '../types/label';
@@ -42,6 +42,9 @@ interface MessageDetail {
     date: string;
     bodyHtml: string;
     bodyText: string;
+    listUnsubscribeUrl?: string;
+    listUnsubscribeMailto?: string;
+    listUnsubscribeOneClick?: boolean;
 }
 
 function extractEmailAddresses(str: string): { display: string; email: string }[] {
@@ -313,6 +316,29 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
         onReply({ to: toAddress, subject: replySubject, body: quotedBody, configId, replyTo: message.from });
     };
 
+    // Handle unsubscribe
+    const handleUnsubscribe = async () => {
+        if (!message) return;
+        if (!confirm('このメールマガジンの登録を解除しますか？')) return;
+
+        if (message.listUnsubscribeUrl) {
+            window.open(message.listUnsubscribeUrl, '_blank', 'noopener,noreferrer');
+            return;
+        }
+
+        if (message.listUnsubscribeMailto) {
+            try {
+                const url = new URL(message.listUnsubscribeMailto);
+                const to = url.pathname;
+                const subject = url.searchParams.get('subject') ?? 'unsubscribe';
+                await sendMail({ configId, to, subject, body: '' });
+                toast.success('登録解除メールを送信しました');
+            } catch {
+                toast.error('登録解除メールの送信に失敗しました');
+            }
+        }
+    };
+
     // Translate HTML while preserving structure
     const translateHtmlContent = async (html: string, translateFn: (text: string) => Promise<string>): Promise<string> => {
         const parser = new DOMParser();
@@ -446,6 +472,19 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                </svg>
+                            </button>
+                        )}
+                        {/* Unsubscribe button */}
+                        {message && (message.listUnsubscribeUrl || message.listUnsubscribeMailto) && (
+                            <button
+                                onClick={handleUnsubscribe}
+                                disabled={actionLoading}
+                                className="text-gray-500 hover:text-orange-600 hover:bg-orange-50 p-2.5 rounded-lg transition-colors disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                title="登録解除"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                                 </svg>
                             </button>
                         )}
