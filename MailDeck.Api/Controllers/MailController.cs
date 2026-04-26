@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using MailDeck.Api.Extensions;
 using MailDeck.Api.Models;
 using MailDeck.Api.Models.DTO.Mail;
@@ -391,6 +392,18 @@ public class MailController : BaseAuthController
 
                 message = await inbox.GetMessageAsync(uid);
 
+                string? unsubscribeUrl = null;
+                string? unsubscribeMailto = null;
+                var listUnsubscribeRaw = message.Headers[HeaderId.ListUnsubscribe];
+                if (listUnsubscribeRaw != null)
+                {
+                    var urlMatch = Regex.Match(listUnsubscribeRaw, @"<(https?://[^>]+)>");
+                    if (urlMatch.Success) unsubscribeUrl = urlMatch.Groups[1].Value;
+
+                    var mailtoMatch = Regex.Match(listUnsubscribeRaw, @"<(mailto:[^>]+)>");
+                    if (mailtoMatch.Success) unsubscribeMailto = mailtoMatch.Groups[1].Value;
+                }
+
                 var result = new MailMessageDetailResponse
                 {
                     Id = uid.Id.ToString(),
@@ -400,7 +413,10 @@ public class MailController : BaseAuthController
                     Cc = message.Cc.ToString(),
                     Date = message.Date.DateTime,
                     BodyHtml = message.HtmlBody,
-                    BodyText = message.TextBody
+                    BodyText = message.TextBody,
+                    ListUnsubscribeUrl = unsubscribeUrl,
+                    ListUnsubscribeMailto = unsubscribeMailto,
+                    ListUnsubscribeOneClick = message.Headers["List-Unsubscribe-Post"]?.Contains("One-Click") == true,
                 };
 
                 await client.DisconnectAsync(true);

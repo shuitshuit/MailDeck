@@ -78,6 +78,32 @@ export async function getInboxFolder(configId: string, folderName: string, page 
 }
 
 /**
+ * Send an email
+ */
+export async function sendMail(params: {
+    configId: string;
+    to: string;
+    subject: string;
+    body: string;
+    cc?: string;
+    bcc?: string;
+    replyTo?: string;
+}) {
+    await authFetch('/mail/send', {
+        method: 'POST',
+        body: JSON.stringify({
+            configId: params.configId,
+            to: params.to,
+            subject: params.subject,
+            body: params.body,
+            cc: params.cc ?? '',
+            bcc: params.bcc ?? '',
+            replyTo: params.replyTo ?? '',
+        }),
+    });
+}
+
+/**
  * Get single message details
  */
 export async function getMessage(configId: string, messageId: number) {
