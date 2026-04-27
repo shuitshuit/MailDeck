@@ -16,6 +16,9 @@ foreach ($line in Get-Content $envFile) {
     [System.Environment]::SetEnvironmentVariable($key, $value, 'Process')
 }
 
+# Set API URL for release build
+[System.Environment]::SetEnvironmentVariable("VITE_API_URL", 'https://maildeck.shuit.net/api', 'Process')
+
 # Verify required vars
 $required = @("ANDROID_KEYSTORE_PATH", "ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD")
 foreach ($var in $required) {
