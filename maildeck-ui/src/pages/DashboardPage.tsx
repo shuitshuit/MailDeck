@@ -106,7 +106,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         if (messageId && configId) {
             setSelectedMail({ id: messageId, configId, from: '', subject: '', date: '', isRead: true });
         }
-    }, []);
+    }, [searchParams]);
 
     const loadConfigs = async () => {
         try {

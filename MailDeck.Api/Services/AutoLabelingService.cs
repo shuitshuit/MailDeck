@@ -191,7 +191,9 @@ public class AutoLabelingService : BackgroundService
                         Data = new Dictionary<string, string>
                         {
                             ["title"] = notification.From ?? "",
-                            ["body"] = messageBody
+                            ["body"] = messageBody,
+                            ["configId"] = notification.ConfigId,
+                            ["messageId"] = notification.MessageId.ToString()
                         },
                         Token = sub.Token,
                         Android = new AndroidConfig
