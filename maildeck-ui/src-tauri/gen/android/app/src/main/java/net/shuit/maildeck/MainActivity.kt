@@ -50,16 +50,18 @@ class MainActivity : TauriActivity() {
 
     if (configId == null || messageId == null) return
 
+    // 常にSharedPreferencesに保存（フォールバック保証）
+    Log.i(TAG, "-> saving to SharedPreferences")
+    getSharedPreferences("maildeck_fcm", Context.MODE_PRIVATE).edit()
+      .putString("pending_configId", configId)
+      .putString("pending_messageId", messageId)
+      .apply()
+
+    // リスナー登録済みならemitも試みる（即時性のため）
     val plugin = fcmPlugin
     if (fromNewIntent && plugin != null) {
-      Log.i(TAG, "-> emitNavigation via plugin")
+      Log.i(TAG, "-> also emitNavigation via plugin (hasListener=${plugin.hasNavigationListener()})")
       plugin.emitNavigation(configId, messageId)
-    } else {
-      Log.i(TAG, "-> saving to SharedPreferences (fromNewIntent=$fromNewIntent, plugin=$plugin)")
-      getSharedPreferences("maildeck_fcm", Context.MODE_PRIVATE).edit()
-        .putString("pending_configId", configId)
-        .putString("pending_messageId", messageId)
-        .apply()
     }
   }
 

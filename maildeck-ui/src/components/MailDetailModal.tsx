@@ -7,7 +7,6 @@ import type { CustomActionPattern } from '../types/customAction';
 import LabelSelector from './LabelSelector';
 import LabelModal from './LabelModal';
 import EnhancedMailContent from './EnhancedMailContent';
-import HtmlMailFrame from './HtmlMailFrame';
 import TranslatorApiGuideModal from './TranslatorApiGuideModal';
 import { useToast } from '../contexts/ToastContext';
 import { useLabels } from '../contexts/LabelContext';
@@ -697,17 +696,13 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                 {/* Show translation or original content */}
                                 {showTranslation && translatedContent ? (
                                     message.bodyHtml ? (
-                                        <>
-                                            <EnhancedMailContent
-                                                content={message.bodyText || ''}
-                                                isHtml={false}
-                                                patterns={showCustomActions ? patterns : []}
-                                                emailContext={{ from: message.from, subject: message.subject, body: message.bodyText }}
-                                                onCopy={(value) => toast.success(`コピーしました: ${value}`)}
-                                                className="mb-2"
-                                            />
-                                            <HtmlMailFrame html={translatedContent} />
-                                        </>
+                                        <EnhancedMailContent
+                                            content={translatedContent}
+                                            isHtml={true}
+                                            patterns={showCustomActions ? patterns : []}
+                                            emailContext={{ from: message.from, subject: message.subject, body: message.bodyText }}
+                                            onCopy={(value) => toast.success(`コピーしました: ${value}`)}
+                                        />
                                     ) : (
                                         <EnhancedMailContent
                                             content={translatedContent}
@@ -718,18 +713,13 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                         />
                                     )
                                 ) : message.bodyHtml ? (
-                                    <>
-                                        {/* Pattern matching on plain text; HTML rendered in isolated iframe */}
-                                        <EnhancedMailContent
-                                            content={message.bodyText || ''}
-                                            isHtml={false}
-                                            patterns={showCustomActions ? patterns : []}
-                                            emailContext={{ from: message.from, subject: message.subject, body: message.bodyText }}
-                                            onCopy={(value) => toast.success(`コピーしました: ${value}`)}
-                                            className="mb-2"
-                                        />
-                                        <HtmlMailFrame html={processedHtml} />
-                                    </>
+                                    <EnhancedMailContent
+                                        content={processedHtml}
+                                        isHtml={true}
+                                        patterns={showCustomActions ? patterns : []}
+                                        emailContext={{ from: message.from, subject: message.subject, body: message.bodyText }}
+                                        onCopy={(value) => toast.success(`コピーしました: ${value}`)}
+                                    />
                                 ) : (
                                     <EnhancedMailContent
                                         content={message.bodyText}

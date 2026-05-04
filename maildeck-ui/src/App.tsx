@@ -1,5 +1,5 @@
 import { useAuthenticator } from '@aws-amplify/ui-react';
-import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
 import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/auth/LoginPage';
 import SignUpPage from './pages/auth/SignUpPage';
@@ -30,35 +30,10 @@ interface ServerConfig {
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { authStatus } = useAuthenticator(context => [context.authStatus]);
-  const navigate = useNavigate();
 
   useEffect(() => {
     if (authStatus !== 'authenticated') return;
     syncUser();
-    if (!('__TAURI__' in window)) return;
-
-    // 起動時: SharedPreferencesに保存された保留ナビゲーションを処理
-    import('@tauri-apps/api/core').then(({ invoke }) => {
-      invoke<{ configId: string | null; messageId: string | null }>('plugin:fcm|getPendingNavigation')
-        .then(({ configId, messageId }) => {
-          if (configId && messageId) {
-            navigate(`/inbox?configId=${configId}&messageId=${messageId}`);
-          }
-        })
-        .catch(() => {});
-    });
-
-    // 起動済み時: AndroidのonNewIntentからemitされるイベントをリッスン
-    let unlisten: (() => void) | null = null;
-    import('@tauri-apps/api/core').then(({ addPluginListener }) => {
-      addPluginListener<{ configId: string; messageId: string }>('fcm', 'navigation', (payload) => {
-        if (payload.configId && payload.messageId) {
-          navigate(`/inbox?configId=${payload.configId}&messageId=${payload.messageId}`);
-        }
-      }).then(listener => { unlisten = () => listener.unregister(); });
-    });
-
-    return () => { unlisten?.(); };
   }, [authStatus]);
 
   if (authStatus === 'configuring') {
