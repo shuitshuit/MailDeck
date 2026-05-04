@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using MailDeck.Api.Extensions;
 using MailDeck.Api.Models;
 using MailDeck.Api.Models.DTO.Mail;
+using MailDeck.Api.Services;
 using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Security;
@@ -20,16 +21,19 @@ namespace MailDeck.Api.Controllers;
 public class MailController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
-    private readonly Services.IEncryptionService _encryptionService;
+    private readonly IEncryptionService _encryptionService;
+    private readonly IClamAvService _clamAv;
 
     public MailController(
         ILogger<MailController> logger,
         PostgreSqlConnect db,
-        Services.IEncryptionService encryptionService)
+        IEncryptionService encryptionService,
+        IClamAvService clamAv)
         : base(logger)
     {
         _db = db;
         _encryptionService = encryptionService;
+        _clamAv = clamAv;
     }
 
     [HttpGet("inbox")]
@@ -404,6 +408,25 @@ public class MailController : BaseAuthController
                     if (mailtoMatch.Success) unsubscribeMailto = mailtoMatch.Groups[1].Value;
                 }
 
+                var attachments = new List<AttachmentInfoResponse>();
+                int partIndex = 0;
+                foreach (var bodyPart in message.BodyParts)
+                {
+                    if (bodyPart is MimePart mimePart && mimePart.IsAttachment && mimePart.Content != null)
+                    {
+                        using var ms = new MemoryStream();
+                        await mimePart.Content.DecodeToAsync(ms);
+                        attachments.Add(new AttachmentInfoResponse
+                        {
+                            PartIndex = partIndex,
+                            FileName = mimePart.FileName ?? $"attachment_{partIndex}",
+                            ContentType = mimePart.ContentType.MimeType,
+                            SizeBytes = ms.Length
+                        });
+                    }
+                    partIndex++;
+                }
+
                 var result = new MailMessageDetailResponse
                 {
                     Id = uid.Id.ToString(),
@@ -417,6 +440,7 @@ public class MailController : BaseAuthController
                     ListUnsubscribeUrl = unsubscribeUrl,
                     ListUnsubscribeMailto = unsubscribeMailto,
                     ListUnsubscribeOneClick = message.Headers["List-Unsubscribe-Post"]?.Contains("One-Click") == true,
+                    Attachments = attachments,
                 };
 
                 await client.DisconnectAsync(true);
@@ -428,6 +452,72 @@ public class MailController : BaseAuthController
         {
             _logger.LogErrorWithSql(ex, "Failed to fetch message");
             return StatusCode(500, "Failed to fetch message: " + ex.Message);
+        }
+    }
+
+    [HttpGet("attachment/{messageId}/{partIndex}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> DownloadAttachment(string messageId, int partIndex, Guid configId)
+    {
+        var userId = GetUserId();
+
+        try
+        {
+            await _db.OpenAsync();
+            var configs = await _db.GetMultipleAsync<Models.UserServerConfig>(new { id = configId, user_id = userId });
+            var config = configs.FirstOrDefault();
+
+            if (config == null) return NotFound("Configuration not found");
+            if (!uint.TryParse(messageId, out var uidVal)) return BadRequest("Invalid Message ID");
+            var uid = new UniqueId(uidVal);
+
+            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
+
+            using var client = new ImapClient();
+            await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
+            await client.AuthenticateAsync(config.ImapUsername, password);
+
+            var inbox = client.Inbox;
+            if (inbox == null) return NotFound("Inbox folder not found");
+            await inbox.OpenAsync(FolderAccess.ReadOnly);
+
+            var message = await inbox.GetMessageAsync(uid);
+            await client.DisconnectAsync(true);
+
+            var parts = message.BodyParts.ToList();
+            if (partIndex < 0 || partIndex >= parts.Count)
+                return NotFound("Attachment not found");
+
+            if (parts[partIndex] is not MimePart mimePart || !mimePart.IsAttachment || mimePart.Content == null)
+                return NotFound("Attachment not found at specified index");
+
+            using var ms = new MemoryStream();
+            await mimePart.Content.DecodeToAsync(ms);
+            var bytes = ms.ToArray();
+
+            var fileName = mimePart.FileName ?? $"attachment_{partIndex}";
+            var contentType = mimePart.ContentType.MimeType;
+
+            var scanResult = await _clamAv.ScanBytesAsync(bytes, fileName);
+            if (scanResult.Status == ScanStatus.Infected)
+            {
+                _logger.LogWarning("Virus detected in attachment {File}: {Virus}", fileName, scanResult.VirusName);
+                return BadRequest($"ウイルスが検出されました: {scanResult.VirusName}");
+            }
+            if (scanResult.Status == ScanStatus.Error)
+            {
+                _logger.LogWarning("ClamAV scan error for {File}: {Msg}", fileName, scanResult.Message);
+            }
+
+            return File(bytes, contentType, fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogErrorWithSql(ex, "Failed to download attachment");
+            return StatusCode(500, "Failed to download attachment: " + ex.Message);
         }
     }
 
@@ -551,9 +641,10 @@ public class MailController : BaseAuthController
 
     [HttpPost("send")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> SendMail([FromBody] EmailRequest request)
+    public async Task<IActionResult> SendMail([FromForm] SendMailFormRequest request)
     {
         var userId = GetUserId();
 
@@ -571,7 +662,8 @@ public class MailController : BaseAuthController
 
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress(config.AccountName.Split('@')[0], config.AccountName));
-            message.To.Add(new MailboxAddress("", request.To));
+            foreach (var addr in request.To.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                message.To.Add(new MailboxAddress("", addr));
             if (!string.IsNullOrWhiteSpace(request.Cc))
                 foreach (var addr in request.Cc.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                     message.Cc.Add(new MailboxAddress("", addr));
@@ -582,10 +674,49 @@ public class MailController : BaseAuthController
                 message.ReplyTo.Add(new MailboxAddress("", request.ReplyTo));
             message.Subject = request.Subject;
 
-            message.Body = new TextPart("plain")
+            if (request.Attachments != null && request.Attachments.Count > 0)
             {
-                Text = request.Body
-            };
+                var fileEntries = new List<(string Name, string MimeType, byte[] Bytes)>();
+                for (int i = 0; i < request.Attachments.Count; i++)
+                {
+                    var file = request.Attachments[i];
+                    using var fms = new MemoryStream();
+                    await file.CopyToAsync(fms);
+                    fileEntries.Add((file.FileName ?? $"attachment_{i}", file.ContentType ?? "application/octet-stream", fms.ToArray()));
+                }
+
+                foreach (var (name, _, bytes) in fileEntries)
+                {
+                    var scanResult = await _clamAv.ScanBytesAsync(bytes, name);
+                    if (scanResult.Status == ScanStatus.Infected)
+                    {
+                        _logger.LogWarning("Virus detected in outgoing attachment {File}: {Virus}", name, scanResult.VirusName);
+                        return BadRequest($"ウイルスが検出されました: {scanResult.VirusName} (ファイル: {name})");
+                    }
+                    if (scanResult.Status == ScanStatus.Error)
+                        _logger.LogWarning("ClamAV scan error for {File}: {Msg}", name, scanResult.Message);
+                }
+
+                var multipart = new Multipart("mixed");
+                multipart.Add(new TextPart("plain") { Text = request.Body });
+
+                foreach (var (name, mimeType, bytes) in fileEntries)
+                {
+                    var part = new MimePart(mimeType)
+                    {
+                        Content = new MimeContent(new MemoryStream(bytes)),
+                        ContentDisposition = new ContentDisposition(ContentDisposition.Attachment),
+                        ContentTransferEncoding = ContentEncoding.Base64,
+                        FileName = name
+                    };
+                    multipart.Add(part);
+                }
+                message.Body = multipart;
+            }
+            else
+            {
+                message.Body = new TextPart("plain") { Text = request.Body };
+            }
 
             using (var client = new SmtpClient())
             {

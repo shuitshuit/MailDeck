@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getMessage, getLabelsForMessage, addLabelToMessage, removeLabelFromMessage, createLabel, getCustomActionPatterns, moveToTrash, deleteFromTrash, restoreFromTrash, sendMail } from '../lib/api';
+import { getMessage, getLabelsForMessage, addLabelToMessage, removeLabelFromMessage, createLabel, getCustomActionPatterns, moveToTrash, deleteFromTrash, restoreFromTrash, sendMail, downloadAttachment } from '../lib/api';
 import { useModalClose } from '../hooks/useModalClose';
 import { useTranslation } from '../hooks/useTranslation';
 import type { Label } from '../types/label';
@@ -32,6 +32,13 @@ interface MailDetailModalProps {
     onFilterByAddress?: (address: string) => void;
 }
 
+interface AttachmentInfo {
+    partIndex: number;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+}
+
 interface MessageDetail {
     id: string;
     subject: string;
@@ -44,6 +51,7 @@ interface MessageDetail {
     listUnsubscribeUrl?: string;
     listUnsubscribeMailto?: string;
     listUnsubscribeOneClick?: boolean;
+    attachments?: AttachmentInfo[];
 }
 
 function extractEmailAddresses(str: string): { display: string; email: string }[] {
@@ -61,6 +69,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
     const [showImages, setShowImages] = useState(false);
     const [hasBlockedImages, setHasBlockedImages] = useState(false);
     const [actionLoading, setActionLoading] = useState(false);
+    const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null);
     const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
     const toast = useToast();
     const { labels: allLabels, reloadLabels } = useLabels();
@@ -289,6 +298,19 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
             toast.error('復元に失敗しました');
         } finally {
             setActionLoading(false);
+        }
+    };
+
+    // Handle attachment download
+    const handleDownloadAttachment = async (partIndex: number, fileName: string) => {
+        setDownloadingIndex(partIndex);
+        try {
+            await downloadAttachment(configId, messageId, partIndex, fileName);
+        } catch (err) {
+            console.error('Download failed', err);
+            toast.error('ダウンロードに失敗しました: ' + (err instanceof Error ? err.message : String(err)));
+        } finally {
+            setDownloadingIndex(null);
         }
     };
 
@@ -646,6 +668,54 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                     onCreateNewLabel={() => setIsLabelModalOpen(true)}
                                 />
                             </div>
+
+                            {/* 添付ファイルセクション */}
+                            {message.attachments && message.attachments.length > 0 && (
+                                <div className="mb-4 pb-4 border-b border-gray-200">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                        </svg>
+                                        <h3 className="text-sm font-semibold text-gray-700">
+                                            添付ファイル ({message.attachments.length}件)
+                                        </h3>
+                                    </div>
+                                    <ul className="space-y-1">
+                                        {message.attachments.map((att) => (
+                                            <li key={att.partIndex} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-sm">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                    </svg>
+                                                    <span className="truncate">{att.fileName}</span>
+                                                    <span className="text-gray-400 shrink-0 text-xs">
+                                                        {att.sizeBytes < 1024 * 1024
+                                                            ? `${(att.sizeBytes / 1024).toFixed(0)}KB`
+                                                            : `${(att.sizeBytes / 1024 / 1024).toFixed(1)}MB`}
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleDownloadAttachment(att.partIndex, att.fileName)}
+                                                    disabled={downloadingIndex === att.partIndex}
+                                                    className="ml-3 shrink-0 text-brand-600 hover:text-brand-800 disabled:opacity-50 p-1.5 rounded hover:bg-brand-50 transition-colors"
+                                                    title="ダウンロード"
+                                                >
+                                                    {downloadingIndex === att.partIndex ? (
+                                                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                                        </svg>
+                                                    ) : (
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                        </svg>
+                                                    )}
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
 
                             <div className="prose max-w-none min-w-0 overflow-x-hidden break-words">
                                 {hasBlockedImages && (

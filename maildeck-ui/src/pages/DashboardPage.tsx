@@ -1,12 +1,10 @@
-import { fetchAuthSession } from 'aws-amplify/auth';
-import axios from 'axios';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ComposeModal from '../components/ComposeModal';
 import MailDetailModal from '../components/MailDetailModal';
 import LabelBadge from '../components/LabelBadge';
 import SearchBar from '../components/SearchBar';
-import { getInbox, getInboxFolder, getServerConfigs, getDrafts, getSpam, getTrash, emptyTrash, bulkMoveToTrash, bulkDeleteFromTrash, bulkRestoreFromTrash, markAsRead, bulkMarkAsRead } from '../lib/api';
+import { getInbox, getInboxFolder, getServerConfigs, getDrafts, getSpam, getTrash, emptyTrash, bulkMoveToTrash, bulkDeleteFromTrash, bulkRestoreFromTrash, markAsRead, bulkMarkAsRead, sendMail } from '../lib/api';
 import type { Label } from '../types/label';
 import { useToast } from '../contexts/ToastContext';
 import { useLabels } from '../contexts/LabelContext';
@@ -14,7 +12,6 @@ import { parseSearchQuery } from '../utils/searchParser';
 import { addSearchHistory } from '../utils/searchHistory';
 import type { SearchQuery } from '../types/search';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 interface Account {
     id: string;
@@ -565,40 +562,19 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         setSelectedMail(null);
     };
 
-    const handleSendMail = async (to: string, subject: string, body: string, configId: string, cc?: string, bcc?: string, replyTo?: string) => {
+    const handleSendMail = async (to: string, subject: string, body: string, configId: string, cc?: string, bcc?: string, replyTo?: string, attachments?: File[]) => {
         if (!configId) {
             toast.warning('アカウントを選択してください');
             return;
         }
 
-        const session = await fetchAuthSession();
-        const token = session.tokens?.idToken?.toString();
-
-        if (!token) {
-            toast.error('認証エラー: ログインし直してください。');
-            return;
-        }
-
         try {
-            await axios.post(`${API_BASE}/mail/send`, {
-                to,
-                cc: cc ?? '',
-                bcc: bcc ?? '',
-                replyTo: replyTo ?? '',
-                subject,
-                body,
-                configId
-            }, {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
-
+            await sendMail({ configId, to, subject, body, cc, bcc, replyTo, attachments });
             toast.success('メールを送信しました！');
             setIsComposeOpen(false);
         } catch (error) {
             console.error(error);
-            toast.error('送信失敗');
+            toast.error('送信失敗: ' + (error instanceof Error ? error.message : '不明なエラー'));
         }
     };
 
