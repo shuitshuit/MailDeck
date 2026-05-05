@@ -126,7 +126,10 @@ public class MailController : BaseAuthController
                         From = s.Envelope!.From.ToString(),
                         Date = s.InternalDate ?? s.Date.DateTime,
                         IsRead = s.Flags?.HasFlag(MessageFlags.Seen) ?? false,
-                        Labels = labels
+                        Labels = labels,
+                        MessageId = s.Envelope!.MessageId,
+                        InReplyTo = s.Envelope!.InReplyTo,
+                        ThreadKey = NormalizeSubject(s.Envelope!.Subject ?? string.Empty)
                     });
                 }
 
@@ -209,7 +212,10 @@ public class MailController : BaseAuthController
                         From = s.Envelope.From.ToString(),
                         Date = s.InternalDate ?? s.Date.DateTime,
                         IsRead = s.Flags?.HasFlag(MessageFlags.Seen) ?? false,
-                        Labels = labels
+                        Labels = labels,
+                        MessageId = s.Envelope!.MessageId,
+                        InReplyTo = s.Envelope!.InReplyTo,
+                        ThreadKey = NormalizeSubject(s.Envelope!.Subject ?? string.Empty)
                     });
                 }
 
@@ -1436,6 +1442,106 @@ public class MailController : BaseAuthController
         {
             _db.Close();
         }
+    }
+
+    [HttpGet("thread-messages")]
+    [ProducesResponseType(typeof(List<ThreadMessageSummaryResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetThreadMessages(Guid configId, string threadKey, int maxMessages = 50)
+    {
+        var userId = GetUserId();
+        try
+        {
+            await _db.OpenAsync();
+            var configs = await _db.GetMultipleAsync<Models.UserServerConfig>(new { id = configId, user_id = userId });
+            var config = configs.FirstOrDefault();
+            if (config == null) return NotFound("Configuration not found");
+
+            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
+            using var client = new ImapClient();
+            await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
+            await client.AuthenticateAsync(config.ImapUsername, password);
+
+            var inbox = client.Inbox;
+            await inbox.OpenAsync(FolderAccess.ReadOnly);
+
+            IList<UniqueId> uids;
+            try
+            {
+                var query = MailKit.Search.SearchQuery.SubjectContains(threadKey);
+                uids = await inbox.SearchAsync(query);
+            }
+            catch
+            {
+                var total = inbox.Count;
+                var start = Math.Max(0, total - maxMessages);
+                var fallback = await inbox.FetchAsync(start, total - 1, MessageSummaryItems.UniqueId | MessageSummaryItems.Envelope);
+                uids = fallback.Select(s => s.UniqueId).ToList();
+            }
+
+            if (uids.Count == 0)
+            {
+                await client.DisconnectAsync(true);
+                return Ok(new List<ThreadMessageSummaryResponse>());
+            }
+
+            var recentUids = uids.OrderByDescending(u => u.Id).Take(maxMessages).ToList();
+            var summaries = await inbox.FetchAsync(recentUids, MessageSummaryItems.Envelope |
+                MessageSummaryItems.InternalDate | MessageSummaryItems.UniqueId | MessageSummaryItems.Flags);
+
+            var messages = new List<ThreadMessageSummaryResponse>();
+            foreach (var s in summaries)
+            {
+                var normalizedSubject = NormalizeSubject(s.Envelope?.Subject ?? string.Empty);
+                if (!string.IsNullOrEmpty(threadKey) && normalizedSubject != threadKey) continue;
+
+                messages.Add(new ThreadMessageSummaryResponse
+                {
+                    Id = s.UniqueId.Id,
+                    Subject = s.Envelope?.Subject ?? string.Empty,
+                    From = s.Envelope?.From.ToString() ?? string.Empty,
+                    To = s.Envelope?.To.ToString() ?? string.Empty,
+                    Cc = s.Envelope?.Cc.ToString() ?? string.Empty,
+                    Date = s.InternalDate ?? s.Date,
+                    IsRead = s.Flags?.HasFlag(MessageFlags.Seen) ?? false,
+                    MessageId = s.Envelope?.MessageId,
+                    InReplyTo = s.Envelope?.InReplyTo,
+                    ThreadKey = normalizedSubject
+                });
+            }
+
+            messages = messages.OrderBy(m => m.Date).ToList();
+            await client.DisconnectAsync(true);
+            return Ok(messages);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogErrorWithSql(ex, "Failed to fetch thread messages");
+            return StatusCode(500, "Failed to fetch thread messages: " + ex.Message);
+        }
+    }
+
+    private string NormalizeSubject(string subject)
+    {
+        if (string.IsNullOrEmpty(subject)) return string.Empty;
+        var normalized = subject.Trim();
+        var prefixes = new[] { "re:", "fwd:", "fw:", "aw:", "tr:", "rés:", "ref:" };
+        bool changed = true;
+        while (changed)
+        {
+            changed = false;
+            foreach (var prefix in prefixes)
+            {
+                if (normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    normalized = normalized.Substring(prefix.Length).Trim();
+                    changed = true;
+                    break;
+                }
+            }
+        }
+        return normalized.ToLowerInvariant();
     }
 
     private SecureSocketOptions GetSecureSocketOptions(int port, bool sslEnabled)
