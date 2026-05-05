@@ -88,6 +88,7 @@ export async function sendMail(params: {
     cc?: string;
     bcc?: string;
     replyTo?: string;
+    isHtml?: boolean;
 }) {
     await authFetch('/mail/send', {
         method: 'POST',
@@ -99,6 +100,7 @@ export async function sendMail(params: {
             cc: params.cc ?? '',
             bcc: params.bcc ?? '',
             replyTo: params.replyTo ?? '',
+            isHtml: params.isHtml ?? false,
         }),
     });
 }

@@ -565,7 +565,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         setSelectedMail(null);
     };
 
-    const handleSendMail = async (to: string, subject: string, body: string, configId: string, cc?: string, bcc?: string, replyTo?: string) => {
+    const handleSendMail = async (to: string, subject: string, body: string, configId: string, cc?: string, bcc?: string, replyTo?: string, isHtml?: boolean) => {
         if (!configId) {
             toast.warning('アカウントを選択してください');
             return;
@@ -587,7 +587,8 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                 replyTo: replyTo ?? '',
                 subject,
                 body,
-                configId
+                configId,
+                isHtml: isHtml ?? false,
             }, {
                 headers: {
                     Authorization: `Bearer ${token}`

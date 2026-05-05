@@ -3,6 +3,7 @@ import { getContacts } from '../lib/api';
 import { useModalClose } from '../hooks/useModalClose';
 import { useToast } from '../contexts/ToastContext';
 import EmailChipInput from './EmailChipInput';
+import RichTextEditor from './RichTextEditor';
 
 export interface Account {
     id: string;
@@ -12,7 +13,7 @@ export interface Account {
 interface ComposeModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSend: (to: string, subject: string, body: string, configId: string, cc?: string, bcc?: string, replyTo?: string) => Promise<void>;
+    onSend: (to: string, subject: string, body: string, configId: string, cc?: string, bcc?: string, replyTo?: string, isHtml?: boolean) => Promise<void>;
     accounts: Account[];
     initialTo?: string;
     initialSubject?: string;
@@ -23,13 +24,13 @@ interface ComposeModalProps {
 
 export default function ComposeModal({ isOpen, onClose, onSend, accounts, initialTo = '', initialSubject = '', initialBody = '', initialConfigId, initialReplyTo = '' }: ComposeModalProps) {
     const [toChips, setToChips] = useState<string[]>(initialTo ? [initialTo] : []);
-    // Initialize with the first account ID if available
     const [configId, setConfigId] = useState<string | undefined>(undefined);
     const [ccChips, setCcChips] = useState<string[]>([]);
     const [bccChips, setBccChips] = useState<string[]>([]);
     const [replyTo, setReplyTo] = useState(initialReplyTo);
     const [subject, setSubject] = useState(initialSubject);
     const [body, setBody] = useState(initialBody);
+    const [isHtml, setIsHtml] = useState(true);
     const [isSending, setIsSending] = useState(false);
     const [contacts, setContacts] = useState<{ name: string, email: string }[]>([]);
     const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
@@ -79,9 +80,9 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
                 configId,
                 ccChips.length > 0 ? ccChips.join(', ') : undefined,
                 bccChips.length > 0 ? bccChips.join(', ') : undefined,
-                replyTo || undefined
+                replyTo || undefined,
+                isHtml
             );
-            // Reset form
             setToChips([]);
             setCcChips([]);
             setBccChips([]);
@@ -168,14 +169,35 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
                                 required
                             />
                         </div>
+
+                        {/* Rich text / Plain text toggle */}
+                        <div className="flex items-center justify-end pt-1 pb-0.5">
+                            <span className="text-xs text-gray-500 mr-2">書式設定</span>
+                            <button
+                                type="button"
+                                onClick={() => setIsHtml(v => !v)}
+                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isHtml ? 'bg-brand-500' : 'bg-gray-300'}`}
+                            >
+                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${isHtml ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                            </button>
+                        </div>
+
                         <div className="min-h-[160px]">
-                            <textarea
-                                placeholder="本文を入力..."
-                                value={body}
-                                onChange={(e) => setBody(e.target.value)}
-                                className="w-full p-3 resize-y focus:outline-none text-base min-h-[160px]"
-                                required
-                            />
+                            {isHtml ? (
+                                <RichTextEditor
+                                    content={body}
+                                    onChange={setBody}
+                                    placeholder="本文を入力..."
+                                />
+                            ) : (
+                                <textarea
+                                    placeholder="本文を入力..."
+                                    value={body}
+                                    onChange={(e) => setBody(e.target.value)}
+                                    className="w-full p-3 resize-y focus:outline-none text-base min-h-[160px] border border-gray-200 rounded-lg focus:border-brand-400 transition-colors"
+                                    required
+                                />
+                            )}
                         </div>
                     </div>
 

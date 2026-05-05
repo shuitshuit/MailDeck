@@ -582,10 +582,22 @@ public class MailController : BaseAuthController
                 message.ReplyTo.Add(new MailboxAddress("", request.ReplyTo));
             message.Subject = request.Subject;
 
-            message.Body = new TextPart("plain")
+            if (request.IsHtml)
             {
-                Text = request.Body
-            };
+                var plainText = System.Text.RegularExpressions.Regex.Replace(request.Body, "<[^>]+>", "");
+                plainText = System.Net.WebUtility.HtmlDecode(plainText).Trim();
+                var multipart = new MultipartAlternative();
+                multipart.Add(new TextPart("plain") { Text = plainText });
+                multipart.Add(new TextPart("html") { Text = request.Body });
+                message.Body = multipart;
+            }
+            else
+            {
+                message.Body = new TextPart("plain")
+                {
+                    Text = request.Body
+                };
+            }
 
             using (var client = new SmtpClient())
             {
