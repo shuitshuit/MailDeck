@@ -731,6 +731,35 @@ public class MailController : BaseAuthController
 
             _logger.LogInformation($"Email sent to {request.To}");
 
+            // Sentフォルダへコピー (失敗しても送信は成功扱い)
+            try
+            {
+                var folderPaths = await _db.GetMultipleAsync<ImapFolders>(new
+                {
+                    config_id = request.ConfigId,
+                    user_id = userId
+                });
+                var sentFolderPath = folderPaths
+                    .FirstOrDefault(f => f.DisplayName is "Sent")?.ImapPath
+                    ?? folderPaths.FirstOrDefault(f =>
+                        f.ImapPath.Contains("sent", StringComparison.OrdinalIgnoreCase) ||
+                        f.ImapPath == "送信済み")?.ImapPath
+                    ?? "Sent";
+
+                var imapPassword = await _encryptionService.DecryptAsync(config.ImapPassword);
+                using var imapClient = new ImapClient();
+                await imapClient.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
+                await imapClient.AuthenticateAsync(config.ImapUsername, imapPassword);
+                var sentFolder = await imapClient.GetFolderAsync(sentFolderPath);
+                await sentFolder.OpenAsync(FolderAccess.ReadWrite);
+                await sentFolder.AppendAsync(message, MessageFlags.Seen);
+                await imapClient.DisconnectAsync(true);
+            }
+            catch (Exception sentEx)
+            {
+                _logger.LogWarning(sentEx, "Failed to copy sent message to Sent folder");
+            }
+
             return Ok(new { success = true });
         }
         catch (Exception ex)
@@ -993,6 +1022,26 @@ public class MailController : BaseAuthController
                 // Delete the draft after sending
                 await draftsFolder.AddFlagsAsync(uid, MessageFlags.Deleted, true);
                 await draftsFolder.ExpungeAsync();
+
+                // Sentフォルダへコピー
+                try
+                {
+                    var sentFolderPaths = await _db.GetMultipleAsync<ImapFolders>(new { config_id = configId, user_id = userId });
+                    var sentFolderPath = sentFolderPaths
+                        .FirstOrDefault(f => f.DisplayName is "Sent")?.ImapPath
+                        ?? sentFolderPaths.FirstOrDefault(f =>
+                            f.ImapPath.Contains("sent", StringComparison.OrdinalIgnoreCase) ||
+                            f.ImapPath == "送信済み")?.ImapPath
+                        ?? "Sent";
+                    var sentFolder = await client.GetFolderAsync(sentFolderPath);
+                    await sentFolder.OpenAsync(FolderAccess.ReadWrite);
+                    await sentFolder.AppendAsync(message, MessageFlags.Seen);
+                }
+                catch (Exception sentEx)
+                {
+                    _logger.LogWarning(sentEx, "Failed to copy sent draft to Sent folder");
+                }
+
                 await client.DisconnectAsync(true);
                 return Ok(new { success = true });
             }
