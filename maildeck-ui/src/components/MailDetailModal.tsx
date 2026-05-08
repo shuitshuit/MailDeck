@@ -21,6 +21,13 @@ interface ReplyData {
     replyTo: string;
 }
 
+interface ForwardData {
+    to: string;
+    subject: string;
+    body: string;
+    configId: string;
+}
+
 interface MailDetailModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -29,6 +36,7 @@ interface MailDetailModalProps {
     folderType?: FolderType;
     onMessageDeleted?: () => void;
     onReply?: (replyData: ReplyData) => void;
+    onForward?: (forwardData: ForwardData) => void;
     onFilterByAddress?: (address: string) => void;
 }
 
@@ -63,7 +71,7 @@ function extractEmailAddresses(str: string): { display: string; email: string }[
     }).filter(p => p.email.includes('@'));
 }
 
-export default function MailDetailModal({ isOpen, onClose, configId, messageId, folderType = 'inbox', onMessageDeleted, onReply, onFilterByAddress }: MailDetailModalProps) {
+export default function MailDetailModal({ isOpen, onClose, configId, messageId, folderType = 'inbox', onMessageDeleted, onReply, onForward, onFilterByAddress }: MailDetailModalProps) {
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState<MessageDetail | null>(null);
     const [showImages, setShowImages] = useState(false);
@@ -337,6 +345,29 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
         onReply({ to: toAddress, subject: replySubject, body: quotedBody, configId, replyTo: message.from });
     };
 
+    // Handle forward
+    const handleForward = () => {
+        if (!message || !onForward) return;
+
+        const fwdSubject = message.subject.startsWith('Fwd: ')
+            ? message.subject
+            : `Fwd: ${message.subject}`;
+
+        const dateStr = new Date(message.date).toLocaleString('ja-JP');
+        const quotedBody = [
+            '',
+            `--- 転送メッセージ ---`,
+            `From: ${message.from}`,
+            `Date: ${dateStr}`,
+            `Subject: ${message.subject}`,
+            `To: ${message.to}`,
+            '',
+            message.bodyText || '（本文なし）'
+        ].join('\n');
+
+        onForward({ to: '', subject: fwdSubject, body: quotedBody, configId });
+    };
+
     // Handle unsubscribe
     const handleUnsubscribe = async () => {
         if (!message) return;
@@ -457,6 +488,19 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                </svg>
+                            </button>
+                        )}
+                        {/* Forward button */}
+                        {folderType !== 'trash' && folderType !== 'drafts' && onForward && (
+                            <button
+                                onClick={handleForward}
+                                disabled={!message || actionLoading}
+                                className="text-gray-500 hover:text-brand-600 hover:bg-brand-50 p-2.5 rounded-lg transition-colors disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                title="転送"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 10H11a8 8 0 00-8 8v2M21 10l-6-6m6 6l-6 6" />
                                 </svg>
                             </button>
                         )}

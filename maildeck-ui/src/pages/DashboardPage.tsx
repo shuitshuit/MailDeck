@@ -45,6 +45,8 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
     const [loading, setLoading] = useState(false);
     const [isComposeOpen, setIsComposeOpen] = useState(false);
     const [replyData, setReplyData] = useState<{ to: string; subject: string; body: string; configId: string; replyTo: string } | null>(null);
+    const [forwardData, setForwardData] = useState<{ to: string; subject: string; body: string; configId: string } | null>(null);
+    const [composeMode, setComposeMode] = useState<'compose' | 'reply' | 'forward'>('compose');
     const [activeTab, setActiveTab] = useState<string | null>(null);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [page, setPage] = useState(1);
@@ -551,7 +553,17 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
 
     const handleReply = (data: { to: string; subject: string; body: string; configId: string; replyTo: string }) => {
         setSelectedMail(null);
+        setForwardData(null);
         setReplyData(data);
+        setComposeMode('reply');
+        setIsComposeOpen(true);
+    };
+
+    const handleForward = (data: { to: string; subject: string; body: string; configId: string }) => {
+        setSelectedMail(null);
+        setReplyData(null);
+        setForwardData(data);
+        setComposeMode('forward');
         setIsComposeOpen(true);
     };
 
@@ -605,7 +617,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                         </button>
                     )}
                     <button
-                        onClick={() => setIsComposeOpen(true)}
+                        onClick={() => { setReplyData(null); setForwardData(null); setComposeMode('compose'); setIsComposeOpen(true); }}
                         className="bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 shadow-sm font-medium flex items-center justify-center gap-2 flex-1 md:flex-none"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -939,13 +951,16 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                 onClose={() => {
                     setIsComposeOpen(false);
                     setReplyData(null);
+                    setForwardData(null);
+                    setComposeMode('compose');
                 }}
                 onSend={handleSendMail}
                 accounts={accounts}
-                initialTo={replyData?.to ?? ''}
-                initialSubject={replyData?.subject ?? ''}
-                initialBody={replyData?.body ?? ''}
-                initialConfigId={replyData?.configId}
+                mode={composeMode}
+                initialTo={replyData?.to ?? forwardData?.to ?? ''}
+                initialSubject={replyData?.subject ?? forwardData?.subject ?? ''}
+                initialBody={replyData?.body ?? forwardData?.body ?? ''}
+                initialConfigId={replyData?.configId ?? forwardData?.configId}
                 initialReplyTo={replyData?.replyTo ?? ''}
             />
 
@@ -965,6 +980,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     folderType={folderType}
                     onMessageDeleted={loadInbox}
                     onReply={handleReply}
+                    onForward={handleForward}
                     onFilterByAddress={handleFilterByAddress}
                 />
             )}

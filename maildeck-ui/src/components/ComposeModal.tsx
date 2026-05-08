@@ -19,9 +19,10 @@ interface ComposeModalProps {
     initialBody?: string;
     initialConfigId?: string;
     initialReplyTo?: string;
+    mode?: 'compose' | 'reply' | 'forward';
 }
 
-export default function ComposeModal({ isOpen, onClose, onSend, accounts, initialTo = '', initialSubject = '', initialBody = '', initialConfigId, initialReplyTo = '' }: ComposeModalProps) {
+export default function ComposeModal({ isOpen, onClose, onSend, accounts, initialTo = '', initialSubject = '', initialBody = '', initialConfigId, initialReplyTo = '', mode = 'compose' }: ComposeModalProps) {
     const [toChips, setToChips] = useState<string[]>(initialTo ? [initialTo] : []);
     // Initialize with the first account ID if available
     const [configId, setConfigId] = useState<string | undefined>(undefined);
@@ -107,7 +108,9 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4" onClick={handleBackdropClick}>
             <div ref={modalContentRef} className="bg-white rounded-t-2xl md:rounded-xl shadow-xl w-full max-w-2xl relative z-10 flex flex-col h-[92dvh] md:h-auto md:max-h-[90vh]">
                 <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
-                    <h2 className="text-base font-bold text-gray-800">{initialSubject.startsWith('Re:') ? '返信' : '新規メール作成'}</h2>
+                    <h2 className="text-base font-bold text-gray-800">
+                        {mode === 'reply' ? '返信' : mode === 'forward' ? '転送' : '新規メール作成'}
+                    </h2>
                     <button
                         onClick={onClose}
                         className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 min-w-[44px] min-h-[44px] flex items-center justify-center"
@@ -126,7 +129,7 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
                                 onChange={(e) => setConfigId(e.target.value)}
                                 className="w-full px-3 py-3 border-b border-gray-200 focus:outline-none focus:border-brand-500 transition-colors bg-transparent text-base disabled:opacity-60 disabled:cursor-not-allowed"
                                 required
-                                disabled={!!initialConfigId}
+                                disabled={!!initialConfigId && mode !== 'forward'}
                             >
                                 {accounts.map(account => (
                                     <option key={account.id} value={account.id}>
@@ -154,16 +157,18 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
                             onChange={setBccChips}
                             contacts={contacts}
                         />
-                        <div>
-                            <input
-                                type="email"
-                                placeholder="返信先 (Reply-To)"
-                                value={replyTo}
-                                onChange={(e) => setReplyTo(e.target.value)}
-                                className="w-full px-3 py-3 border-b border-gray-200 focus:outline-none focus:border-brand-500 transition-colors text-base"
-                                disabled={!!initialConfigId}
-                            />
-                        </div>
+                        {mode !== 'forward' && (
+                            <div>
+                                <input
+                                    type="email"
+                                    placeholder="返信先 (Reply-To)"
+                                    value={replyTo}
+                                    onChange={(e) => setReplyTo(e.target.value)}
+                                    className="w-full px-3 py-3 border-b border-gray-200 focus:outline-none focus:border-brand-500 transition-colors text-base"
+                                    disabled={!!initialConfigId}
+                                />
+                            </div>
+                        )}
                         <div>
                             <input
                                 type="text"
