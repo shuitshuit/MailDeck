@@ -99,9 +99,9 @@ export async function sendMail(params: {
     formData.append('to', params.to);
     formData.append('subject', params.subject);
     formData.append('body', params.body);
-    formData.append('cc', params.cc ?? '');
-    formData.append('bcc', params.bcc ?? '');
-    formData.append('replyTo', params.replyTo ?? '');
+    if (params.cc) formData.append('cc', params.cc);
+    if (params.bcc) formData.append('bcc', params.bcc);
+    if (params.replyTo) formData.append('replyTo', params.replyTo);
     params.attachments?.forEach(file => formData.append('attachments', file));
 
     await authFetch('/mail/send', { method: 'POST', body: formData }, true);
