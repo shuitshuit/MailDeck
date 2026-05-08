@@ -6,7 +6,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 /**
  * Helper to make authenticated API requests
  */
-async function authFetch(endpoint: string, options: RequestInit = {}) {
+async function authFetch(endpoint: string, options: RequestInit = {}, skipContentType = false) {
     const session = await fetchAuthSession();
     const token = session.tokens?.accessToken?.toString();
 
@@ -14,11 +14,14 @@ async function authFetch(endpoint: string, options: RequestInit = {}) {
         throw new Error('No authentication token found');
     }
 
-    const headers = {
-        'Content-Type': 'application/json',
+    const headers: Record<string, string> = {
         'Authorization': `Bearer ${token}`,
-        ...options.headers,
+        ...(options.headers as Record<string, string>),
     };
+
+    if (!skipContentType) {
+        headers['Content-Type'] = 'application/json';
+    }
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
@@ -26,7 +29,8 @@ async function authFetch(endpoint: string, options: RequestInit = {}) {
     });
 
     if (!response.ok) {
-        throw new Error(`API call failed: ${response.statusText}`);
+        const errorText = await response.text().catch(() => response.statusText);
+        throw new Error(errorText || `API call failed: ${response.statusText}`);
     }
 
     return response;
@@ -88,19 +92,53 @@ export async function sendMail(params: {
     cc?: string;
     bcc?: string;
     replyTo?: string;
+    attachments?: File[];
 }) {
-    await authFetch('/mail/send', {
-        method: 'POST',
-        body: JSON.stringify({
-            configId: params.configId,
-            to: params.to,
-            subject: params.subject,
-            body: params.body,
-            cc: params.cc ?? '',
-            bcc: params.bcc ?? '',
-            replyTo: params.replyTo ?? '',
-        }),
-    });
+    const formData = new FormData();
+    formData.append('configId', params.configId);
+    formData.append('to', params.to);
+    formData.append('subject', params.subject);
+    formData.append('body', params.body);
+    if (params.cc) formData.append('cc', params.cc);
+    if (params.bcc) formData.append('bcc', params.bcc);
+    if (params.replyTo) formData.append('replyTo', params.replyTo);
+    params.attachments?.forEach(file => formData.append('attachments', file));
+
+    await authFetch('/mail/send', { method: 'POST', body: formData }, true);
+}
+
+/**
+ * Download an attachment from a message
+ */
+export async function downloadAttachment(
+    configId: string,
+    messageId: string | number,
+    partIndex: number,
+    fileName: string
+): Promise<void> {
+    const session = await fetchAuthSession();
+    const token = session.tokens?.accessToken?.toString();
+    if (!token) throw new Error('No authentication token found');
+
+    const response = await fetch(
+        `${API_BASE_URL}/mail/attachment/${messageId}/${partIndex}?configId=${configId}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+
+    if (!response.ok) {
+        const text = await response.text().catch(() => response.statusText);
+        throw new Error(text || 'ダウンロードに失敗しました');
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 /**

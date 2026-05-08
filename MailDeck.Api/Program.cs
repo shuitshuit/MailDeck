@@ -190,6 +190,9 @@ try
     // Translation Service
     builder.Services.AddHttpClient<ITranslationService, DeepLTranslationService>();
 
+    // ClamAV Service
+    builder.Services.AddSingleton<IClamAvService, ClamAvService>();
+
     // Firebase Messaging
     FirebaseApp.Create(new AppOptions()
     {
