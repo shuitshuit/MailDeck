@@ -332,6 +332,18 @@ function Layout({ children }: { children: React.ReactNode }) {
           自動ラベリング
         </Link>
         <Link
+          to="/blocked-senders"
+          className={`flex items-center px-4 py-2 rounded-md hover:bg-gray-100 font-medium ${location.pathname.startsWith('/blocked-senders')
+            ? 'bg-gray-100 text-brand-600'
+            : 'text-gray-700'
+            }`}
+        >
+          <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+          </svg>
+          ブロック送信者
+        </Link>
+        <Link
           to="/custom-actions"
           className={`flex items-center px-4 py-2 rounded-md hover:bg-gray-100 font-medium ${location.pathname.startsWith('/custom-actions')
             ? 'bg-gray-100 text-brand-600'
@@ -420,6 +432,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 
 import NotificationListener from './components/Notification ';
 import AutoLabelingPage from './pages/AutoLabelingPage';
+import BlockedSendersPage from './pages/BlockedSendersPage';
 import ContactsPage from './pages/ContactsPage';
 import CustomActionsPage from './pages/CustomActionsPage';
 import LandingPage from './pages/LandingPage';
@@ -530,6 +543,13 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <AutoLabelingPage />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/blocked-senders" element={
+              <ProtectedRoute>
+                <Layout>
+                  <BlockedSendersPage />
                 </Layout>
               </ProtectedRoute>
             } />

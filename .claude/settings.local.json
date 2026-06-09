@@ -5,7 +5,15 @@
       "Bash(xargs cat:*)",
       "Bash(npm run build:*)",
       "Bash(dotnet build:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git -C c:/Users/shuitt/source/repos/MailDeck commit -m ' *)",
+      "Bash(git -C \"c:/Users/shuitt/source/repos/MailDeck\" push -u origin *)",
+      "Bash(gh pr create --title '*' --body ' *)",
+      "Bash(git -C \"c:/Users/shuitt/source/repos/MailDeck\" status)",
+      "Bash(git -C \"c:/Users/shuitt/source/repos/MailDeck\" diff)",
+      "Bash(git -C \"c:/Users/shuitt/source/repos/MailDeck\" log --oneline -3)",
+      "Bash(git -C \"c:/Users/shuitt/source/repos/MailDeck\" checkout -b *)",
+      "Bash(git -C \"c:/Users/shuitt/source/repos/MailDeck\" add .claude/settings.local.json MailDeck.Api/Services/AutoLabelingService.cs MailDeck.Api/Controllers/BlockedSendersController.cs MailDeck.Api/Models/BlockedSender.cs database/migrations/019_blocked_senders.sql maildeck-ui/src/App.tsx maildeck-ui/src/lib/api.ts maildeck-ui/src/components/BlockedSenderModal.tsx maildeck-ui/src/pages/BlockedSendersPage.tsx maildeck-ui/src/types/blockedSenders.ts)"
     ]
   },
   "outputStyle": "default"

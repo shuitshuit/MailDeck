@@ -755,3 +755,37 @@ export async function translateText(request: TranslateRequest): Promise<Translat
     });
     return await response.json();
 }
+
+// ============================================================================
+// Blocked Senders API
+// ============================================================================
+
+export async function getBlockedSenders() {
+    const response = await authFetch('/blocked-senders');
+    return await response.json();
+}
+
+export async function createBlockedSender(data: { emailAddress: string; note?: string }) {
+    const response = await authFetch('/blocked-senders', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    });
+    return await response.json();
+}
+
+export async function updateBlockedSender(id: string, data: { emailAddress: string; note?: string; isEnabled: boolean }) {
+    const response = await authFetch(`/blocked-senders/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+    });
+    return await response.json();
+}
+
+export async function deleteBlockedSender(id: string) {
+    await authFetch(`/blocked-senders/${id}`, { method: 'DELETE' });
+}
+
+export async function toggleBlockedSender(id: string) {
+    const response = await authFetch(`/blocked-senders/${id}/toggle`, { method: 'POST' });
+    return await response.json();
+}
