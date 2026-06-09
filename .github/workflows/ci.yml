@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-backend:
+    name: Build Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore dependencies
+        run: dotnet restore MailDeck.Api/MailDeck.Api.csproj
+
+      - name: Build
+        run: dotnet build MailDeck.Api/MailDeck.Api.csproj -c Release --no-restore
+
+      - name: Publish
+        run: dotnet publish MailDeck.Api/MailDeck.Api.csproj -c Release -o ./build --no-build
+
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-build
+          path: ./build/
+          retention-days: 1
+
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: maildeck-ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: maildeck-ui
+
+      - name: Lint
+        run: npm run lint
+        working-directory: maildeck-ui
+
+      - name: Build
+        run: npm run build
+        working-directory: maildeck-ui
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_AWS_REGION: ${{ secrets.VITE_AWS_REGION }}
+          VITE_USER_POOL_ID: ${{ secrets.VITE_USER_POOL_ID }}
+          VITE_USER_POOL_CLIENT_ID: ${{ secrets.VITE_USER_POOL_CLIENT_ID }}
+          VITE_COGNITO_DOMAIN: ${{ secrets.VITE_COGNITO_DOMAIN }}
+          VITE_REDIRECT_URI: ${{ secrets.VITE_REDIRECT_URI }}
+          VITE_SIGNOUT_URI: ${{ secrets.VITE_SIGNOUT_URI }}
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: maildeck-ui/dist/
+          retention-days: 1
