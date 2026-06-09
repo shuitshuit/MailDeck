@@ -1,6 +1,20 @@
 import { fetchAuthSession } from 'aws-amplify/auth';
 import type { RuleConditions } from '../types/autoLabeling';
 
+export interface ServerConfigPayload {
+    accountName: string;
+    imapHost: string;
+    imapPort: number;
+    imapSslEnabled: boolean;
+    imapUsername: string;
+    imapPassword: string;
+    smtpHost: string;
+    smtpPort: number;
+    smtpSslEnabled: boolean;
+    smtpUsername: string;
+    smtpPassword: string;
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 /**
@@ -355,7 +369,7 @@ export async function bulkRestoreFromTrash(configId: string, messageIds: number[
 /**
  * Add a new server configuration
  */
-export async function addServerConfig(config: any) {
+export async function addServerConfig(config: ServerConfigPayload) {
     const response = await authFetch('/serverconfig', {
         method: 'POST',
         body: JSON.stringify(config)
@@ -377,7 +391,7 @@ export async function autoConfig(email: string) {
 /**
  * Update server configuration
  */
-export async function updateServerConfig(id: string, config: any) {
+export async function updateServerConfig(id: string, config: ServerConfigPayload) {
     const response = await authFetch(`/serverconfig/${id}`, {
         method: 'PUT',
         body: JSON.stringify(config)

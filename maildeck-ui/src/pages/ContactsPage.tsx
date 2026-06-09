@@ -97,7 +97,7 @@ export default function ContactsPage() {
             });
             setContacts(contacts.filter(c => c.id !== id));
             toast.success('連絡先を削除しました');
-        } catch (err) {
+        } catch {
             toast.error('削除に失敗しました');
         }
     };
