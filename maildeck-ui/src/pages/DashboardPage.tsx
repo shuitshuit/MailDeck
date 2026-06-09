@@ -173,7 +173,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     const fetchSize = page * pageSize;
                     const promises = accounts.map(acc =>
                         getInboxFolder(acc.id, customFolderPath, 1, fetchSize).then(res => ({
-                            messages: (res.messages || []).map((m: any) => ({ ...m, configId: acc.id })),
+                            messages: (res.messages || []).map((m: Omit<Email, 'configId'>) => ({ ...m, configId: acc.id })),
                             total: res.total || 0
                         })).catch(() => ({ messages: [], total: 0 }))
                     );
@@ -186,7 +186,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     setTotalCount(total);
                 } else {
                     const data = await getInboxFolder(activeTab, customFolderPath, page);
-                    const messagesWithConfig = (data.messages || []).map((m: any) => ({ ...m, configId: activeTab }));
+                    const messagesWithConfig = (data.messages || []).map((m: Omit<Email, 'configId'>) => ({ ...m, configId: activeTab }));
                     setMails(messagesWithConfig);
                     setTotalCount(data.total || 0);
                 }
@@ -197,7 +197,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     // 全アカウントから page*pageSize 件取得してフロントでマージ・ソート・スライス
                     const fetchSize = page * pageSize;
                     const promises = accounts.map(acc => apiFunc(acc.id, 1, fetchSize).then(res => ({
-                        messages: (res.messages || []).map((m: any) => ({ ...m, configId: acc.id })),
+                        messages: (res.messages || []).map((m: Omit<Email, 'configId'>) => ({ ...m, configId: acc.id })),
                         total: res.total || 0
                     })));
                     const results = await Promise.all(promises);
@@ -210,7 +210,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                 } else {
                     const data = await apiFunc(activeTab, page);
                     // Inject configId for single tab too for consistency
-                    const messagesWithConfig = (data.messages || []).map((m: any) => ({ ...m, configId: activeTab }));
+                    const messagesWithConfig = (data.messages || []).map((m: Omit<Email, 'configId'>) => ({ ...m, configId: activeTab }));
                     setMails(messagesWithConfig);
                     setTotalCount(data.total || 0);
                 }

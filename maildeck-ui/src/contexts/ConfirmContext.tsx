@@ -15,6 +15,7 @@ interface ConfirmContextType {
 
 const ConfirmContext = createContext<ConfirmContextType | undefined>(undefined);
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useConfirm() {
     const context = useContext(ConfirmContext);
     if (!context) {
