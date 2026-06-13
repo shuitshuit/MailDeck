@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getContacts } from '../lib/api';
 import { useModalClose } from '../hooks/useModalClose';
 import { useToast } from '../contexts/ToastContext';
@@ -13,16 +13,17 @@ export interface Account {
 interface ComposeModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSend: (to: string, subject: string, body: string, configId: string, cc?: string, bcc?: string, replyTo?: string, isHtml?: boolean) => Promise<void>;
+    onSend: (to: string, subject: string, body: string, configId: string, cc?: string, bcc?: string, replyTo?: string, isHtml?: boolean, attachments?: File[]) => Promise<void>;
     accounts: Account[];
     initialTo?: string;
     initialSubject?: string;
     initialBody?: string;
     initialConfigId?: string;
     initialReplyTo?: string;
+    mode?: 'compose' | 'reply' | 'forward';
 }
 
-export default function ComposeModal({ isOpen, onClose, onSend, accounts, initialTo = '', initialSubject = '', initialBody = '', initialConfigId, initialReplyTo = '' }: ComposeModalProps) {
+export default function ComposeModal({ isOpen, onClose, onSend, accounts, initialTo = '', initialSubject = '', initialBody = '', initialConfigId, initialReplyTo = '', mode = 'compose' }: ComposeModalProps) {
     const [toChips, setToChips] = useState<string[]>(initialTo ? [initialTo] : []);
     const [configId, setConfigId] = useState<string | undefined>(undefined);
     const [ccChips, setCcChips] = useState<string[]>([]);
@@ -32,6 +33,9 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
     const [body, setBody] = useState(initialBody);
     const [isHtml, setIsHtml] = useState(true);
     const [isSending, setIsSending] = useState(false);
+    const [attachments, setAttachments] = useState<File[]>([]);
+    const [isDragOver, setIsDragOver] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [contacts, setContacts] = useState<{ name: string, email: string }[]>([]);
     const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
     const toast = useToast();
@@ -48,6 +52,7 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
             setReplyTo(initialReplyTo);
             setSubject(initialSubject);
             setBody(initialBody);
+            setAttachments([]);
             if (initialConfigId) {
                 setConfigId(initialConfigId);
             } else if (accounts.length > 0) {
@@ -81,7 +86,8 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
                 ccChips.length > 0 ? ccChips.join(', ') : undefined,
                 bccChips.length > 0 ? bccChips.join(', ') : undefined,
                 replyTo || undefined,
-                isHtml
+                isHtml,
+                attachments.length > 0 ? attachments : undefined
             );
             setToChips([]);
             setCcChips([]);
@@ -89,6 +95,7 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
             setReplyTo('');
             setSubject('');
             setBody('');
+            setAttachments([]);
             onClose();
         } catch (error) {
             console.error('Failed to send:', error);
@@ -102,7 +109,9 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4" onClick={handleBackdropClick}>
             <div ref={modalContentRef} className="bg-white rounded-t-2xl md:rounded-xl shadow-xl w-full max-w-2xl relative z-10 flex flex-col h-[92dvh] md:h-auto md:max-h-[90vh]">
                 <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
-                    <h2 className="text-base font-bold text-gray-800">{initialSubject.startsWith('Re:') ? '返信' : '新規メール作成'}</h2>
+                    <h2 className="text-base font-bold text-gray-800">
+                        {mode === 'reply' ? '返信' : mode === 'forward' ? '転送' : '新規メール作成'}
+                    </h2>
                     <button
                         onClick={onClose}
                         className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 min-w-[44px] min-h-[44px] flex items-center justify-center"
@@ -121,7 +130,7 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
                                 onChange={(e) => setConfigId(e.target.value)}
                                 className="w-full px-3 py-3 border-b border-gray-200 focus:outline-none focus:border-brand-500 transition-colors bg-transparent text-base disabled:opacity-60 disabled:cursor-not-allowed"
                                 required
-                                disabled={!!initialConfigId}
+                                disabled={!!initialConfigId && mode !== 'forward'}
                             >
                                 {accounts.map(account => (
                                     <option key={account.id} value={account.id}>
@@ -149,16 +158,18 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
                             onChange={setBccChips}
                             contacts={contacts}
                         />
-                        <div>
-                            <input
-                                type="email"
-                                placeholder="返信先 (Reply-To)"
-                                value={replyTo}
-                                onChange={(e) => setReplyTo(e.target.value)}
-                                className="w-full px-3 py-3 border-b border-gray-200 focus:outline-none focus:border-brand-500 transition-colors text-base"
-                                disabled={!!initialConfigId}
-                            />
-                        </div>
+                        {mode !== 'forward' && (
+                            <div>
+                                <input
+                                    type="email"
+                                    placeholder="返信先 (Reply-To)"
+                                    value={replyTo}
+                                    onChange={(e) => setReplyTo(e.target.value)}
+                                    className="w-full px-3 py-3 border-b border-gray-200 focus:outline-none focus:border-brand-500 transition-colors text-base"
+                                    disabled={!!initialConfigId}
+                                />
+                            </div>
+                        )}
                         <div>
                             <input
                                 type="text"
@@ -199,6 +210,66 @@ export default function ComposeModal({ isOpen, onClose, onSend, accounts, initia
                                 />
                             )}
                         </div>
+
+                        {/* ファイル添付エリア */}
+                        <div
+                            className={`mx-1 border-2 border-dashed rounded-lg p-3 text-center transition-colors cursor-pointer ${
+                                isDragOver ? 'border-brand-500 bg-brand-50' : 'border-gray-200 hover:border-gray-400'
+                            }`}
+                            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                            onDragLeave={() => setIsDragOver(false)}
+                            onDrop={(e) => {
+                                e.preventDefault();
+                                setIsDragOver(false);
+                                const files = Array.from(e.dataTransfer.files);
+                                setAttachments(prev => [...prev, ...files]);
+                            }}
+                            onClick={() => fileInputRef.current?.click()}
+                        >
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                multiple
+                                className="hidden"
+                                onChange={(e) => {
+                                    const files = Array.from(e.target.files ?? []);
+                                    setAttachments(prev => [...prev, ...files]);
+                                    e.target.value = '';
+                                }}
+                            />
+                            <p className="text-sm text-gray-500">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 inline mr-1 mb-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                </svg>
+                                ファイルをドラッグ&ドロップ、またはクリックして選択
+                            </p>
+                        </div>
+
+                        {/* 添付ファイルリスト */}
+                        {attachments.length > 0 && (
+                            <ul className="mx-1 space-y-1">
+                                {attachments.map((file, i) => (
+                                    <li key={i} className="flex items-center justify-between bg-gray-100 rounded px-3 py-1.5 text-sm">
+                                        <span className="truncate flex-1">{file.name}</span>
+                                        <span className="text-gray-400 ml-2 shrink-0 text-xs">
+                                            {file.size < 1024 * 1024
+                                                ? `${(file.size / 1024).toFixed(0)}KB`
+                                                : `${(file.size / 1024 / 1024).toFixed(1)}MB`}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
+                                            className="ml-2 text-red-500 hover:text-red-700 shrink-0 min-w-[24px] min-h-[24px] flex items-center justify-center"
+                                            title="削除"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
                     </div>
 
                     <div className="px-4 py-3 border-t bg-gray-50 flex gap-3 shrink-0">

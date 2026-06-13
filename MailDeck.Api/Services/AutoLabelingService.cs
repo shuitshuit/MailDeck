@@ -3,6 +3,10 @@ using System.Text.RegularExpressions;
 using FirebaseAdmin.Messaging;
 using MailDeck.Api.Models;
 using MailDeck.Api.Extensions;
+using MailKit;
+using MailKit.Net.Imap;
+using MailKit.Security;
+using MimeKit;
 using Npgsql;
 using ShuitNet.ORM.PostgreSQL.LinqToSql;
 
@@ -66,6 +70,31 @@ public class AutoLabelingService : BackgroundService
         try
         {
             await db.OpenAsync();
+
+            // 0. Check blocked senders BEFORE auto-labeling rules
+            var configGuid = Guid.Parse(notification.ConfigId);
+            var blockedSenders = await db.GetMultipleAsync<BlockedSender>(new
+            {
+                user_id = notification.UserId,
+                is_enabled = true
+            });
+
+            if (blockedSenders.Any())
+            {
+                var fromAddress = ExtractEmailAddress(notification.From);
+                var isBlocked = blockedSenders.Any(b =>
+                    b.EmailAddress.Equals(fromAddress, StringComparison.OrdinalIgnoreCase));
+
+                if (isBlocked)
+                {
+                    _logger.LogInformation(
+                        "Blocked sender detected for message {MessageId} from {From}, moving to Spam",
+                        notification.MessageId, notification.From);
+
+                    await MoveToSpamAsync(notification, configGuid, db);
+                    return;
+                }
+            }
 
             // 1. Get user's enabled rules sorted by priority
             var allRules = await db.GetMultipleAsync<AutoLabelingRule>(new { user_id = notification.UserId });
@@ -343,6 +372,87 @@ public class AutoLabelingService : BackgroundService
             _logger.LogWarning("Regex evaluation failed for pattern '{Pattern}': {Message}", pattern, ex.Message);
             return false;
         }
+    }
+
+    private async Task MoveToSpamAsync(
+        NewEmailNotification notification,
+        Guid configGuid,
+        ShuitNet.ORM.PostgreSQL.PostgreSqlConnect db)
+    {
+        try
+        {
+            var configs = await db.GetMultipleAsync<UserServerConfig>(new
+            {
+                id = configGuid,
+                user_id = notification.UserId
+            });
+            var config = configs.FirstOrDefault();
+            if (config == null)
+            {
+                _logger.LogWarning("Config {ConfigId} not found for spam move", configGuid);
+                return;
+            }
+
+            var folderPaths = await db.GetMultipleAsync<ImapFolders>(new
+            {
+                config_id = configGuid
+            });
+            var spamFolderPath = folderPaths
+                .FirstOrDefault(f => f.ImapPath is "Junk" or "迷惑メール" or "spam")?.ImapPath
+                ?? folderPaths.FirstOrDefault(f => f.DisplayName is "Junk" or "迷惑メール" or "spam")?.ImapPath
+                ?? "Junk";
+
+            var encryptionService = _serviceProvider.GetRequiredService<IEncryptionService>();
+            var password = await encryptionService.DecryptAsync(config.ImapPassword);
+
+            using var client = new ImapClient();
+            await client.ConnectAsync(
+                config.ImapHost,
+                config.ImapPort,
+                GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
+            await client.AuthenticateAsync(config.ImapUsername, password);
+
+            var inbox = client.Inbox;
+            if (inbox == null)
+            {
+                _logger.LogWarning("Inbox not found for config {ConfigId}", configGuid);
+                return;
+            }
+            await inbox.OpenAsync(FolderAccess.ReadWrite);
+
+            var uid = new UniqueId((uint)notification.MessageId);
+            var spamFolder = await client.GetFolderAsync(spamFolderPath);
+            await inbox.MoveToAsync(uid, spamFolder);
+
+            await client.DisconnectAsync(true);
+
+            _logger.LogInformation(
+                "Moved blocked message {MessageId} to Spam folder '{SpamFolder}'",
+                notification.MessageId, spamFolderPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogErrorWithSql(ex,
+                "Failed to move blocked message {MessageId} to Spam",
+                notification.MessageId);
+        }
+    }
+
+    private static string ExtractEmailAddress(string? from)
+    {
+        if (string.IsNullOrEmpty(from)) return string.Empty;
+        var match = Regex.Match(from, @"<([^>]+)>");
+        return match.Success ? match.Groups[1].Value.Trim() : from.Trim();
+    }
+
+    private static SecureSocketOptions GetSecureSocketOptions(int port, bool sslEnabled)
+    {
+        if (sslEnabled)
+        {
+            if (port == 465 || port == 993) return SecureSocketOptions.SslOnConnect;
+            return SecureSocketOptions.StartTls;
+        }
+        return SecureSocketOptions.Auto;
     }
 
     /// <summary>

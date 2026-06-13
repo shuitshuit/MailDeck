@@ -1,12 +1,26 @@
 import { fetchAuthSession } from 'aws-amplify/auth';
 import type { RuleConditions } from '../types/autoLabeling';
 
+export interface ServerConfigPayload {
+    accountName: string;
+    imapHost: string;
+    imapPort: number;
+    imapSslEnabled: boolean;
+    imapUsername: string;
+    imapPassword: string;
+    smtpHost: string;
+    smtpPort: number;
+    smtpSslEnabled: boolean;
+    smtpUsername: string;
+    smtpPassword: string;
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 /**
  * Helper to make authenticated API requests
  */
-async function authFetch(endpoint: string, options: RequestInit = {}) {
+async function authFetch(endpoint: string, options: RequestInit = {}, skipContentType = false) {
     const session = await fetchAuthSession();
     const token = session.tokens?.accessToken?.toString();
 
@@ -14,11 +28,14 @@ async function authFetch(endpoint: string, options: RequestInit = {}) {
         throw new Error('No authentication token found');
     }
 
-    const headers = {
-        'Content-Type': 'application/json',
+    const headers: Record<string, string> = {
         'Authorization': `Bearer ${token}`,
-        ...options.headers,
+        ...(options.headers as Record<string, string>),
     };
+
+    if (!skipContentType) {
+        headers['Content-Type'] = 'application/json';
+    }
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
@@ -26,7 +43,8 @@ async function authFetch(endpoint: string, options: RequestInit = {}) {
     });
 
     if (!response.ok) {
-        throw new Error(`API call failed: ${response.statusText}`);
+        const errorText = await response.text().catch(() => response.statusText);
+        throw new Error(errorText || `API call failed: ${response.statusText}`);
     }
 
     return response;
@@ -89,20 +107,54 @@ export async function sendMail(params: {
     bcc?: string;
     replyTo?: string;
     isHtml?: boolean;
+    attachments?: File[];
 }) {
-    await authFetch('/mail/send', {
-        method: 'POST',
-        body: JSON.stringify({
-            configId: params.configId,
-            to: params.to,
-            subject: params.subject,
-            body: params.body,
-            cc: params.cc ?? '',
-            bcc: params.bcc ?? '',
-            replyTo: params.replyTo ?? '',
-            isHtml: params.isHtml ?? false,
-        }),
-    });
+    const formData = new FormData();
+    formData.append('configId', params.configId);
+    formData.append('to', params.to);
+    formData.append('subject', params.subject);
+    formData.append('body', params.body);
+    if (params.cc) formData.append('cc', params.cc);
+    if (params.bcc) formData.append('bcc', params.bcc);
+    if (params.replyTo) formData.append('replyTo', params.replyTo);
+    formData.append('isHtml', String(params.isHtml ?? false));
+    params.attachments?.forEach(file => formData.append('attachments', file));
+
+    await authFetch('/mail/send', { method: 'POST', body: formData }, true);
+}
+
+/**
+ * Download an attachment from a message
+ */
+export async function downloadAttachment(
+    configId: string,
+    messageId: string | number,
+    partIndex: number,
+    fileName: string
+): Promise<void> {
+    const session = await fetchAuthSession();
+    const token = session.tokens?.accessToken?.toString();
+    if (!token) throw new Error('No authentication token found');
+
+    const response = await fetch(
+        `${API_BASE_URL}/mail/attachment/${messageId}/${partIndex}?configId=${configId}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+
+    if (!response.ok) {
+        const text = await response.text().catch(() => response.statusText);
+        throw new Error(text || 'ダウンロードに失敗しました');
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 /**
@@ -110,6 +162,15 @@ export async function sendMail(params: {
  */
 export async function getMessage(configId: string, messageId: number) {
     const response = await authFetch(`/mail/message/${messageId}?configId=${configId}`);
+    return await response.json();
+}
+
+/**
+ * Get all message summaries for a thread (by normalized subject key)
+ */
+export async function getThreadMessages(configId: string, threadKey: string, maxMessages = 50) {
+    const params = new URLSearchParams({ configId, threadKey, maxMessages: String(maxMessages) });
+    const response = await authFetch(`/mail/thread-messages?${params}`);
     return await response.json();
 }
 
@@ -319,7 +380,7 @@ export async function bulkRestoreFromTrash(configId: string, messageIds: number[
 /**
  * Add a new server configuration
  */
-export async function addServerConfig(config: any) {
+export async function addServerConfig(config: ServerConfigPayload) {
     const response = await authFetch('/serverconfig', {
         method: 'POST',
         body: JSON.stringify(config)
@@ -341,7 +402,7 @@ export async function autoConfig(email: string) {
 /**
  * Update server configuration
  */
-export async function updateServerConfig(id: string, config: any) {
+export async function updateServerConfig(id: string, config: ServerConfigPayload) {
     const response = await authFetch(`/serverconfig/${id}`, {
         method: 'PUT',
         body: JSON.stringify(config)
@@ -717,5 +778,39 @@ export async function translateText(request: TranslateRequest): Promise<Translat
         method: 'POST',
         body: JSON.stringify(request)
     });
+    return await response.json();
+}
+
+// ============================================================================
+// Blocked Senders API
+// ============================================================================
+
+export async function getBlockedSenders() {
+    const response = await authFetch('/blocked-senders');
+    return await response.json();
+}
+
+export async function createBlockedSender(data: { emailAddress: string; note?: string }) {
+    const response = await authFetch('/blocked-senders', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    });
+    return await response.json();
+}
+
+export async function updateBlockedSender(id: string, data: { emailAddress: string; note?: string; isEnabled: boolean }) {
+    const response = await authFetch(`/blocked-senders/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+    });
+    return await response.json();
+}
+
+export async function deleteBlockedSender(id: string) {
+    await authFetch(`/blocked-senders/${id}`, { method: 'DELETE' });
+}
+
+export async function toggleBlockedSender(id: string) {
+    const response = await authFetch(`/blocked-senders/${id}/toggle`, { method: 'POST' });
     return await response.json();
 }

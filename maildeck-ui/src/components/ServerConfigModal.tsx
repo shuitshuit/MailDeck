@@ -97,7 +97,7 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
         }
     };
 
-    const handleChange = (field: keyof ServerConfig, value: any) => {
+    const handleChange = (field: keyof ServerConfig, value: ServerConfig[keyof ServerConfig]) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 

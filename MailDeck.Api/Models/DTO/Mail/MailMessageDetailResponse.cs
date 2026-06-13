@@ -13,4 +13,5 @@ public class MailMessageDetailResponse
     public string? ListUnsubscribeUrl { get; set; }
     public string? ListUnsubscribeMailto { get; set; }
     public bool ListUnsubscribeOneClick { get; set; }
+    public List<AttachmentInfoResponse> Attachments { get; set; } = new();
 }

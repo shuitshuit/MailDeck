@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import type { RuleCondition, RuleConditions } from '../types/autoLabeling';
 
 interface RuleConditionBuilderProps {
@@ -26,9 +26,7 @@ export default function RuleConditionBuilder({ conditions, onChange }: RuleCondi
 
     const isRegexOperator = (op: string) => op === 'matches' || op === 'notmatches';
 
-    const [regexErrors, setRegexErrors] = useState<Record<number, string | null>>({});
-
-    useEffect(() => {
+    const regexErrors = useMemo<Record<number, string | null>>(() => {
         const errors: Record<number, string | null> = {};
         conditions.rules.forEach((rule, idx) => {
             if (isRegexOperator(rule.operator) && rule.value) {
@@ -42,7 +40,7 @@ export default function RuleConditionBuilder({ conditions, onChange }: RuleCondi
                 errors[idx] = null;
             }
         });
-        setRegexErrors(errors);
+        return errors;
     }, [conditions.rules]);
 
     const handleAddCondition = () => {

@@ -1,60 +1,57 @@
 #!/bin/bash
 
-# MailDeck deployment script
-# This script pulls latest code, builds both frontend and backend, and restarts services
+# MailDeck deployment script (manual / emergency use)
+# For normal deployments, push to main branch — GitHub Actions handles CI/CD automatically.
+#
+# Usage: ./deploy.sh
+#   Run on the OCI server directly to rebuild and redeploy everything from the current git state.
 
-set -e  # Exit on error
+set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "=========================================="
-echo "MailDeck Deployment Script"
+echo "MailDeck Manual Deployment"
 echo "=========================================="
 echo ""
 
-# Step 1: Git pull
-echo "[1/5] Pulling latest code from git..."
+echo "[1/6] Pulling latest code..."
 git pull
 echo "✓ Git pull completed"
 echo ""
 
-# Step 2: Build backend
-echo "[2/5] Building backend (ASP.NET Core)..."
+echo "[2/6] Building backend (ASP.NET Core)..."
 cd MailDeck.Api
-# Clean previous build artifacts
-dotnet clean -c Release
-# Build to bin/Release/net8.0/publish/ to avoid polluting project root
 dotnet publish -c Release -o ../build
+cd ..
 echo "✓ Backend build completed"
 echo ""
 
-# Step 3: Build frontend
-echo "[3/5] Building frontend (React + Vite)..."
-cd ../maildeck-ui
+echo "[3/6] Building frontend (React + Vite)..."
+cd maildeck-ui
+npm ci
 npm run build
+cd ..
 echo "✓ Frontend build completed"
 echo ""
 
-# Step 4: Stop services
-echo "[4/5] Stopping MailDeck services..."
-sudo systemctl stop maildeck-api.service
-echo "✓ Services stopped"
+echo "[4/6] Deploying frontend to /var/www/html/..."
+sudo rsync -av --delete maildeck-ui/dist/ /var/www/html/
+echo "✓ Frontend deployed"
 echo ""
 
-# Step 5: Start services
-echo "[5/5] Starting MailDeck services..."
-sudo systemctl start maildeck-api.service
-echo "✓ Services started"
+echo "[5/6] Restarting API service..."
+sudo systemctl restart maildeck-api.service
+echo "✓ Service restarted"
 echo ""
 
-# Check service status
-echo "=========================================="
-echo "Deployment Status"
-echo "=========================================="
-sudo systemctl status maildeck-api --no-pager -l
+echo "[6/6] Health check..."
+sleep 3
+sudo systemctl is-active maildeck-api.service
+curl -sf http://localhost:5000/health && echo "✓ API responding" || echo "⚠ Health check failed — check logs"
 echo ""
 
 echo "=========================================="
-echo "Deployment completed successfully!"
+echo "Deployment completed!"
 echo "=========================================="

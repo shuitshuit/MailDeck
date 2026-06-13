@@ -1,12 +1,11 @@
-import { fetchAuthSession } from 'aws-amplify/auth';
-import axios from 'axios';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ComposeModal from '../components/ComposeModal';
 import MailDetailModal from '../components/MailDetailModal';
+import ThreadDetailModal from '../components/ThreadDetailModal';
 import LabelBadge from '../components/LabelBadge';
 import SearchBar from '../components/SearchBar';
-import { getInbox, getInboxFolder, getServerConfigs, getDrafts, getSpam, getTrash, emptyTrash, bulkMoveToTrash, bulkDeleteFromTrash, bulkRestoreFromTrash, markAsRead, bulkMarkAsRead } from '../lib/api';
+import { getInbox, getInboxFolder, getServerConfigs, getDrafts, getSpam, getTrash, emptyTrash, bulkMoveToTrash, bulkDeleteFromTrash, bulkRestoreFromTrash, markAsRead, bulkMarkAsRead, sendMail } from '../lib/api';
 import type { Label } from '../types/label';
 import { useToast } from '../contexts/ToastContext';
 import { useLabels } from '../contexts/LabelContext';
@@ -14,7 +13,6 @@ import { parseSearchQuery } from '../utils/searchParser';
 import { addSearchHistory } from '../utils/searchHistory';
 import type { SearchQuery } from '../types/search';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 interface Account {
     id: string;
@@ -29,8 +27,24 @@ interface Email {
     date: string;
     isRead: boolean;
     hasAttachment?: boolean;
-    configId: string; // For identifying which account the email belongs to
-    labels?: Label[]; // Labels attached to this email
+    configId: string;
+    labels?: Label[];
+    threadKey?: string;
+    messageId?: string;
+    inReplyTo?: string;
+}
+
+interface ThreadGroup {
+    key: string;
+    threadKey: string;
+    subject: string;
+    participants: string[];
+    latestDate: string;
+    hasUnread: boolean;
+    latestMessageId: string;
+    configId: string;
+    labels: Label[];
+    messages: Email[];
 }
 
 type FolderType = 'inbox' | 'drafts' | 'spam' | 'trash';
@@ -44,10 +58,13 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const [selectedMail, setSelectedMail] = useState<Email | null>(null);
+    const [selectedThread, setSelectedThread] = useState<ThreadGroup | null>(null);
     const [mails, setMails] = useState<Email[]>([]);
     const [loading, setLoading] = useState(false);
     const [isComposeOpen, setIsComposeOpen] = useState(false);
     const [replyData, setReplyData] = useState<{ to: string; subject: string; body: string; configId: string; replyTo: string } | null>(null);
+    const [forwardData, setForwardData] = useState<{ to: string; subject: string; body: string; configId: string } | null>(null);
+    const [composeMode, setComposeMode] = useState<'compose' | 'reply' | 'forward'>('compose');
     const [activeTab, setActiveTab] = useState<string | null>(null);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [page, setPage] = useState(1);
@@ -60,7 +77,6 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
     const [emptyTrashLoading, setEmptyTrashLoading] = useState(false);
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
     const [bulkActionLoading, setBulkActionLoading] = useState(false);
-    const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
     const toast = useToast();
 
     // Get custom folder from URL params
@@ -174,7 +190,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     const fetchSize = page * pageSize;
                     const promises = accounts.map(acc =>
                         getInboxFolder(acc.id, customFolderPath, 1, fetchSize).then(res => ({
-                            messages: (res.messages || []).map((m: any) => ({ ...m, configId: acc.id })),
+                            messages: (res.messages || []).map((m: Omit<Email, 'configId'>) => ({ ...m, configId: acc.id })),
                             total: res.total || 0
                         })).catch(() => ({ messages: [], total: 0 }))
                     );
@@ -187,7 +203,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     setTotalCount(total);
                 } else {
                     const data = await getInboxFolder(activeTab, customFolderPath, page);
-                    const messagesWithConfig = (data.messages || []).map((m: any) => ({ ...m, configId: activeTab }));
+                    const messagesWithConfig = (data.messages || []).map((m: Omit<Email, 'configId'>) => ({ ...m, configId: activeTab }));
                     setMails(messagesWithConfig);
                     setTotalCount(data.total || 0);
                 }
@@ -198,7 +214,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     // 全アカウントから page*pageSize 件取得してフロントでマージ・ソート・スライス
                     const fetchSize = page * pageSize;
                     const promises = accounts.map(acc => apiFunc(acc.id, 1, fetchSize).then(res => ({
-                        messages: (res.messages || []).map((m: any) => ({ ...m, configId: acc.id })),
+                        messages: (res.messages || []).map((m: Omit<Email, 'configId'>) => ({ ...m, configId: acc.id })),
                         total: res.total || 0
                     })));
                     const results = await Promise.all(promises);
@@ -211,7 +227,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                 } else {
                     const data = await apiFunc(activeTab, page);
                     // Inject configId for single tab too for consistency
-                    const messagesWithConfig = (data.messages || []).map((m: any) => ({ ...m, configId: activeTab }));
+                    const messagesWithConfig = (data.messages || []).map((m: Omit<Email, 'configId'>) => ({ ...m, configId: activeTab }));
                     setMails(messagesWithConfig);
                     setTotalCount(data.total || 0);
                 }
@@ -327,6 +343,61 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         return filtered;
     }, [mails, selectedLabelId, parsedSearchQuery]);
 
+    // スレッドグループ化
+    const threadedMails = useMemo((): ThreadGroup[] => {
+        const threadMap = new Map<string, ThreadGroup>();
+
+        for (const mail of filteredMails) {
+            const normalizedKey = mail.threadKey || mail.subject.toLowerCase().replace(/^(re|fwd|fw|aw|tr):\s*/i, '').trim();
+            const groupKey = `${mail.configId}:${normalizedKey}`;
+            const existing = threadMap.get(groupKey);
+
+            if (existing) {
+                existing.messages.push(mail);
+                existing.hasUnread = existing.hasUnread || !mail.isRead;
+                if (new Date(mail.date) > new Date(existing.latestDate)) {
+                    existing.latestDate = mail.date;
+                    existing.latestMessageId = mail.id;
+                }
+                if (!existing.participants.includes(mail.from)) {
+                    existing.participants.push(mail.from);
+                }
+                if (mail.labels) {
+                    for (const lbl of mail.labels) {
+                        if (!existing.labels.some(l => l.id === lbl.id)) {
+                            existing.labels.push(lbl);
+                        }
+                    }
+                }
+            } else {
+                threadMap.set(groupKey, {
+                    key: groupKey,
+                    threadKey: normalizedKey,
+                    subject: mail.subject,
+                    participants: [mail.from],
+                    latestDate: mail.date,
+                    hasUnread: !mail.isRead,
+                    latestMessageId: mail.id,
+                    configId: mail.configId,
+                    labels: mail.labels ? [...mail.labels] : [],
+                    messages: [mail],
+                });
+            }
+        }
+
+        return Array.from(threadMap.values()).sort(
+            (a, b) => new Date(b.latestDate).getTime() - new Date(a.latestDate).getTime()
+        );
+    }, [filteredMails]);
+
+    const openThread = (thread: ThreadGroup) => {
+        if (thread.messages.length === 1) {
+            openMail(thread.messages[0]);
+        } else {
+            setSelectedThread(thread);
+        }
+    };
+
     // 検索ハンドラー
     const openMail = (mail: Email) => {
         setSelectedMail(mail);
@@ -375,54 +446,6 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         } finally {
             setEmptyTrashLoading(false);
         }
-    };
-
-    // Handle message selection with Shift/Ctrl support
-    const toggleMessageSelection = (mailKey: string, index: number, e: React.MouseEvent) => {
-        e.stopPropagation();
-
-        // Shift+Click: Range selection
-        if (e.shiftKey && lastSelectedIndex !== null) {
-            const start = Math.min(lastSelectedIndex, index);
-            const end = Math.max(lastSelectedIndex, index);
-            const rangeKeys = filteredMails
-                .slice(start, end + 1)
-                .map(mail => `${mail.configId}::${mail.id}`);
-
-            setSelectedMessages(prev => {
-                const newSet = new Set(prev);
-                rangeKeys.forEach(key => newSet.add(key));
-                return newSet;
-            });
-            return;
-        }
-
-        // Ctrl+Click (or Cmd+Click on Mac): Toggle single item without clearing others
-        if (e.ctrlKey || e.metaKey) {
-            setSelectedMessages(prev => {
-                const newSet = new Set(prev);
-                if (newSet.has(mailKey)) {
-                    newSet.delete(mailKey);
-                } else {
-                    newSet.add(mailKey);
-                }
-                return newSet;
-            });
-            setLastSelectedIndex(index);
-            return;
-        }
-
-        // Normal click: Toggle selection (clear others if selecting)
-        setSelectedMessages(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(mailKey)) {
-                newSet.delete(mailKey);
-            } else {
-                newSet.add(mailKey);
-            }
-            return newSet;
-        });
-        setLastSelectedIndex(index);
     };
 
     const toggleSelectAll = () => {
@@ -554,7 +577,17 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
 
     const handleReply = (data: { to: string; subject: string; body: string; configId: string; replyTo: string }) => {
         setSelectedMail(null);
+        setForwardData(null);
         setReplyData(data);
+        setComposeMode('reply');
+        setIsComposeOpen(true);
+    };
+
+    const handleForward = (data: { to: string; subject: string; body: string; configId: string }) => {
+        setSelectedMail(null);
+        setReplyData(null);
+        setForwardData(data);
+        setComposeMode('forward');
         setIsComposeOpen(true);
     };
 
@@ -565,41 +598,19 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         setSelectedMail(null);
     };
 
-    const handleSendMail = async (to: string, subject: string, body: string, configId: string, cc?: string, bcc?: string, replyTo?: string, isHtml?: boolean) => {
+    const handleSendMail = async (to: string, subject: string, body: string, configId: string, cc?: string, bcc?: string, replyTo?: string, isHtml?: boolean, attachments?: File[]) => {
         if (!configId) {
             toast.warning('アカウントを選択してください');
             return;
         }
 
-        const session = await fetchAuthSession();
-        const token = session.tokens?.idToken?.toString();
-
-        if (!token) {
-            toast.error('認証エラー: ログインし直してください。');
-            return;
-        }
-
         try {
-            await axios.post(`${API_BASE}/mail/send`, {
-                to,
-                cc: cc ?? '',
-                bcc: bcc ?? '',
-                replyTo: replyTo ?? '',
-                subject,
-                body,
-                configId,
-                isHtml: isHtml ?? false,
-            }, {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
-
+            await sendMail({ configId, to, subject, body, cc, bcc, replyTo, isHtml, attachments });
             toast.success('メールを送信しました！');
             setIsComposeOpen(false);
         } catch (error) {
             console.error(error);
-            toast.error('送信失敗');
+            toast.error('送信失敗: ' + (error instanceof Error ? error.message : '不明なエラー'));
         }
     };
 
@@ -630,7 +641,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                         </button>
                     )}
                     <button
-                        onClick={() => setIsComposeOpen(true)}
+                        onClick={() => { setReplyData(null); setForwardData(null); setComposeMode('compose'); setIsComposeOpen(true); }}
                         className="bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 shadow-sm font-medium flex items-center justify-center gap-2 flex-1 md:flex-none"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -812,17 +823,28 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     <>
                         {/* Mobile View (Cards) */}
                         <div className="block md:hidden divide-y divide-gray-100">
-                            {filteredMails.map((mail, index) => {
-                                const mailKey = `${mail.configId}::${mail.id}`;
-                                const isSelected = selectedMessages.has(mailKey);
+                            {threadedMails.map((thread) => {
+                                const allKeys = thread.messages.map(m => `${m.configId}::${m.id}`);
+                                const isSelected = allKeys.every(k => selectedMessages.has(k));
+                                const participantDisplay = thread.participants.length <= 2
+                                    ? thread.participants.map(p => { const m = p.match(/^"?([^"<]+)"?\s*</); return m ? m[1].trim() : p.split('@')[0]; }).join(', ')
+                                    : thread.participants.slice(0, 2).map(p => { const m = p.match(/^"?([^"<]+)"?\s*</); return m ? m[1].trim() : p.split('@')[0]; }).join(', ') + ` 他${thread.participants.length - 2}人`;
                                 return (
                                     <div
-                                        key={`mobile-${mailKey}`}
-                                        className={`py-3 px-3 active:bg-gray-100 cursor-pointer flex gap-3 ${!mail.isRead ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'} ${isSelected ? 'bg-brand-50' : ''}`}
+                                        key={`mobile-${thread.key}`}
+                                        className={`py-3 px-3 active:bg-gray-100 cursor-pointer flex gap-3 ${thread.hasUnread ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'} ${isSelected ? 'bg-brand-50' : ''}`}
                                     >
                                         <div
                                             className="flex items-center justify-center w-10 h-10 shrink-0"
-                                            onClick={(e) => toggleMessageSelection(mailKey, index, e)}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedMessages(prev => {
+                                                    const next = new Set(prev);
+                                                    if (isSelected) allKeys.forEach(k => next.delete(k));
+                                                    else allKeys.forEach(k => next.add(k));
+                                                    return next;
+                                                });
+                                            }}
                                         >
                                             <input
                                                 type="checkbox"
@@ -831,17 +853,24 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                                 className="w-5 h-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
                                             />
                                         </div>
-                                        <div className="flex-1 min-w-0" onClick={() => openMail(mail)}>
+                                        <div className="flex-1 min-w-0" onClick={() => openThread(thread)}>
                                             <div className="flex justify-between items-baseline mb-0.5">
-                                                <div className={`text-sm truncate flex-1 pr-2 ${!mail.isRead ? 'font-bold text-gray-950' : 'font-medium text-gray-700'}`}>{mail.from}</div>
+                                                <div className={`text-sm truncate flex-1 pr-2 ${thread.hasUnread ? 'font-bold text-gray-950' : 'font-medium text-gray-700'}`}>
+                                                    {participantDisplay}
+                                                    {thread.messages.length > 1 && (
+                                                        <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-600">
+                                                            {thread.messages.length}
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <div className="text-xs text-gray-400 whitespace-nowrap shrink-0">
-                                                    {new Date(mail.date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
+                                                    {new Date(thread.latestDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
                                                 </div>
                                             </div>
-                                            <div className={`text-sm mb-0.5 truncate ${!mail.isRead ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{mail.subject || '(件名なし)'}</div>
-                                            {mail.labels && mail.labels.length > 0 && (
+                                            <div className={`text-sm mb-0.5 truncate ${thread.hasUnread ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{thread.subject || '(件名なし)'}</div>
+                                            {thread.labels.length > 0 && (
                                                 <div className="flex flex-wrap gap-1 mt-1">
-                                                    {mail.labels.map(label => (
+                                                    {thread.labels.map(label => (
                                                         <LabelBadge key={label.id} label={label} />
                                                     ))}
                                                 </div>
@@ -870,15 +899,26 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                {filteredMails.map((mail, index) => {
-                                    const mailKey = `${mail.configId}::${mail.id}`;
-                                    const isSelected = selectedMessages.has(mailKey);
+                                {threadedMails.map((thread) => {
+                                    const allKeys = thread.messages.map(m => `${m.configId}::${m.id}`);
+                                    const isSelected = allKeys.every(k => selectedMessages.has(k));
+                                    const participantDisplay = thread.participants.length <= 2
+                                        ? thread.participants.map(p => { const m = p.match(/^"?([^"<]+)"?\s*</); return m ? m[1].trim() : p.split('@')[0]; }).join(', ')
+                                        : thread.participants.slice(0, 2).map(p => { const m = p.match(/^"?([^"<]+)"?\s*</); return m ? m[1].trim() : p.split('@')[0]; }).join(', ') + ` 他${thread.participants.length - 2}人`;
                                     return (
                                         <tr
-                                            key={mailKey}
-                                            className={`hover:bg-gray-50 cursor-pointer transition-colors ${!mail.isRead ? 'font-semibold bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'} ${isSelected ? 'bg-brand-50' : ''}`}
+                                            key={thread.key}
+                                            className={`hover:bg-gray-50 cursor-pointer transition-colors ${thread.hasUnread ? 'font-semibold bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'} ${isSelected ? 'bg-brand-50' : ''}`}
                                         >
-                                            <td className="p-4" onClick={(e) => toggleMessageSelection(mailKey, index, e)}>
+                                            <td className="p-4" onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedMessages(prev => {
+                                                    const next = new Set(prev);
+                                                    if (isSelected) allKeys.forEach(k => next.delete(k));
+                                                    else allKeys.forEach(k => next.add(k));
+                                                    return next;
+                                                });
+                                            }}>
                                                 <input
                                                     type="checkbox"
                                                     checked={isSelected}
@@ -886,21 +926,32 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                                     className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
                                                 />
                                             </td>
-                                            <td className={`p-4 truncate ${!mail.isRead ? 'text-gray-950 font-bold' : 'text-gray-900'}`} title={mail.from} onClick={() => openMail(mail)}>{mail.from}</td>
-                                            <td className="p-4" onClick={() => openMail(mail)}>
+                                            <td
+                                                className={`p-4 truncate ${thread.hasUnread ? 'text-gray-950 font-bold' : 'text-gray-900'}`}
+                                                title={thread.participants.join(', ')}
+                                                onClick={() => openThread(thread)}
+                                            >
+                                                <span>{participantDisplay}</span>
+                                                {thread.messages.length > 1 && (
+                                                    <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-600">
+                                                        {thread.messages.length}
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="p-4" onClick={() => openThread(thread)}>
                                                 <div className="flex flex-col gap-1">
-                                                    <span className={`truncate ${!mail.isRead ? 'text-gray-950' : 'text-gray-900'}`}>{mail.subject || '(件名なし)'}</span>
-                                                    {mail.labels && mail.labels.length > 0 && (
+                                                    <span className={`truncate ${thread.hasUnread ? 'text-gray-950' : 'text-gray-900'}`}>{thread.subject || '(件名なし)'}</span>
+                                                    {thread.labels.length > 0 && (
                                                         <div className="flex flex-wrap gap-1">
-                                                            {mail.labels.map(label => (
+                                                            {thread.labels.map(label => (
                                                                 <LabelBadge key={label.id} label={label} />
                                                             ))}
                                                         </div>
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="p-4 text-right text-gray-500 text-sm whitespace-nowrap" onClick={() => openMail(mail)}>
-                                                {new Date(mail.date).toLocaleString()}
+                                            <td className="p-4 text-right text-gray-500 text-sm whitespace-nowrap" onClick={() => openThread(thread)}>
+                                                {new Date(thread.latestDate).toLocaleString()}
                                             </td>
                                         </tr>
                                     );
@@ -964,13 +1015,16 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                 onClose={() => {
                     setIsComposeOpen(false);
                     setReplyData(null);
+                    setForwardData(null);
+                    setComposeMode('compose');
                 }}
                 onSend={handleSendMail}
                 accounts={accounts}
-                initialTo={replyData?.to ?? ''}
-                initialSubject={replyData?.subject ?? ''}
-                initialBody={replyData?.body ?? ''}
-                initialConfigId={replyData?.configId}
+                mode={composeMode}
+                initialTo={replyData?.to ?? forwardData?.to ?? ''}
+                initialSubject={replyData?.subject ?? forwardData?.subject ?? ''}
+                initialBody={replyData?.body ?? forwardData?.body ?? ''}
+                initialConfigId={replyData?.configId ?? forwardData?.configId}
                 initialReplyTo={replyData?.replyTo ?? ''}
             />
 
@@ -990,7 +1044,21 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     folderType={folderType}
                     onMessageDeleted={loadInbox}
                     onReply={handleReply}
+                    onForward={handleForward}
                     onFilterByAddress={handleFilterByAddress}
+                />
+            )}
+
+            {selectedThread && (
+                <ThreadDetailModal
+                    isOpen={!!selectedThread}
+                    onClose={() => setSelectedThread(null)}
+                    configId={selectedThread.configId}
+                    threadKey={selectedThread.threadKey}
+                    threadSubject={selectedThread.subject}
+                    onReply={handleReply}
+                    onMessageDeleted={loadInbox}
+                    initialMessageId={parseInt(selectedThread.latestMessageId)}
                 />
             )}
         </div>

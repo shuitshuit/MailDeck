@@ -12,6 +12,7 @@ interface ConsentContextType {
 
 const ConsentContext = createContext<ConsentContextType | undefined>(undefined);
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useConsent() {
     const context = useContext(ConsentContext);
     if (!context) {
