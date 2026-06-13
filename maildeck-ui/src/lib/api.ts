@@ -164,6 +164,15 @@ export async function getMessage(configId: string, messageId: number) {
 }
 
 /**
+ * Get all message summaries for a thread (by normalized subject key)
+ */
+export async function getThreadMessages(configId: string, threadKey: string, maxMessages = 50) {
+    const params = new URLSearchParams({ configId, threadKey, maxMessages: String(maxMessages) });
+    const response = await authFetch(`/mail/thread-messages?${params}`);
+    return await response.json();
+}
+
+/**
  * Delete a message
  */
 export async function deleteMessage(configId: string, messageId: number) {
