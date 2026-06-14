@@ -52,7 +52,8 @@ export default function AutoLabelingRuleModal({
                     for (let i = 0; i < migratedConditions.rules.length - 1; i++) {
                         if (!migratedConditions.rules[i].nextOperator) {
                             // Use the old global operator if available, otherwise default to AND
-                            migratedConditions.rules[i].nextOperator = (initialData.conditions as RuleConditions & { operator?: string }).operator || 'AND';
+                            const oldOperator = (initialData.conditions as RuleConditions & { operator?: 'AND' | 'OR' }).operator;
+                            migratedConditions.rules[i].nextOperator = oldOperator || 'AND';
                         }
                     }
                 }
