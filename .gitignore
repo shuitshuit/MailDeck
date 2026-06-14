@@ -47,6 +47,10 @@ logs/
 
 tmpclaude*
 
+# Playwright MCP
+.playwright-mcp/
+inbox-after-*.png
+
 maildeck-*.json
 .claude/settings.local.json
 

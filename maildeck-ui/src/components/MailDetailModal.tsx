@@ -10,6 +10,7 @@ import EnhancedMailContent from './EnhancedMailContent';
 import TranslatorApiGuideModal from './TranslatorApiGuideModal';
 import { useToast } from '../contexts/ToastContext';
 import { useLabels } from '../contexts/LabelContext';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 type FolderType = 'inbox' | 'drafts' | 'spam' | 'trash';
 
@@ -80,6 +81,7 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
     const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null);
     const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
     const toast = useToast();
+    const { confirm } = useConfirm();
     const { labels: allLabels, reloadLabels } = useLabels();
 
     // Label-related state
@@ -261,7 +263,14 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
 
     // Handle move to trash
     const handleMoveToTrash = async () => {
-        if (!confirm('このメールをゴミ箱に移動しますか？')) return;
+        const confirmed = await confirm({
+            title: 'ゴミ箱に移動',
+            message: 'このメールをゴミ箱に移動しますか？',
+            confirmText: '移動',
+            cancelText: 'キャンセル',
+            type: 'warning'
+        });
+        if (!confirmed) return;
         setActionLoading(true);
         try {
             await moveToTrash(configId, messageId);
@@ -278,7 +287,14 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
 
     // Handle permanent delete from trash
     const handleDeletePermanently = async () => {
-        if (!confirm('このメールを完全に削除しますか？この操作は取り消せません。')) return;
+        const confirmed = await confirm({
+            title: 'メールを削除',
+            message: 'このメールを完全に削除しますか？この操作は取り消せません。',
+            confirmText: '削除',
+            cancelText: 'キャンセル',
+            type: 'danger'
+        });
+        if (!confirmed) return;
         setActionLoading(true);
         try {
             await deleteFromTrash(configId, messageId);
@@ -371,7 +387,14 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
     // Handle unsubscribe
     const handleUnsubscribe = async () => {
         if (!message) return;
-        if (!confirm('このメールマガジンの登録を解除しますか？')) return;
+        const confirmed = await confirm({
+            title: '登録解除',
+            message: 'このメールマガジンの登録を解除しますか？',
+            confirmText: '解除',
+            cancelText: 'キャンセル',
+            type: 'warning'
+        });
+        if (!confirmed) return;
 
         if (message.listUnsubscribeUrl) {
             window.open(message.listUnsubscribeUrl, '_blank', 'noopener,noreferrer');

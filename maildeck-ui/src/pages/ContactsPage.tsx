@@ -5,6 +5,7 @@ import ComposeModal, { type Account } from '../components/ComposeModal';
 import ContactModal from '../components/ContactModal';
 import { getServerConfigs, updateContact } from '../lib/api';
 import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -23,6 +24,7 @@ export default function ContactsPage() {
     const [composeTo, setComposeTo] = useState('');
     const [accounts, setAccounts] = useState<Account[]>([]);
     const toast = useToast();
+    const { confirm } = useConfirm();
 
     const fetchContacts = async () => {
         try {
@@ -86,7 +88,14 @@ export default function ContactsPage() {
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('本当に削除しますか？')) return;
+        const confirmed = await confirm({
+            title: '連絡先を削除',
+            message: '本当に削除しますか？',
+            confirmText: '削除',
+            cancelText: 'キャンセル',
+            type: 'danger'
+        });
+        if (!confirmed) return;
 
         const session = await fetchAuthSession();
         const token = session.tokens?.accessToken?.toString();

@@ -3,6 +3,7 @@ import { getMessage, getThreadMessages, moveToTrash } from '../lib/api';
 import { useModalClose } from '../hooks/useModalClose';
 import EnhancedMailContent from './EnhancedMailContent';
 import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 interface ReplyData {
     to: string;
@@ -72,6 +73,7 @@ export default function ThreadDetailModal({
     const [loadingIds, setLoadingIds] = useState<Set<number>>(new Set());
     const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
     const toast = useToast();
+    const { confirm } = useConfirm();
 
     useEffect(() => {
         if (!isOpen) {
@@ -153,7 +155,14 @@ export default function ThreadDetailModal({
     };
 
     const handleMoveToTrash = async (id: number) => {
-        if (!confirm('このメールをゴミ箱に移動しますか？')) return;
+        const confirmed = await confirm({
+            title: 'ゴミ箱に移動',
+            message: 'このメールをゴミ箱に移動しますか？',
+            confirmText: '移動',
+            cancelText: 'キャンセル',
+            type: 'warning'
+        });
+        if (!confirmed) return;
         try {
             await moveToTrash(configId, id);
             setMessages(prev => prev.filter(m => m.id !== id));
