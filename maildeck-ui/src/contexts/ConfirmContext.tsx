@@ -65,7 +65,7 @@ export function ConfirmProvider({ children }: ConfirmProviderProps) {
         <ConfirmContext.Provider value={{ confirm }}>
             {children}
             {/* Confirm modal */}
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black bg-opacity-50">
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/30">
                 <div className="bg-white rounded-xl shadow-xl w-full max-w-md relative z-10 p-6 animate-scale-in">
                     {/* Icon */}
                     <div className="mb-4 flex justify-center">

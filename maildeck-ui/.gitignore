@@ -34,3 +34,9 @@ src-tauri/gen/schemas/
 src-tauri/gen/android/.tauri/
 src-tauri/gen/android/local.properties
 src-tauri/gen/android/app/google-services.json
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

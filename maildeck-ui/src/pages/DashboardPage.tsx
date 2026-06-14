@@ -8,6 +8,7 @@ import SearchBar from '../components/SearchBar';
 import { getInbox, getInboxFolder, getServerConfigs, getDrafts, getSpam, getTrash, emptyTrash, bulkMoveToTrash, bulkDeleteFromTrash, bulkRestoreFromTrash, markAsRead, bulkMarkAsRead, sendMail } from '../lib/api';
 import type { Label } from '../types/label';
 import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { useLabels } from '../contexts/LabelContext';
 import { parseSearchQuery } from '../utils/searchParser';
 import { addSearchHistory } from '../utils/searchHistory';
@@ -78,6 +79,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
     const [bulkActionLoading, setBulkActionLoading] = useState(false);
     const toast = useToast();
+    const { confirm } = useConfirm();
 
     // Get custom folder from URL params
     const customFolderPath = searchParams.get('folder');
@@ -433,7 +435,14 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
             toast.warning('アカウントを選択してください');
             return;
         }
-        if (!confirm('ゴミ箱のすべてのメールを完全に削除しますか？この操作は取り消せません。')) return;
+        const confirmed = await confirm({
+            title: 'ゴミ箱を空にする',
+            message: 'ゴミ箱のすべてのメールを完全に削除しますか？この操作は取り消せません。',
+            confirmText: '削除',
+            cancelText: 'キャンセル',
+            type: 'danger'
+        });
+        if (!confirmed) return;
 
         setEmptyTrashLoading(true);
         try {
@@ -488,7 +497,14 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
     // Bulk move to trash
     const handleBulkMoveToTrash = async () => {
         if (selectedMessages.size === 0) return;
-        if (!confirm(`${selectedMessages.size}件のメールをゴミ箱に移動しますか？`)) return;
+        const confirmed = await confirm({
+            title: 'ゴミ箱に移動',
+            message: `${selectedMessages.size}件のメールをゴミ箱に移動しますか？`,
+            confirmText: '移動',
+            cancelText: 'キャンセル',
+            type: 'warning'
+        });
+        if (!confirmed) return;
 
         setBulkActionLoading(true);
         try {
@@ -511,7 +527,14 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
     // Bulk delete from trash
     const handleBulkDeleteFromTrash = async () => {
         if (selectedMessages.size === 0) return;
-        if (!confirm(`${selectedMessages.size}件のメールを完全に削除しますか？この操作は取り消せません。`)) return;
+        const confirmed = await confirm({
+            title: 'メールを削除',
+            message: `${selectedMessages.size}件のメールを完全に削除しますか？この操作は取り消せません。`,
+            confirmText: '削除',
+            cancelText: 'キャンセル',
+            type: 'danger'
+        });
+        if (!confirmed) return;
 
         setBulkActionLoading(true);
         try {
@@ -533,7 +556,14 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
     // Bulk restore from trash
     const handleBulkRestoreFromTrash = async () => {
         if (selectedMessages.size === 0) return;
-        if (!confirm(`${selectedMessages.size}件のメールを復元しますか？`)) return;
+        const confirmed = await confirm({
+            title: 'メールを復元',
+            message: `${selectedMessages.size}件のメールを復元しますか？`,
+            confirmText: '復元',
+            cancelText: 'キャンセル',
+            type: 'info'
+        });
+        if (!confirmed) return;
 
         setBulkActionLoading(true);
         try {

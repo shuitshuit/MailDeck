@@ -4,6 +4,7 @@ import ServerConfigModal from '../components/ServerConfigModal';
 import LabelManager from '../components/LabelManager';
 import PasskeySettings from '../components/PasskeySettings';
 import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 interface ServerConfig {
     id?: string;
@@ -29,6 +30,7 @@ export default function SettingsPage() {
     const [editingAccount, setEditingAccount] = useState<ServerConfig | null>(null);
     const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
     const toast = useToast();
+    const { confirm } = useConfirm();
 
     const loadAccounts = async () => {
         try {
@@ -75,7 +77,14 @@ export default function SettingsPage() {
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('本当にこのアカウントを削除しますか？')) return;
+        const confirmed = await confirm({
+            title: 'アカウントを削除',
+            message: '本当にこのアカウントを削除しますか？',
+            confirmText: '削除',
+            cancelText: 'キャンセル',
+            type: 'danger'
+        });
+        if (!confirmed) return;
 
         try {
             await deleteServerConfig(id);
