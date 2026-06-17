@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { getMessage, getThreadMessages, moveToTrash } from '../lib/api';
+import { getMessage, getThreadMessages, moveToTrash, getCustomActionPatterns } from '../lib/api';
 import { useModalClose } from '../hooks/useModalClose';
 import EnhancedMailContent from './EnhancedMailContent';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
+import type { CustomActionPattern } from '../types/customAction';
 
 interface ReplyData {
     to: string;
@@ -71,9 +72,24 @@ export default function ThreadDetailModal({
     const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
     const [loadedDetails, setLoadedDetails] = useState<Map<number, MessageDetail>>(new Map());
     const [loadingIds, setLoadingIds] = useState<Set<number>>(new Set());
+    const [patterns, setPatterns] = useState<CustomActionPattern[]>([]);
     const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
     const toast = useToast();
     const { confirm } = useConfirm();
+
+    // Fetch custom action patterns once when modal opens
+    useEffect(() => {
+        if (!isOpen) return;
+        const fetchPatterns = async () => {
+            try {
+                const data = await getCustomActionPatterns();
+                setPatterns(data.filter((p: CustomActionPattern) => p.isEnabled));
+            } catch (err) {
+                console.error('Failed to fetch custom action patterns', err);
+            }
+        };
+        fetchPatterns();
+    }, [isOpen]);
 
     useEffect(() => {
         if (!isOpen) {
@@ -304,9 +320,9 @@ export default function ThreadDetailModal({
                                                     <EnhancedMailContent
                                                         content={detail.bodyHtml || detail.bodyText || ''}
                                                         isHtml={!!detail.bodyHtml}
-                                                        patterns={[]}
+                                                        patterns={patterns}
                                                         emailContext={{ from: msg.from, subject: msg.subject, body: detail.bodyText ?? '' }}
-                                                        onCopy={() => {}}
+                                                        onCopy={(value) => toast.success(`コピーしました: ${value}`)}
                                                     />
                                                 </div>
                                             ) : (
