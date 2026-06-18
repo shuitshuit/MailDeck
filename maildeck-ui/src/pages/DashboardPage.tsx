@@ -1088,6 +1088,13 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     threadSubject={selectedThread.subject}
                     onReply={handleReply}
                     onMessageDeleted={loadInbox}
+                    onMessageRead={(messageId) => {
+                        setMails(prev => prev.map(m =>
+                            parseInt(m.id) === messageId && m.configId === selectedThread.configId
+                                ? { ...m, isRead: true }
+                                : m
+                        ));
+                    }}
                     initialMessageId={parseInt(selectedThread.latestMessageId)}
                 />
             )}
