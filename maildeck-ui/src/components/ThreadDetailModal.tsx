@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getMessage, getThreadMessages, moveToTrash, getCustomActionPatterns } from '../lib/api';
+import { getMessage, getThreadMessages, moveToTrash, getCustomActionPatterns, markAsRead } from '../lib/api';
 import { useModalClose } from '../hooks/useModalClose';
 import EnhancedMailContent from './EnhancedMailContent';
 import { useToast } from '../contexts/ToastContext';
@@ -22,6 +22,7 @@ interface ThreadDetailModalProps {
     threadSubject: string;
     onReply?: (replyData: ReplyData) => void;
     onMessageDeleted?: () => void;
+    onMessageRead?: (messageId: number) => void;
     initialMessageId?: number;
 }
 
@@ -65,6 +66,7 @@ export default function ThreadDetailModal({
     threadSubject,
     onReply,
     onMessageDeleted,
+    onMessageRead,
     initialMessageId,
 }: ThreadDetailModalProps) {
     const [messages, setMessages] = useState<ThreadMessageSummary[]>([]);
@@ -127,6 +129,16 @@ export default function ThreadDetailModal({
         try {
             const detail = await getMessage(configId, id);
             setLoadedDetails(prev => new Map(prev).set(id, detail));
+
+            // 展開して本文を表示したら既読にする（未読の場合のみ）
+            const target = messages.find(m => m.id === id);
+            if (target && !target.isRead) {
+                setMessages(prev => prev.map(m => m.id === id ? { ...m, isRead: true } : m));
+                markAsRead(configId, id).catch(err =>
+                    console.error('Failed to mark as read:', err)
+                );
+                onMessageRead?.(id);
+            }
         } catch {
             toast.error('メッセージの読み込みに失敗しました');
         } finally {
