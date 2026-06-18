@@ -36,8 +36,8 @@ cd ..
 echo "✓ Frontend build completed"
 echo ""
 
-echo "[4/6] Deploying frontend to /var/www/html/..."
-sudo rsync -av --delete maildeck-ui/dist/ /var/www/html/
+echo "[4/6] Deploying frontend to /var/www/maildeck/..."
+sudo rsync -av --delete maildeck-ui/dist/ /var/www/maildeck/
 echo "✓ Frontend deployed"
 echo ""
 

@@ -11,7 +11,7 @@ GitHub Actions から OCI サーバーへ SSH + rsync でデプロイするた�
 - OS: Ubuntu (22.04 / 24.04)
 - デプロイ先パス:
   - バックエンド: `/opt/maildeck/build/`
-  - フロントエンド: `/var/www/html/`
+  - フロントエンド: `/var/www/maildeck/`
 
 ---
 
@@ -74,10 +74,12 @@ sudo mkdir -p /opt/maildeck/build
 sudo chown -R maildeck-deploy:maildeck-deploy /opt/maildeck/build
 
 # フロントエンド静的ファイルディレクトリ
-sudo chown -R maildeck-deploy:maildeck-deploy /var/www/html
+sudo mkdir -p /var/www/maildeck
+sudo chown -R maildeck-deploy:maildeck-deploy /var/www/maildeck
 ```
 
 > rsync の書き込みはファイルシステム権限で制御するため、sudo は不要になる。
+> nginx のデフォルトサイトと競合しないよう、配信先は `/var/www/html` ではなく MailDeck 専用の `/var/www/maildeck` を使用する。nginx の `root` も同じパスに設定すること（[infrastructure/nginx/maildeck.conf](../../infrastructure/nginx/maildeck.conf)）。
 
 ---
 
@@ -117,7 +119,7 @@ ssh -i "$HOME\.ssh\github-actions-maildeck" maildeck-deploy@<SERVER_IP> "sudo sy
 
 # 書き込み権限確認
 ssh -i "$HOME\.ssh\github-actions-maildeck" maildeck-deploy@<SERVER_IP> "touch /opt/maildeck/build/.test && rm /opt/maildeck/build/.test && echo 'write OK'"
-ssh -i "$HOME\.ssh\github-actions-maildeck" maildeck-deploy@<SERVER_IP> "touch /var/www/html/.test && rm /var/www/html/.test && echo 'write OK'"
+ssh -i "$HOME\.ssh\github-actions-maildeck" maildeck-deploy@<SERVER_IP> "touch /var/www/maildeck/.test && rm /var/www/maildeck/.test && echo 'write OK'"
 ```
 
 すべて OK が返れば設定完了。
@@ -191,7 +193,7 @@ main ブランチに何かコミットを push して GitHub Actions の実行�
 | SSH でのインタラクティブログイン | **不可** | shell = nologin |
 | SSH 鍵認証でのコマンド実行 | 可 | authorized_keys |
 | `/opt/maildeck/build/` への書き込み | 可 | ファイルシステム所有権 |
-| `/var/www/html/` への書き込み | 可 | ファイルシステム所有権 |
+| `/var/www/maildeck/` への書き込み | 可 | ファイルシステム所有権 |
 | `maildeck-api` の再起動 | 可 | sudoers (コマンド指定) |
 | `maildeck-api` の状態確認 | 可 | sudoers (コマンド指定) |
 | `maildeck-api` のログ確認 | 可 | sudoers (コマンド指定) |
