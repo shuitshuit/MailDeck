@@ -42,6 +42,7 @@ jobs:
             --exclude='.env' \
             --exclude='logs/' \
             --exclude='*.json.key' \
+            --exclude='maildeck-*.json' \
             ./backend-build/ \
             ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/maildeck/build/
 
