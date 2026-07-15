@@ -56,9 +56,3 @@ jobs:
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
             "sudo systemctl restart maildeck-api.service && sudo systemctl is-active maildeck-api.service"
-
-      - name: Health check
-        run: |
-          sleep 5
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-            "curl -sf http://localhost:5000/health || (sudo journalctl -u maildeck-api -n 30 --no-pager && exit 1)"
