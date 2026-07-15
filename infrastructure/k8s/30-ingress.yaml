@@ -1,0 +1,29 @@
+# maildeck.shuit.net を Traefik(websecure)で公開する Ingress。
+# UI は API の wwwroot から同一オリジンで配信するため、全パスを maildeck-api へ流す
+# (/api も静的ファイルも SPA フォールバックも 1 サービスが処理する)。
+# TLS は cert-manager(letsencrypt-dns, Cloudflare DNS-01) 発行の maildeck-tls で終端。
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: maildeck
+  namespace: maildeck
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-dns
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - maildeck.shuit.net
+      secretName: maildeck-tls
+  rules:
+    - host: maildeck.shuit.net
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: maildeck-api
+                port:
+                  number: 80

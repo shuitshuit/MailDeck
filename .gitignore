@@ -6,6 +6,7 @@
 *.user
 *.userosscache
 *.sln.docstates
+.serena/
 
 # .NET
 bin/
@@ -53,6 +54,14 @@ inbox-after-*.png
 
 maildeck-*.json
 .claude/settings.local.json
+
+# k8s Secret 実値 (テンプレートの .example.yaml のみコミット)
+infrastructure/k8s/*.yaml
+!infrastructure/k8s/*.example.yaml
+!infrastructure/k8s/00-namespace.yaml
+!infrastructure/k8s/10-api-deployment.yaml
+!infrastructure/k8s/20-ui-deployment.yaml
+!infrastructure/k8s/30-ingress.yaml
 
 # Tauri
 maildeck-ui/src-tauri/target/

@@ -15,7 +15,8 @@ export interface ServerConfigPayload {
     smtpPassword: string;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// 同一オリジン配信 (API の wwwroot) では相対パス。dev では vite proxy が /api を転送。
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 /**
  * Helper to make authenticated API requests

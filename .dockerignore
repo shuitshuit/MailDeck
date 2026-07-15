@@ -1,0 +1,35 @@
+# ビルド成果物・依存
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+build/
+
+# ログ
+logs/
+**/*.log
+
+# VCS / IDE
+.git/
+.vs/
+.vscode/
+.idea/
+
+# Tauri (フロントの k8s イメージには不要)
+maildeck-ui/src-tauri/
+
+# ⚠️ ローカル開発用 .env (VITE_API_URL=http://localhost:5000/api 等) を
+#    コンテナに入れると npm run build がこれを読み、localhost が焼き込まれる。
+#    本番の VITE_ 値は Dockerfile の build-arg 経由で渡すため .env は除外する。
+maildeck-ui/.env
+maildeck-ui/.env.*
+!maildeck-ui/.env.example
+
+# その他
+.playwright-mcp/
+.claude/
+infrastructure/k8s/
+*.md
+
+# ⚠️ Firebase サービスアカウントキー (maildeck-*.json) は
+#    バックエンドイメージに必要なので除外しない

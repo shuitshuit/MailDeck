@@ -223,11 +223,39 @@ try
     }
 
     //app.UseHttpsRedirection();
+
+    // UI (React SPA) を wwwroot から同一オリジンで配信する。
+    // ハッシュ付き /assets/* は長期キャッシュ、Service Worker と index.html は
+    // 常に最新を取りに行かせるため no-cache にする。
+    app.UseDefaultFiles();
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        OnPrepareResponse = ctx =>
+        {
+            var path = ctx.File.Name;
+            var headers = ctx.Context.Response.Headers;
+            if (path == "sw.js" ||
+                path == "firebase-messaging-sw.js" ||
+                path == "index.html")
+            {
+                headers.CacheControl = "no-cache, no-store, must-revalidate";
+            }
+            else if (ctx.Context.Request.Path.StartsWithSegments("/assets"))
+            {
+                headers.CacheControl = "public, max-age=31536000, immutable";
+            }
+        }
+    });
+
     app.UseCors("AllowFrontend");
     app.UseAuthentication();
     app.UseAuthorization();
 
     app.MapControllers();
+
+    // SPA フォールバック: API/静的ファイルにマッチしないパスは index.html を返す
+    // (クライアントサイドルーティングのディープリンク対応)。/api は MapControllers が先に処理する。
+    app.MapFallbackToFile("index.html");
 
     app.Run();
 }

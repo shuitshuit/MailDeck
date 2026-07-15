@@ -1,0 +1,92 @@
+# MailDeck.Api (.NET) の Deployment + ClusterIP Service。
+# 機密値は 1Password 生成 Secret "maildeck-api-secret"、非機密は ConfigMap から注入。
+# イメージはクラスタ内プライベートレジストリ (insecure/TLS なし) から pull する。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: maildeck-api
+  namespace: maildeck
+  labels:
+    app: maildeck-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: maildeck-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: maildeck-api
+    spec:
+      containers:
+        - name: maildeck-api
+          # クラスタ内プライベートレジストリ (認証なし、imagePullSecrets 不要)。
+          # 事前に docker push k3s-05.tailef9ae7.ts.net:30500/maildeck-api:latest 済みであること。
+          image: k3s-05.tailef9ae7.ts.net:30500/maildeck-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: maildeck-api-config
+            - secretRef:
+                name: maildeck-api-secret
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          # ヘルスチェックエンドポイント未実装のため TCP プローブを使用
+          # (/healthz を実装したら httpGet に切り替え推奨)
+          startupProbe:
+            tcpSocket:
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+      volumes:
+        - name: logs
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: maildeck-api
+  namespace: maildeck
+  labels:
+    app: maildeck-api
+spec:
+  type: ClusterIP
+  selector:
+    app: maildeck-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
