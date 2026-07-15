@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ComposeModal from '../components/ComposeModal';
 import MailDetailModal from '../components/MailDetailModal';
@@ -402,6 +402,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
     };
 
     // Ctrl/Cmd+クリックで個別選択トグル、Shift+クリックで範囲選択、通常クリックでスレッドを開く
+    // (選択中の項目が1件以上ある場合は、タッチ操作でも使えるよう通常クリックもトグル動作にする)
     const handleThreadClick = (thread: ThreadGroup, index: number, e: React.MouseEvent) => {
         const allKeys = thread.messages.map(m => `${m.configId}::${m.id}`);
 
@@ -419,7 +420,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                 return next;
             });
             setLastSelectedIndex(index);
-        } else if (e.ctrlKey || e.metaKey) {
+        } else if (e.ctrlKey || e.metaKey || selectedMessages.size > 0) {
             const isSelected = allKeys.every(k => selectedMessages.has(k));
             setSelectedMessages(prev => {
                 const next = new Set(prev);
@@ -432,6 +433,40 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
             openThread(thread);
             setLastSelectedIndex(index);
         }
+    };
+
+    // モバイル(タッチ操作)用: 長押しで選択モードを開始する
+    const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const longPressTriggeredRef = useRef(false);
+
+    const handleLongPressStart = (thread: ThreadGroup, index: number) => {
+        longPressTriggeredRef.current = false;
+        longPressTimerRef.current = setTimeout(() => {
+            longPressTriggeredRef.current = true;
+            const allKeys = thread.messages.map(m => `${m.configId}::${m.id}`);
+            setSelectedMessages(prev => {
+                const next = new Set(prev);
+                allKeys.forEach(k => next.add(k));
+                return next;
+            });
+            setLastSelectedIndex(index);
+            if (navigator.vibrate) navigator.vibrate(15);
+        }, 500);
+    };
+
+    const handleLongPressEnd = () => {
+        if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+        }
+    };
+
+    const handleMobileContentClick = (thread: ThreadGroup, index: number, e: React.MouseEvent) => {
+        if (longPressTriggeredRef.current) {
+            longPressTriggeredRef.current = false;
+            return;
+        }
+        handleThreadClick(thread, index, e);
     };
 
     // 検索ハンドラー
@@ -896,7 +931,11 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                 return (
                                     <div
                                         key={`mobile-${thread.key}`}
-                                        className={`py-3 px-3 active:bg-gray-100 cursor-pointer flex gap-3 ${thread.hasUnread ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'} ${isSelected ? 'bg-brand-50' : ''}`}
+                                        className={`py-3 px-3 active:bg-gray-100 cursor-pointer flex gap-3 select-none ${thread.hasUnread ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'} ${isSelected ? 'bg-brand-50' : ''}`}
+                                        onTouchStart={() => handleLongPressStart(thread, index)}
+                                        onTouchEnd={handleLongPressEnd}
+                                        onTouchMove={handleLongPressEnd}
+                                        onContextMenu={(e) => e.preventDefault()}
                                     >
                                         <div
                                             className="flex items-center justify-center w-10 h-10 shrink-0"
@@ -922,7 +961,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                                 className="w-5 h-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
                                             />
                                         </div>
-                                        <div className="flex-1 min-w-0" onClick={(e) => handleThreadClick(thread, index, e)}>
+                                        <div className="flex-1 min-w-0" onClick={(e) => handleMobileContentClick(thread, index, e)}>
                                             <div className="flex justify-between items-baseline mb-0.5">
                                                 <div className={`text-sm truncate flex-1 pr-2 ${thread.hasUnread ? 'font-bold text-gray-950' : 'font-medium text-gray-700'}`}>
                                                     {participantDisplay}
