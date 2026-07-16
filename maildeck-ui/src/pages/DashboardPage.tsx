@@ -931,7 +931,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                 return (
                                     <div
                                         key={`mobile-${thread.key}`}
-                                        className={`py-3 px-3 active:bg-gray-100 cursor-pointer flex gap-3 select-none ${thread.hasUnread ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'} ${isSelected ? 'bg-brand-50' : ''}`}
+                                        className={`py-3 px-3 cursor-pointer flex gap-3 select-none ${isSelected ? 'bg-brand-50 active:bg-brand-100' : 'active:bg-gray-100'} ${thread.hasUnread ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'}`}
                                         onTouchStart={() => handleLongPressStart(thread, index)}
                                         onTouchEnd={handleLongPressEnd}
                                         onTouchMove={handleLongPressEnd}
@@ -1016,7 +1016,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                     return (
                                         <tr
                                             key={thread.key}
-                                            className={`hover:bg-gray-50 cursor-pointer transition-colors select-none ${thread.hasUnread ? 'font-semibold bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'} ${isSelected ? 'bg-brand-50' : ''}`}
+                                            className={`cursor-pointer transition-colors select-none ${isSelected ? 'bg-brand-50 hover:bg-brand-100' : 'hover:bg-gray-50'} ${thread.hasUnread ? 'font-semibold bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'}`}
                                         >
                                             <td className="p-4" onClick={(e) => {
                                                 e.stopPropagation();
