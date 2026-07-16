@@ -6,53 +6,74 @@ on:
     types: [completed]
     branches: [main]
 
+# クラスタ内プライベートレジストリ (TLS なし・認証なし、Tailnet 上)
+env:
+  REGISTRY: k3s-05.tailef9ae7.ts.net:30500
+  IMAGE_NAME: maildeck-api
+
 jobs:
   deploy:
-    name: Deploy to OCI Server
+    name: Build image & rollout to k3s
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-      - name: Download backend artifact
-        uses: actions/download-artifact@v4
+      - name: Checkout (deployed commit)
+        uses: actions/checkout@v4
         with:
-          name: backend-build
-          path: ./backend-build
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # CI をトリガーした commit を確実にビルドする
+          ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Download frontend artifact
-        uses: actions/download-artifact@v4
+      # Tailnet 上のレジストリ / k3s API へ到達するため runner を join する。
+      # ACL 側で tag:ci にレジストリ (30500) と k3s API (6443) への到達を許可しておくこと。
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v3
         with:
-          name: frontend-build
-          path: ./frontend-build
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
 
-      - name: Setup SSH
+      # レジストリは TLS なしのため Docker daemon に insecure 登録して再起動する。
+      - name: Configure insecure registry
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts
+          echo "{ \"insecure-registries\": [\"${REGISTRY}\"] }" | sudo tee /etc/docker/daemon.json
+          sudo systemctl restart docker
+          # daemon 再起動後の復帰を待つ
+          timeout 30 sh -c 'until docker info >/dev/null 2>&1; do sleep 1; done'
 
-      - name: Deploy backend via rsync
+      # build-image.sh は maildeck-ui/.env を要求するため secrets から生成する
+      # (VITE_API_URL は同一オリジン配信で不要 = スクリプトが除外する)。
+      - name: Generate maildeck-ui/.env from secrets
         run: |
-          rsync -avz --delete \
-            --exclude='.env' \
-            --exclude='logs/' \
-            --exclude='*.json.key' \
-            --exclude='maildeck-*.json' \
-            ./backend-build/ \
-            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/maildeck/build/
+          cat > maildeck-ui/.env <<EOF
+          VITE_AWS_REGION=${{ secrets.VITE_AWS_REGION }}
+          VITE_USER_POOL_ID=${{ secrets.VITE_USER_POOL_ID }}
+          VITE_USER_POOL_CLIENT_ID=${{ secrets.VITE_USER_POOL_CLIENT_ID }}
+          VITE_COGNITO_DOMAIN=${{ secrets.VITE_COGNITO_DOMAIN }}
+          VITE_REDIRECT_URI=${{ secrets.VITE_REDIRECT_URI }}
+          VITE_SIGNOUT_URI=${{ secrets.VITE_SIGNOUT_URI }}
+          EOF
 
-      - name: Deploy frontend via rsync
+      # SHA タグでビルド & push (build-image.sh を再利用)。
+      - name: Build and push image (SHA tag)
         run: |
-          rsync -avz --delete \
-            ./frontend-build/ \
-            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/var/www/maildeck/
+          scripts/build-image.sh "${REGISTRY}/${IMAGE_NAME}:${GITHUB_SHA}" --push
 
-      - name: Restart API service
+      # latest タグを付け替えて push (再ビルドせずタグ追加)。
+      - name: Tag and push latest
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-            "sudo systemctl restart maildeck-api.service && sudo systemctl is-active maildeck-api.service"
+          docker tag "${REGISTRY}/${IMAGE_NAME}:${GITHUB_SHA}" "${REGISTRY}/${IMAGE_NAME}:latest"
+          docker push "${REGISTRY}/${IMAGE_NAME}:latest"
+
+      # Tailnet 経由で k3s API を叩く。KUBECONFIG は base64 で注入する。
+      - name: Setup kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Rollout to k3s
+        run: |
+          kubectl -n maildeck set image deployment/maildeck-api \
+            maildeck-api="${REGISTRY}/${IMAGE_NAME}:${GITHUB_SHA}"
+          kubectl -n maildeck rollout status deployment/maildeck-api --timeout=180s
