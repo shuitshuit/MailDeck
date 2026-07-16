@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ComposeModal from '../components/ComposeModal';
 import MailDetailModal from '../components/MailDetailModal';
@@ -77,6 +77,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
     const [parsedSearchQuery, setParsedSearchQuery] = useState<SearchQuery>({ keywords: [] });
     const [emptyTrashLoading, setEmptyTrashLoading] = useState(false);
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
+    const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
     const [bulkActionLoading, setBulkActionLoading] = useState(false);
     const toast = useToast();
     const { confirm } = useConfirm();
@@ -398,6 +399,74 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         } else {
             setSelectedThread(thread);
         }
+    };
+
+    // Ctrl/Cmd+クリックで個別選択トグル、Shift+クリックで範囲選択、通常クリックでスレッドを開く
+    // (選択中の項目が1件以上ある場合は、タッチ操作でも使えるよう通常クリックもトグル動作にする)
+    const handleThreadClick = (thread: ThreadGroup, index: number, e: React.MouseEvent) => {
+        const allKeys = thread.messages.map(m => `${m.configId}::${m.id}`);
+
+        if (e.shiftKey) {
+            e.preventDefault();
+            const anchor = lastSelectedIndex ?? index;
+            const start = Math.min(anchor, index);
+            const end = Math.max(anchor, index);
+            const rangeKeys = threadedMails
+                .slice(start, end + 1)
+                .flatMap(t => t.messages.map(m => `${t.configId}::${m.id}`));
+            setSelectedMessages(prev => {
+                const next = new Set(prev);
+                rangeKeys.forEach(k => next.add(k));
+                return next;
+            });
+            setLastSelectedIndex(index);
+        } else if (e.ctrlKey || e.metaKey || selectedMessages.size > 0) {
+            const isSelected = allKeys.every(k => selectedMessages.has(k));
+            setSelectedMessages(prev => {
+                const next = new Set(prev);
+                if (isSelected) allKeys.forEach(k => next.delete(k));
+                else allKeys.forEach(k => next.add(k));
+                return next;
+            });
+            setLastSelectedIndex(index);
+        } else {
+            openThread(thread);
+            setLastSelectedIndex(index);
+        }
+    };
+
+    // モバイル(タッチ操作)用: 長押しで選択モードを開始する
+    const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const longPressTriggeredRef = useRef(false);
+
+    const handleLongPressStart = (thread: ThreadGroup, index: number) => {
+        longPressTriggeredRef.current = false;
+        longPressTimerRef.current = setTimeout(() => {
+            longPressTriggeredRef.current = true;
+            const allKeys = thread.messages.map(m => `${m.configId}::${m.id}`);
+            setSelectedMessages(prev => {
+                const next = new Set(prev);
+                allKeys.forEach(k => next.add(k));
+                return next;
+            });
+            setLastSelectedIndex(index);
+            if (navigator.vibrate) navigator.vibrate(15);
+        }, 500);
+    };
+
+    const handleLongPressEnd = () => {
+        if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+        }
+    };
+
+    const handleMobileContentClick = (thread: ThreadGroup, index: number, e: React.MouseEvent) => {
+        if (longPressTriggeredRef.current) {
+            longPressTriggeredRef.current = false;
+            return;
+        }
+        handleThreadClick(thread, index, e);
     };
 
     // 検索ハンドラー
@@ -853,7 +922,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                     <>
                         {/* Mobile View (Cards) */}
                         <div className="block md:hidden divide-y divide-gray-100">
-                            {threadedMails.map((thread) => {
+                            {threadedMails.map((thread, index) => {
                                 const allKeys = thread.messages.map(m => `${m.configId}::${m.id}`);
                                 const isSelected = allKeys.every(k => selectedMessages.has(k));
                                 const participantDisplay = thread.participants.length <= 2
@@ -862,18 +931,27 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                 return (
                                     <div
                                         key={`mobile-${thread.key}`}
-                                        className={`py-3 px-3 active:bg-gray-100 cursor-pointer flex gap-3 ${thread.hasUnread ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'} ${isSelected ? 'bg-brand-50' : ''}`}
+                                        className={`py-3 px-3 cursor-pointer flex gap-3 select-none ${isSelected ? 'bg-brand-50 active:bg-brand-100' : 'active:bg-gray-100'} ${thread.hasUnread ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'}`}
+                                        onTouchStart={() => handleLongPressStart(thread, index)}
+                                        onTouchEnd={handleLongPressEnd}
+                                        onTouchMove={handleLongPressEnd}
+                                        onContextMenu={(e) => e.preventDefault()}
                                     >
                                         <div
                                             className="flex items-center justify-center w-10 h-10 shrink-0"
                                             onClick={(e) => {
                                                 e.stopPropagation();
+                                                if (e.shiftKey) {
+                                                    handleThreadClick(thread, index, e);
+                                                    return;
+                                                }
                                                 setSelectedMessages(prev => {
                                                     const next = new Set(prev);
                                                     if (isSelected) allKeys.forEach(k => next.delete(k));
                                                     else allKeys.forEach(k => next.add(k));
                                                     return next;
                                                 });
+                                                setLastSelectedIndex(index);
                                             }}
                                         >
                                             <input
@@ -883,7 +961,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                                 className="w-5 h-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
                                             />
                                         </div>
-                                        <div className="flex-1 min-w-0" onClick={() => openThread(thread)}>
+                                        <div className="flex-1 min-w-0" onClick={(e) => handleMobileContentClick(thread, index, e)}>
                                             <div className="flex justify-between items-baseline mb-0.5">
                                                 <div className={`text-sm truncate flex-1 pr-2 ${thread.hasUnread ? 'font-bold text-gray-950' : 'font-medium text-gray-700'}`}>
                                                     {participantDisplay}
@@ -929,7 +1007,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                {threadedMails.map((thread) => {
+                                {threadedMails.map((thread, index) => {
                                     const allKeys = thread.messages.map(m => `${m.configId}::${m.id}`);
                                     const isSelected = allKeys.every(k => selectedMessages.has(k));
                                     const participantDisplay = thread.participants.length <= 2
@@ -938,16 +1016,21 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                     return (
                                         <tr
                                             key={thread.key}
-                                            className={`hover:bg-gray-50 cursor-pointer transition-colors ${thread.hasUnread ? 'font-semibold bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'} ${isSelected ? 'bg-brand-50' : ''}`}
+                                            className={`cursor-pointer transition-colors select-none ${isSelected ? 'bg-brand-50 hover:bg-brand-100' : 'hover:bg-gray-50'} ${thread.hasUnread ? 'font-semibold bg-blue-50 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'}`}
                                         >
                                             <td className="p-4" onClick={(e) => {
                                                 e.stopPropagation();
+                                                if (e.shiftKey) {
+                                                    handleThreadClick(thread, index, e);
+                                                    return;
+                                                }
                                                 setSelectedMessages(prev => {
                                                     const next = new Set(prev);
                                                     if (isSelected) allKeys.forEach(k => next.delete(k));
                                                     else allKeys.forEach(k => next.add(k));
                                                     return next;
                                                 });
+                                                setLastSelectedIndex(index);
                                             }}>
                                                 <input
                                                     type="checkbox"
@@ -959,7 +1042,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                             <td
                                                 className={`p-4 truncate ${thread.hasUnread ? 'text-gray-950 font-bold' : 'text-gray-900'}`}
                                                 title={thread.participants.join(', ')}
-                                                onClick={() => openThread(thread)}
+                                                onClick={(e) => handleThreadClick(thread, index, e)}
                                             >
                                                 <span>{participantDisplay}</span>
                                                 {thread.messages.length > 1 && (
@@ -968,7 +1051,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="p-4" onClick={() => openThread(thread)}>
+                                            <td className="p-4" onClick={(e) => handleThreadClick(thread, index, e)}>
                                                 <div className="flex flex-col gap-1">
                                                     <span className={`truncate ${thread.hasUnread ? 'text-gray-950' : 'text-gray-900'}`}>{thread.subject || '(件名なし)'}</span>
                                                     {thread.labels.length > 0 && (
@@ -980,7 +1063,7 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="p-4 text-right text-gray-500 text-sm whitespace-nowrap" onClick={() => openThread(thread)}>
+                                            <td className="p-4 text-right text-gray-500 text-sm whitespace-nowrap" onClick={(e) => handleThreadClick(thread, index, e)}>
                                                 {new Date(thread.latestDate).toLocaleString()}
                                             </td>
                                         </tr>
