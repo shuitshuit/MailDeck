@@ -14,6 +14,7 @@ UI 用の別 Deployment・別イメージ・nginx は不要です。
 | `00-namespace.yaml` | `maildeck` namespace |
 | `01-api-config.yaml` | バックエンドの非機密設定 (ConfigMap) |
 | `02-onepassword-item.yaml` | 機密値を 1Password から取り込む `OnePasswordItem` |
+| `03-ci-rbac.yaml` | GitHub Actions 用の ServiceAccount + Role (最小権限) |
 | `10-api-deployment.yaml` | MailDeck.Api (UI 同梱) の Deployment + Service |
 | `30-ingress.yaml` | Traefik Ingress (全パス → API、TLS 終端) |
 
@@ -100,12 +101,76 @@ docker build -f MailDeck.Api/Dockerfile \
 ```
 </details>
 
+## CI/CD (GitHub Actions) の kubeconfig
+
+`.github/workflows/deploy.yml` は Tailscale に join してイメージを build/push し、
+`kubectl set image` + `rollout status` で Deployment を更新します。
+そのための `KUBECONFIG` secret は **cluster-admin の `/etc/rancher/k3s/k3s.yaml` ではなく**、
+`03-ci-rbac.yaml` の ServiceAccount (maildeck namespace の Deployment 更新のみ可能) から作ります。
+
+### 1. 前提: apiserver 証明書の SAN に Tailnet 名を含める
+
+kubeconfig の `server` は Tailnet アドレス (`https://k3s-05.tailef9ae7.ts.net:6443`) を指すため、
+apiserver 証明書の SAN にそのホスト名が必要です。含まれていないと kubectl が x509 エラーになります。
+
+```bash
+# 現在の SAN を確認
+sudo openssl x509 -in /var/lib/rancher/k3s/server/tls/serving-kube-apiserver.crt -noout -text \
+  | grep -A1 "Subject Alternative Name"
+```
+
+無い場合は k3s に `--tls-san k3s-05.tailef9ae7.ts.net` を追加 (`/etc/rancher/k3s/config.yaml` の
+`tls-san:` でも可) し、既存証明書を削除して再起動すると再生成されます
+(**再起動中は apiserver が数十秒落ちます**。稼働中の Pod は影響を受けません):
+
+```bash
+sudo rm /var/lib/rancher/k3s/server/tls/serving-kube-apiserver.{crt,key}
+sudo systemctl restart k3s
+```
+
+### 2. RBAC を適用して kubeconfig を生成
+
+```bash
+kubectl apply -f infrastructure/k8s/03-ci-rbac.yaml
+
+# ServiceAccount トークンから kubeconfig-ci.yaml を生成 (リポジトリルートで実行)
+scripts/gen-ci-kubeconfig.sh
+
+# 疎通確認 (Tailnet に繋がっている端末から)
+KUBECONFIG=kubeconfig-ci.yaml kubectl -n maildeck get deployment maildeck-api
+```
+
+### 3. GitHub Secret に登録
+
+`deploy.yml` は `base64 -d` でデコードするため、**base64 化して**登録します。
+
+```bash
+base64 -w0 kubeconfig-ci.yaml | gh secret set KUBECONFIG --repo shuitshuit/MailDeck
+# または生成と同時に
+scripts/gen-ci-kubeconfig.sh --base64 | gh secret set KUBECONFIG --repo shuitshuit/MailDeck
+```
+
+> 生成した `kubeconfig-ci.yaml` は**認証情報そのもの**です。登録後は削除するか、
+> 少なくともコミットしないこと (`.gitignore` 済み)。
+
+### 4. その他必要な secrets
+
+| Secret | 用途 |
+|--------|------|
+| `TS_OAUTH_CLIENT_ID` / `TS_OAUTH_SECRET` | Tailscale OAuth client (runner を ephemeral node として join) |
+| `KUBECONFIG` | 上記で生成した base64 kubeconfig |
+| `VITE_*` 一式 | イメージビルド時に UI へ埋め込む値 (`ci.yml` と同じもの) |
+
+Tailscale ACL 側で、`deploy.yml` の `tags:` に指定した tag (既定 `tag:ci`) から
+レジストリ (`k3s-05...:30500`) と apiserver (`:6443`) への到達を許可しておくこと。
+
 ## デプロイ
 
 ```bash
 kubectl apply -f 00-namespace.yaml
 kubectl apply -f 01-api-config.yaml
 kubectl apply -f 02-onepassword-item.yaml
+kubectl apply -f 03-ci-rbac.yaml
 kubectl apply -f 10-api-deployment.yaml
 kubectl apply -f 30-ingress.yaml
 
