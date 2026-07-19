@@ -60,30 +60,43 @@ Operator が同名の `Secret` を maildeck namespace に自動生成し、API D
 
 UI は API のイメージに同梱されるため **ビルドは 1 つだけ**です
 (`MailDeck.Api/Dockerfile` がマルチステージで UI をビルドし wwwroot に配置する)。
-push 側の開発機の Docker に insecure registry 登録が必要です
-(`/etc/docker/daemon.json` に `{ "insecure-registries": ["k3s-05.tailef9ae7.ts.net:30500"] }`)。
+push 時は `linux/amd64` + `linux/arm64` の**マルチアーキイメージ**を `docker buildx` で
+ビルド & push します (クラスタのノードが amd64/arm64 混在でも同じタグで pull できる)。
+push 側の開発機に以下が必要です:
+
+- `docker buildx` プラグイン (Docker Desktop / 最近の Docker Engine には同梱)
+- クロスアーキビルド用の QEMU (未登録ならスクリプトが `tonistiigi/binfmt` で自動登録を試みる。
+  `--privileged` でコンテナを起動するため失敗する環境では事前に手動登録しておくこと)
+
+insecure registry (`k3s-05.tailef9ae7.ts.net:30500`, TLS なし) 向けの設定は、
+スクリプトが実行の都度 buildx 用の `buildkitd.toml` を生成してビルダーに渡すため
+`/etc/docker/daemon.json` の `insecure-registries` 登録は **push 側に不要**です
+(ローカル確認ビルド `docker build` のみを使う場合は従来通り不要)。
 
 VITE_ 変数はビルド時に UI に埋め込まれます (VITE_API_URL は同一オリジンの相対パス /api に
 なるため不要)。値は `maildeck-ui/.env` に用意し、ヘルパースクリプトが --build-arg に
 自動展開します (VITE_API_URL は自動で除外)。
 
 ```bash
-# リポジトリルートで実行。デフォルトタグ maildeck-api:integrated (ローカル確認用、push なし)
+# リポジトリルートで実行。デフォルトタグ maildeck-api:integrated (ローカル確認用、push なし、native arch のみ)
 scripts/build-image.sh
-# クラスタ内レジストリ用タグでビルド & push (タグ省略時は既定レジストリを自動採用)
+# クラスタ内レジストリ用タグで amd64+arm64 マルチアーキ build & push (タグ省略時は既定レジストリを自動採用)
 scripts/build-image.sh --push
 # 任意タグを指定 (--push と併用可)
 scripts/build-image.sh k3s-05.tailef9ae7.ts.net:30500/maildeck-api:latest --push
 # 別の env ファイルを使う場合
 ENV_FILE=maildeck-ui/.env.prod scripts/build-image.sh --push
+# push するプラットフォームを絞る場合
+PLATFORMS=linux/amd64 scripts/build-image.sh --push
 ```
 
 Windows (PowerShell) では同じ引数体系で `build-image.ps1` を使います:
 
 ```powershell
-./scripts/build-image.ps1              # ローカル確認用 (push なし)
-./scripts/build-image.ps1 -Push        # 既定レジストリタグでビルド & push
+./scripts/build-image.ps1              # ローカル確認用 (push なし、native arch のみ)
+./scripts/build-image.ps1 -Push        # 既定レジストリタグで amd64+arm64 マルチアーキ build & push
 ./scripts/build-image.ps1 -ImageTag <tag> -Push
+./scripts/build-image.ps1 -Push -Platforms linux/amd64
 ```
 
 <details><summary>スクリプトを使わず直接 docker build する場合</summary>
