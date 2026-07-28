@@ -1,0 +1,15 @@
+{
+  "app": {
+    "windows": [
+      {
+        "title": "MailDeck",
+        "width": 414,
+        "height": 896,
+        "resizable": true,
+        "fullscreen": false,
+        "useHttpsScheme": false,
+        "url": "https://maildeck.shuit.net"
+      }
+    ]
+  }
+}
