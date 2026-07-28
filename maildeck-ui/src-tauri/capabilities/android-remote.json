@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/android-schema.json",
+  "identifier": "android-remote",
+  "description": "Grants the deployed production origin the same IPC permissions as bundled content, so the Android WebView can load the live UI directly instead of a build-time snapshot",
+  "windows": ["main"],
+  "platforms": ["android"],
+  "remote": {
+    "urls": ["https://maildeck.shuit.net/*"]
+  },
+  "permissions": [
+    "core:default",
+    "notification:default",
+    "fcm:default"
+  ]
+}
