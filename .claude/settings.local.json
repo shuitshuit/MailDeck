@@ -16,7 +16,8 @@
       "Bash(git -C \"c:/Users/shuitt/source/repos/MailDeck\" add .claude/settings.local.json MailDeck.Api/Services/AutoLabelingService.cs MailDeck.Api/Controllers/BlockedSendersController.cs MailDeck.Api/Models/BlockedSender.cs database/migrations/019_blocked_senders.sql maildeck-ui/src/App.tsx maildeck-ui/src/lib/api.ts maildeck-ui/src/components/BlockedSenderModal.tsx maildeck-ui/src/pages/BlockedSendersPage.tsx maildeck-ui/src/types/blockedSenders.ts)",
       "mcp__playwright__browser_click",
       "mcp__playwright__browser_snapshot",
-      "mcp__playwright__browser_console_messages"
+      "mcp__playwright__browser_console_messages",
+      "mcp__Claude_Code_Remote__send_later"
     ]
   },
   "outputStyle": "default"
