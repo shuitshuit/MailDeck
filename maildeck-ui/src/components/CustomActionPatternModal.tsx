@@ -29,8 +29,9 @@ export default function CustomActionPatternModal({
 }: CustomActionPatternModalProps) {
     const [patternName, setPatternName] = useState('');
     const [patternType, setPatternType] = useState<string>('otp');
-    // Multi-regex patterns: at least one entry
-    const [regexEntries, setRegexEntries] = useState<RegexPatternEntry[]>([{ regex: '', nextOperator: undefined }]);
+    // Multi-regex patterns, entered as chips (type a pattern, press Space/Enter to commit)
+    const [regexEntries, setRegexEntries] = useState<RegexPatternEntry[]>([]);
+    const [patternDraft, setPatternDraft] = useState('');
     const [actionType, setActionType] = useState<string>('copy');
     const [linkTemplate, setLinkTemplate] = useState('');
     const [priority, setPriority] = useState(0);
@@ -41,11 +42,13 @@ export default function CustomActionPatternModal({
     // Test preview
     const [testText, setTestText] = useState('');
     const [testResults, setTestResults] = useState<string[]>([]);
-    const [regexErrors, setRegexErrors] = useState<(string | null)[]>([null]);
+    const [regexErrors, setRegexErrors] = useState<(string | null)[]>([]);
     const [linkTemplateError, setLinkTemplateError] = useState<string | null>(null);
 
     // Computed: first error (for link preview check)
     const regexError = regexErrors[0] ?? null;
+    // Validation for the not-yet-committed chip draft
+    const draftError = patternDraft.trim() ? validateRegexPattern(patternDraft.trim()) : null;
 
     const { modalContentRef, handleBackdropClick } = useModalClose(isOpen, onClose);
     const toast = useToast();
@@ -69,14 +72,15 @@ export default function CustomActionPatternModal({
             } else {
                 setPatternName('');
                 setPatternType('otp');
-                setRegexEntries([{ regex: '', nextOperator: undefined }]);
-                setRegexErrors([null]);
+                setRegexEntries([]);
+                setRegexErrors([]);
                 setActionType('copy');
                 setLinkTemplate('');
                 setPriority(0);
                 setIsEnabled(true);
                 setDescription('');
             }
+            setPatternDraft('');
             setTestText('');
             setTestResults([]);
             setLinkTemplateError(null);
@@ -135,6 +139,45 @@ export default function CustomActionPatternModal({
 
     if (!isOpen) return null;
 
+    // Commit the current draft text as a new pattern chip
+    const commitPatternDraft = (value: string = patternDraft) => {
+        const trimmed = value.trim();
+        if (!trimmed) return;
+        setRegexEntries(prev => {
+            const updated = [...prev];
+            if (updated.length > 0) {
+                updated[updated.length - 1] = { ...updated[updated.length - 1], nextOperator: updated[updated.length - 1].nextOperator ?? 'AND' };
+            }
+            return [...updated, { regex: trimmed, nextOperator: undefined }];
+        });
+        setPatternDraft('');
+    };
+
+    const removePatternChip = (idx: number) => {
+        setRegexEntries(prev => {
+            const updated = prev.filter((_, i) => i !== idx);
+            if (updated.length > 0) updated[updated.length - 1] = { ...updated[updated.length - 1], nextOperator: undefined };
+            return updated;
+        });
+    };
+
+    // Click a chip's text to pull it back into the input for editing
+    const editPatternChip = (idx: number) => {
+        setPatternDraft(regexEntries[idx].regex);
+        removePatternChip(idx);
+    };
+
+    const handlePatternDraftKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            if (patternDraft.trim()) {
+                e.preventDefault();
+                commitPatternDraft();
+            }
+        } else if (e.key === 'Backspace' && patternDraft === '' && regexEntries.length > 0) {
+            removePatternChip(regexEntries.length - 1);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -144,13 +187,29 @@ export default function CustomActionPatternModal({
             return;
         }
 
-        const validEntries = regexEntries.filter(e => e.regex.trim() !== '');
+        const draftTrimmed = patternDraft.trim();
+        if (draftTrimmed && validateRegexPattern(draftTrimmed)) {
+            toast.error('無効な正規表現パターンがあります。');
+            return;
+        }
+
+        // Include any not-yet-committed draft text as the final chip
+        const allEntries = draftTrimmed
+            ? [
+                ...regexEntries.map((entry, i) =>
+                    i === regexEntries.length - 1 ? { ...entry, nextOperator: entry.nextOperator ?? 'AND' } : entry
+                ),
+                { regex: draftTrimmed, nextOperator: undefined as undefined }
+            ]
+            : regexEntries;
+
+        const validEntries = allEntries.filter(entry => entry.regex.trim() !== '');
         if (validEntries.length === 0) {
             toast.error('正規表現パターンを1つ以上入力してください。');
             return;
         }
 
-        if (regexErrors.some(e => e !== null)) {
+        if (regexErrors.some(err => err !== null)) {
             toast.error('無効な正規表現パターンがあります。');
             return;
         }
@@ -161,9 +220,9 @@ export default function CustomActionPatternModal({
         }
 
         // Normalize: last entry has no nextOperator
-        const normalizedEntries = validEntries.map((e, i) => ({
-            regex: e.regex,
-            nextOperator: i < validEntries.length - 1 ? (e.nextOperator ?? 'AND') : undefined
+        const normalizedEntries = validEntries.map((entry, i) => ({
+            regex: entry.regex,
+            nextOperator: i < validEntries.length - 1 ? (entry.nextOperator ?? 'AND') : undefined
         }));
 
         setIsSaving(true);
@@ -179,6 +238,7 @@ export default function CustomActionPatternModal({
                 description: description.trim() || undefined,
                 linkTemplate: actionType === 'link' ? linkTemplate.trim() : undefined
             });
+            setPatternDraft('');
             onClose();
         } catch (error) {
             console.error('Failed to save pattern:', error);
@@ -296,93 +356,82 @@ export default function CustomActionPatternModal({
                         </div>
                     )}
 
-                    {/* Regex Patterns (multi) */}
+                    {/* Regex Patterns (multi, chip input) */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             正規表現パターン <span className="text-red-500">*</span>
                         </label>
-                        <div className="space-y-2">
+                        <div
+                            className="flex flex-wrap items-center gap-1.5 p-2 border rounded-lg focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-brand-500 transition-all cursor-text"
+                            onClick={(e) => {
+                                if (e.target === e.currentTarget) (e.currentTarget.querySelector('input') as HTMLInputElement | null)?.focus();
+                            }}
+                        >
                             {regexEntries.map((entry, idx) => (
-                                <div key={idx}>
-                                    <div className="flex items-start space-x-2">
-                                        <input
-                                            type="text"
-                                            value={entry.regex}
-                                            onChange={(e) => {
+                                <div key={idx} className="flex items-center gap-1.5">
+                                    <span
+                                        className={`inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-full text-sm font-mono ${
+                                            regexErrors[idx] ? 'bg-red-100 text-red-800 ring-1 ring-red-400' : 'bg-brand-100 text-brand-800'
+                                        }`}
+                                        title={regexErrors[idx] ?? 'クリックして編集'}
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() => editPatternChip(idx)}
+                                            className="max-w-[220px] truncate hover:underline"
+                                        >
+                                            {entry.regex}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => removePatternChip(idx)}
+                                            className="shrink-0 leading-none opacity-70 hover:opacity-100 hover:text-red-600"
+                                            title="削除"
+                                        >
+                                            ×
+                                        </button>
+                                    </span>
+                                    {/* AND/OR toggle between entries, individually switchable */}
+                                    {idx < regexEntries.length - 1 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
                                                 const updated = [...regexEntries];
-                                                updated[idx] = { ...updated[idx], regex: e.target.value };
+                                                const current = updated[idx].nextOperator ?? 'AND';
+                                                updated[idx] = { ...updated[idx], nextOperator: current === 'AND' ? 'OR' : 'AND' };
                                                 setRegexEntries(updated);
                                             }}
-                                            className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all font-mono text-sm ${
-                                                regexErrors[idx] ? 'border-red-500' : ''
+                                            className={`px-3 py-1 rounded-full text-xs font-bold transition-all hover:scale-105 ${
+                                                (entry.nextOperator ?? 'AND') === 'AND'
+                                                    ? 'bg-blue-500 text-white shadow-md'
+                                                    : 'bg-amber-500 text-white shadow-md'
                                             }`}
-                                            placeholder={idx === 0 ? '例: \\b\\d{6}\\b' : '追加パターン...'}
-                                            required={idx === 0}
-                                        />
-                                        {regexEntries.length > 1 && (
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    const updated = regexEntries.filter((_, i) => i !== idx);
-                                                    // Clear nextOperator from new last entry
-                                                    if (updated.length > 0) updated[updated.length - 1] = { ...updated[updated.length - 1], nextOperator: undefined };
-                                                    setRegexEntries(updated);
-                                                }}
-                                                className="flex-shrink-0 p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                title="削除"
-                                            >
-                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                </svg>
-                                            </button>
-                                        )}
-                                    </div>
-                                    {regexErrors[idx] && (
-                                        <p className="text-xs text-red-600 mt-0.5">{regexErrors[idx]}</p>
-                                    )}
-                                    {/* AND/OR toggle between entries */}
-                                    {idx < regexEntries.length - 1 && (
-                                        <div className="flex justify-center py-1">
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    const updated = [...regexEntries];
-                                                    const current = updated[idx].nextOperator ?? 'AND';
-                                                    updated[idx] = { ...updated[idx], nextOperator: current === 'AND' ? 'OR' : 'AND' };
-                                                    setRegexEntries(updated);
-                                                }}
-                                                className={`px-4 py-1 rounded-full text-xs font-bold transition-all hover:scale-105 ${
-                                                    (entry.nextOperator ?? 'AND') === 'AND'
-                                                        ? 'bg-blue-500 text-white shadow-md'
-                                                        : 'bg-amber-500 text-white shadow-md'
-                                                }`}
-                                                title="クリックして切り替え"
-                                            >
-                                                {(entry.nextOperator ?? 'AND') === 'AND' ? 'AND (すべてに含む)' : 'OR (いずれかに含む)'}
-                                            </button>
-                                        </div>
+                                            title="クリックして切り替え"
+                                        >
+                                            {(entry.nextOperator ?? 'AND') === 'AND' ? 'AND' : 'OR'}
+                                        </button>
                                     )}
                                 </div>
                             ))}
+                            <input
+                                type="text"
+                                value={patternDraft}
+                                onChange={(e) => setPatternDraft(e.target.value)}
+                                onKeyDown={handlePatternDraftKeyDown}
+                                onBlur={() => commitPatternDraft()}
+                                className="flex-1 min-w-[160px] py-1 outline-none bg-transparent font-mono text-sm"
+                                placeholder={regexEntries.length === 0 ? '例: \\b\\d{6}\\b （スペースで確定）' : '追加パターン...'}
+                            />
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                const updated = [...regexEntries];
-                                // Set nextOperator on current last entry
-                                if (updated.length > 0) updated[updated.length - 1] = { ...updated[updated.length - 1], nextOperator: 'AND' };
-                                setRegexEntries([...updated, { regex: '', nextOperator: undefined }]);
-                                setRegexErrors([...regexErrors, null]);
-                            }}
-                            className="mt-2 flex items-center space-x-1 text-brand-600 hover:bg-brand-50 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
-                        >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
-                            <span>パターンを追加</span>
-                        </button>
+                        {draftError && (
+                            <p className="text-xs text-red-600 mt-0.5">{draftError}</p>
+                        )}
+                        {regexErrors.some(err => !!err) && (
+                            <p className="text-xs text-red-600 mt-0.5">無効な正規表現があります。赤いボタンにカーソルを合わせると詳細を確認できます。</p>
+                        )}
                         <p className="text-xs text-gray-500 mt-1">
-                            JavaScriptの正規表現構文。AND: 本文が全パターンに含む、OR: いずれかに含む。例: \b\d{'{6}'}\b は6桁の数字。
+                            パターンを入力してスペースキーかEnterで確定するとボタンになります（×で削除、クリックで編集）。
+                            AND: 本文が全パターンに含む、OR: いずれかに含む。例: \b\d{'{6}'}\b は6桁の数字。
                         </p>
                     </div>
 
@@ -480,7 +529,7 @@ export default function CustomActionPatternModal({
                         </button>
                         <button
                             type="submit"
-                            disabled={isSaving || regexErrors.some(e => !!e) || !!linkTemplateError}
+                            disabled={isSaving || regexErrors.some(e => !!e) || !!linkTemplateError || !!draftError}
                             className="flex-1 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isSaving ? '保存中...' : initialData ? '更新' : '作成'}
