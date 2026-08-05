@@ -176,6 +176,12 @@ try
     builder.Services.AddAWSService<IAmazonKeyManagementService>();
     builder.Services.AddSingleton<IEncryptionService, KmsEncryptionService>();
 
+    // OAuth2 (XOAUTH2) mail accounts
+    builder.Services.AddMemoryCache();
+    builder.Services.AddHttpClient<IGoogleOAuthService, GoogleOAuthService>();
+    builder.Services.AddSingleton<IOAuthStateStore, OAuthStateStore>();
+    builder.Services.AddSingleton<IMailConnectionService, MailConnectionService>();
+
     // Channel Service for auto-labeling
     builder.Services.AddSingleton<ChannelService>();
 

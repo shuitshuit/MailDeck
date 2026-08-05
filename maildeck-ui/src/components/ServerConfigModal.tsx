@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useToast } from '../contexts/ToastContext';
+import type { AuthType } from '../lib/api';
 
 interface ServerConfig {
     id?: string;
     accountName: string;
+    authType?: AuthType;
+    oauthProvider?: string | null;
     imapHost: string;
     imapPort: number;
     imapSslEnabled: boolean;
@@ -42,13 +45,38 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
     const [email, setEmail] = useState('');
     const [isAutoConfiguring, setIsAutoConfiguring] = useState(false);
     const [showManualConfig, setShowManualConfig] = useState(false);
+    const [isGoogleAvailable, setIsGoogleAvailable] = useState(false);
+    const [isStartingOAuth, setIsStartingOAuth] = useState(false);
     const toast = useToast();
+
+    // OAuth2アカウントはトークンで認証するため、パスワード欄は表示しない
+    const isOAuthAccount = initialData?.authType === 'oauth2';
+
+    useEffect(() => {
+        if (!isOpen || mode !== 'create') return;
+
+        let cancelled = false;
+        (async () => {
+            try {
+                const { getOAuthProviders } = await import('../lib/api');
+                const providers = await getOAuthProviders();
+                if (!cancelled) setIsGoogleAvailable(providers.google);
+            } catch (error) {
+                // 未設定のサーバーではボタンを出さないだけでよい
+                console.error('Failed to load OAuth providers:', error);
+            }
+        })();
+
+        return () => { cancelled = true; };
+    }, [isOpen, mode]);
 
     useEffect(() => {
         if (isOpen && initialData) {
             setFormData({
                 id: initialData.id,
                 accountName: initialData.accountName,
+                authType: initialData.authType,
+                oauthProvider: initialData.oauthProvider,
                 imapHost: initialData.imapHost,
                 imapPort: initialData.imapPort,
                 imapSslEnabled: initialData.imapSslEnabled,
@@ -99,6 +127,19 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
 
     const handleChange = (field: keyof ServerConfig, value: ServerConfig[keyof ServerConfig]) => {
         setFormData(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleGoogleOAuth = async () => {
+        setIsStartingOAuth(true);
+        try {
+            const { startGoogleOAuth } = await import('../lib/api');
+            // Googleの同意画面へ遷移し、戻り先は設定ページ (?oauth=success|error)
+            window.location.href = await startGoogleOAuth();
+        } catch (error) {
+            console.error('Failed to start Google OAuth:', error);
+            toast.error('Googleとの連携を開始できませんでした。');
+            setIsStartingOAuth(false);
+        }
     };
 
     const handleAutoConfig = async () => {
@@ -238,6 +279,34 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
                                     <p className="text-gray-600 text-sm">メールアドレスを入力すると、サーバー設定を自動検出します</p>
                                 </div>
 
+                                {isGoogleAvailable && (
+                                    <div className="mb-6">
+                                        <button
+                                            type="button"
+                                            onClick={handleGoogleOAuth}
+                                            disabled={isStartingOAuth}
+                                            className="w-full px-6 py-3 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-bold shadow-sm flex items-center justify-center gap-3"
+                                        >
+                                            <svg className="w-5 h-5" viewBox="0 0 18 18" aria-hidden="true">
+                                                <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 01-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
+                                                <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 009 18z" />
+                                                <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 010-3.44V4.95H.96a9 9 0 000 8.1l3.01-2.33z" />
+                                                <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.9 11.43 0 9 0A9 9 0 00.96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z" />
+                                            </svg>
+                                            {isStartingOAuth ? 'Googleに接続中...' : 'Googleアカウントで追加'}
+                                        </button>
+                                        <p className="text-xs text-gray-500 mt-2">
+                                            パスワードやアプリパスワードは不要です
+                                        </p>
+
+                                        <div className="flex items-center gap-3 mt-6">
+                                            <div className="flex-1 h-px bg-gray-200" />
+                                            <span className="text-xs text-gray-400">または</span>
+                                            <div className="flex-1 h-px bg-gray-200" />
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="space-y-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2 text-left">
@@ -297,6 +366,20 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
                         {/* Manual Configuration */}
                         {(mode === 'edit' || showManualConfig) && (
                             <>
+                        {isOAuthAccount && (
+                            <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-blue-600 shrink-0 mt-0.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                                </svg>
+                                <div className="text-sm text-blue-900">
+                                    <p className="font-medium">OAuth2 ({formData.oauthProvider ?? 'google'}) で認証しています</p>
+                                    <p className="text-blue-700 text-xs mt-0.5">
+                                        パスワードは保存されていません。ユーザー名を変更すると認証できなくなります。
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Account Name */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -373,6 +456,7 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
                                         required
                                     />
                                 </div>
+                                {!isOAuthAccount && (
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         IMAPパスワード {mode === 'edit' && <span className="text-gray-500 text-xs">(変更する場合のみ入力)</span>}
@@ -387,6 +471,7 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
                                         required={mode === 'create'}
                                     />
                                 </div>
+                                )}
                             </div>
                         </div>
 
@@ -451,6 +536,7 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
                                         required
                                     />
                                 </div>
+                                {!isOAuthAccount && (
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         SMTPパスワード {mode === 'edit' && <span className="text-gray-500 text-xs">(変更する場合のみ入力)</span>}
@@ -465,6 +551,7 @@ export default function ServerConfigModal({ isOpen, onClose, onSave, initialData
                                         required={mode === 'create'}
                                     />
                                 </div>
+                                )}
                             </div>
                         </div>
                             </>

@@ -15,12 +15,43 @@ public class ServerConfigController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
     private readonly Services.IEncryptionService _encryptionService;
+    private readonly Services.IMailConnectionService _mailConnection;
+    private readonly Services.IGoogleOAuthService _google;
 
-    public ServerConfigController(ILogger<ServerConfigController> logger, PostgreSqlConnect db, Services.IEncryptionService encryptionService)
+    public ServerConfigController(
+        ILogger<ServerConfigController> logger,
+        PostgreSqlConnect db,
+        Services.IEncryptionService encryptionService,
+        Services.IMailConnectionService mailConnection,
+        Services.IGoogleOAuthService google)
         : base(logger)
     {
         _db = db;
         _encryptionService = encryptionService;
+        _mailConnection = mailConnection;
+        _google = google;
+    }
+
+    /// <summary>
+    /// Tells the provider the account is gone. Best-effort: the row is already
+    /// deleted, and a stale grant on Google's side must not fail the request.
+    /// </summary>
+    private async Task RevokeOAuthGrantAsync(UserServerConfig config)
+    {
+        if (config.OauthProvider != OAuthProviders.Google || string.IsNullOrEmpty(config.OauthRefreshToken))
+        {
+            return;
+        }
+
+        try
+        {
+            var refreshToken = await _encryptionService.DecryptAsync(config.OauthRefreshToken);
+            await _google.RevokeAsync(refreshToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to revoke OAuth grant for deleted account {ConfigId}", config.Id);
+        }
     }
 
     [HttpGet]
@@ -65,6 +96,7 @@ public class ServerConfigController : BaseAuthController
             Id = Guid.NewGuid(),
             UserId = userId,
             AccountName = request.AccountName,
+            AuthType = AuthTypes.Password,
             ImapHost = request.ImapHost,
             ImapPort = request.ImapPort,
             ImapUsername = request.ImapUsername,
@@ -231,14 +263,19 @@ public class ServerConfigController : BaseAuthController
             existing.IsDefault = request.IsDefault;
             existing.UpdatedAt = DateTime.UtcNow;
 
-            // Handle password updates
-            if (!string.IsNullOrEmpty(request.ImapPassword) && request.ImapPassword != "*****")
+            // Handle password updates. OAuth2 accounts authenticate with a token,
+            // so a password sent for one would never be used - ignore it rather
+            // than storing a credential that silently does nothing.
+            if (existing.AuthType != AuthTypes.OAuth2)
             {
-                existing.ImapPassword = await _encryptionService.EncryptAsync(request.ImapPassword);
-            }
-            if (!string.IsNullOrEmpty(request.SmtpPassword) && request.SmtpPassword != "*****")
-            {
-                existing.SmtpPassword = await _encryptionService.EncryptAsync(request.SmtpPassword);
+                if (!string.IsNullOrEmpty(request.ImapPassword) && request.ImapPassword != "*****")
+                {
+                    existing.ImapPassword = await _encryptionService.EncryptAsync(request.ImapPassword);
+                }
+                if (!string.IsNullOrEmpty(request.SmtpPassword) && request.SmtpPassword != "*****")
+                {
+                    existing.SmtpPassword = await _encryptionService.EncryptAsync(request.SmtpPassword);
+                }
             }
 
             await _db.UpdateAsync(existing);
@@ -272,6 +309,13 @@ public class ServerConfigController : BaseAuthController
             }
 
             await _db.DeleteAsync(existing);
+
+            if (existing.AuthType == AuthTypes.OAuth2)
+            {
+                _mailConnection.InvalidateCachedToken(existing.Id);
+                await RevokeOAuthGrantAsync(existing);
+            }
+
             return Ok();
         }
         catch (Exception ex)

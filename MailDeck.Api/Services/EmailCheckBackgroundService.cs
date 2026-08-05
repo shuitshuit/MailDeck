@@ -3,7 +3,6 @@ using MailDeck.Api.Extensions;
 using MailDeck.Api.Models;
 using MailKit;
 using MailKit.Net.Imap;
-using MailKit.Security;
 using MimeKit;
 using ShuitNet.ORM.PostgreSQL;
 using ShuitNet.ORM.PostgreSQL.LinqToSql;
@@ -64,7 +63,7 @@ public class EmailCheckBackgroundService : BackgroundService
         _logger.LogInformation("Starting email check cycle...");
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<PostgreSqlConnect>();
-        var encryptionService = scope.ServiceProvider.GetRequiredService<IEncryptionService>();
+        var mailConnection = scope.ServiceProvider.GetRequiredService<IMailConnectionService>();
 
         await db.OpenAsync();
 
@@ -115,7 +114,7 @@ public class EmailCheckBackgroundService : BackgroundService
             if (stoppingToken.IsCancellationRequested) break;
 
             var semaphore = _hostSemaphores.GetOrAdd(config.ImapHost, _ => new SemaphoreSlim(MaxConnectionsPerHost, MaxConnectionsPerHost));
-            tasks.Add(RunCheckWithThrottle(config, semaphore, db, encryptionService, stoppingToken));
+            tasks.Add(RunCheckWithThrottle(config, semaphore, db, mailConnection, stoppingToken));
 
             if (staggerDelay > TimeSpan.Zero)
             {
@@ -154,13 +153,13 @@ public class EmailCheckBackgroundService : BackgroundService
         UserServerConfig config,
         SemaphoreSlim hostSemaphore,
         PostgreSqlConnect db,
-        IEncryptionService encryptionService,
+        IMailConnectionService mailConnection,
         CancellationToken stoppingToken)
     {
         await hostSemaphore.WaitAsync(stoppingToken);
         try
         {
-            await RunCheckSingle(config, db, encryptionService, stoppingToken);
+            await RunCheckSingle(config, db, mailConnection, stoppingToken);
         }
         finally
         {
@@ -168,14 +167,11 @@ public class EmailCheckBackgroundService : BackgroundService
         }
     }
 
-    private async Task RunCheckSingle(UserServerConfig config, PostgreSqlConnect db, IEncryptionService encryptionService, CancellationToken stoppingToken)
+    private async Task RunCheckSingle(UserServerConfig config, PostgreSqlConnect db, IMailConnectionService mailConnection, CancellationToken stoppingToken)
     {
         try
         {
-            // Decrypt password
-            var password = await encryptionService.DecryptAsync(config.ImapPassword);
-
-            var currentMax = await FetchLastMessageUIDAsync(config, password, stoppingToken);
+            var currentMax = await FetchLastMessageUIDAsync(config, mailConnection, stoppingToken);
             if (config.LastKnownUid == 0)
             {
                 config.LastKnownUid = currentMax;
@@ -194,7 +190,7 @@ public class EmailCheckBackgroundService : BackgroundService
                     var currentMsgID = 0;
                     try
                     {
-                        var mimeMessages = await FetchMessageAsync(config, password, uidsToFetch, stoppingToken);
+                        var mimeMessages = await FetchMessageAsync(config, mailConnection, uidsToFetch, stoppingToken);
                         var (fetchedMessages, messages) = mimeMessages;
                         for (int i = 0; i < fetchedMessages.Count; i++)
                         {
@@ -239,15 +235,10 @@ public class EmailCheckBackgroundService : BackgroundService
         }
     }
 
-    private async Task<uint> FetchLastMessageUIDAsync(UserServerConfig config, string password, CancellationToken stoppingToken)
+    private async Task<uint> FetchLastMessageUIDAsync(UserServerConfig config, IMailConnectionService mailConnection, CancellationToken stoppingToken)
     {
         using var client = new ImapClient();
-        var options = config.ImapSslEnabled ?
-                    (config.ImapPort == 465 || config.ImapPort == 993 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls) :
-                    SecureSocketOptions.Auto;
-
-        await client.ConnectAsync(config.ImapHost, config.ImapPort, options, stoppingToken);
-        await client.AuthenticateAsync(config.ImapUsername, password, stoppingToken);
+        await mailConnection.ConnectImapAsync(client, config, stoppingToken);
 
         var inbox = client.Inbox;
         if (inbox == null) return 0;
@@ -267,14 +258,10 @@ public class EmailCheckBackgroundService : BackgroundService
         return currentMax;
     }
 
-    private async Task<MessageFetchResult> FetchMessageAsync(UserServerConfig config, string password, List<UniqueId> uids, CancellationToken stoppingToken)
+    private async Task<MessageFetchResult> FetchMessageAsync(UserServerConfig config, IMailConnectionService mailConnection, List<UniqueId> uids, CancellationToken stoppingToken)
     {
         using var client = new ImapClient();
-        var options = config.ImapSslEnabled ?
-                    (config.ImapPort == 465 || config.ImapPort == 993 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls) :
-                    SecureSocketOptions.Auto;
-        await client.ConnectAsync(config.ImapHost, config.ImapPort, options, stoppingToken);
-        await client.AuthenticateAsync(config.ImapUsername, password, stoppingToken);
+        await mailConnection.ConnectImapAsync(client, config, stoppingToken);
         var inbox = client.Inbox;
         if (inbox == null) return new MessageFetchResult([], []);
         await inbox.OpenAsync(FolderAccess.ReadOnly, stoppingToken);

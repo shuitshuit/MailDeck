@@ -97,6 +97,9 @@ AWS Cognito (認証)                          PostgreSQL (ShuitNet.ORM)
 - IMAPアカウント設定
 - **PK: UUID** (推測困難なID、セキュリティ向上のため2024年にSERIALから移行)
 - **重要**: `imap_password`, `smtp_password` は AWS KMS暗号化
+- `auth_type`: `password` (従来通り) または `oauth2` (XOAUTH2)
+- `oauth_provider` / `oauth_refresh_token` / `oauth_access_token` / `oauth_token_expires_at`:
+  OAuth2アカウント用。トークンはKMS暗号化して保存
 - `last_known_uid`: 効率的な新着チェック用
 - `last_checked_at`: 最終チェック時刻
 
@@ -143,7 +146,7 @@ Serilogで3種類のJSONログを日次ローテーション (7日保持):
 
 ### 認証情報の保護
 
-- **保存**: AWS KMS (`KmsEncryptionService`) で暗号化
+- **保存**: AWS KMS (`KmsEncryptionService`) で暗号化 (パスワード・OAuth2トークン共通)
 - **通信**: IMAP/SMTP接続は常にSSL/TLS強制
 - **トークン**: JWT BearerトークンをCognitoで検証
 - **CORS**: フロントエンドドメインのみ許可
@@ -164,6 +167,11 @@ POSTGRES_CONNECTION_STRING=<接続文字列>
 VAPID_PUBLIC_KEY=<公開鍵>
 VAPID_PRIVATE_KEY=<秘密鍵>
 VAPID_SUBJECT=mailto:admin@example.com
+
+# Google OAuth2 (Gmail連携。未設定ならUIにボタンが出ないだけで他機能に影響なし)
+OAuth__Google__ClientId=<Google Cloud のOAuthクライアントID>
+OAuth__Google__ClientSecret=<クライアントシークレット>
+OAuth__Google__RedirectUri=https://maildeck.example.com/api/oauth/google/callback
 ```
 
 ## デプロイメント
@@ -276,6 +284,14 @@ await db.DeleteAsync<UserServerConfig>(config.Id);
 2. ログ `logs/maildeck-{Date}.json` でMailKit例外確認
 3. サーバー設定でSSL/TLSポート確認 (IMAP: 993, SMTP: 465/587)
 
+### Gmail (OAuth2) に接続できない
+
+1. `auth_type = 'oauth2'` の行に `oauth_refresh_token` があるか確認
+   (空なら再認証が必要。設定画面のアカウントカードに再認証リンクが出る)
+2. `MailConnectionService` のログでトークンリフレッシュ失敗 (`invalid_grant`) を確認
+   → ユーザーがGoogle側でアクセスを取り消した場合は再認証以外に復旧手段はない
+3. Google Cloud Console のリダイレクトURIが `OAuth__Google__RedirectUri` と完全一致しているか確認
+
 ### JWT検証失敗
 
 1. `appsettings.json` の `CognitoAuthority`, `CognitoClientId` 確認
@@ -300,6 +316,9 @@ await db.DeleteAsync<UserServerConfig>(config.Id);
 | `/api/serverconfig/{id}` | PUT | IMAPアカウント更新 |
 | `/api/serverconfig/{id}` | DELETE | IMAPアカウント削除 |
 | `/api/serverconfig/autoconfig` | POST | Thunderbird風自動設定検出 |
+| `/api/oauth/providers` | GET | 利用可能なOAuthプロバイダ一覧 |
+| `/api/oauth/google/authorize` | POST | Google同意画面URL発行 (`configId`指定で再認証) |
+| `/api/oauth/google/callback` | GET | Googleからのリダイレクト受け口 (認証不要) |
 | `/api/users/sync` | POST | ユーザー同期 |
 | `/api/contacts` | GET/POST | 連絡先一覧/追加 |
 | `/api/contacts/{id}` | PUT | 連絡先更新 |

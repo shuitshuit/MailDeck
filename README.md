@@ -9,6 +9,7 @@ MailDeckは、ユーザーが複数のメールアカウントを統合インタ
 ### 主な機能
 
 - **マルチアカウント管理**: 複数のIMAP/SMTPアカウントを接続・管理
+- **Gmail連携 (OAuth2)**: Googleアカウントでログインするだけで追加 (アプリパスワード不要)
 - **セキュアな認証**: AWS Cognito + JWTトークンによるユーザー認証
 - **メール操作**: すべてのアカウント間でメールの読み取り、送信、整理が可能
 - **リアルタイム通知**: 新着メールのWeb Push通知
@@ -123,6 +124,12 @@ POSTGRES_CONNECTION_STRING=Host=localhost;Database=maildeck;Username=postgres;Pa
 VAPID_PUBLIC_KEY=<公開鍵>
 VAPID_PRIVATE_KEY=<秘密鍵>
 VAPID_SUBJECT=mailto:admin@example.com
+
+# Google OAuth2 (Gmail連携) - 任意。未設定の場合はパスワード認証のみ利用可能
+# 取得手順: docs/operations/gmail-oauth-setup.md
+OAuth__Google__ClientId=<OAuthクライアントID>
+OAuth__Google__ClientSecret=<クライアントシークレット>
+OAuth__Google__RedirectUri=https://maildeck.example.com/api/oauth/google/callback
 ```
 
 3. バックエンドを起動:
@@ -277,6 +284,9 @@ Authorization: Bearer <cognito-jwt-token>
 | `/api/serverconfig/{id}` | PUT | IMAPアカウント更新 |
 | `/api/serverconfig/{id}` | DELETE | IMAPアカウント削除 |
 | `/api/serverconfig/autoconfig` | POST | メール設定自動検出 |
+| `/api/oauth/providers` | GET | 利用可能なOAuthプロバイダ一覧 |
+| `/api/oauth/google/authorize` | POST | Google同意画面URLの発行 |
+| `/api/oauth/google/callback` | GET | Googleからのリダイレクト受け口 |
 | `/api/contacts` | GET | 連絡先一覧 |
 | `/api/contacts` | POST | 連絡先作成 |
 | `/api/contacts/{id}` | PUT | 連絡先更新 |

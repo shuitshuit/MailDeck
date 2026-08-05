@@ -5,7 +5,6 @@ using MailDeck.Api.Models;
 using MailDeck.Api.Extensions;
 using MailKit;
 using MailKit.Net.Imap;
-using MailKit.Security;
 using MimeKit;
 using Npgsql;
 using ShuitNet.ORM.PostgreSQL.LinqToSql;
@@ -402,15 +401,10 @@ public class AutoLabelingService : BackgroundService
                 ?? folderPaths.FirstOrDefault(f => f.DisplayName is "Junk" or "迷惑メール" or "spam")?.ImapPath
                 ?? "Junk";
 
-            var encryptionService = _serviceProvider.GetRequiredService<IEncryptionService>();
-            var password = await encryptionService.DecryptAsync(config.ImapPassword);
+            var mailConnection = _serviceProvider.GetRequiredService<IMailConnectionService>();
 
             using var client = new ImapClient();
-            await client.ConnectAsync(
-                config.ImapHost,
-                config.ImapPort,
-                GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-            await client.AuthenticateAsync(config.ImapUsername, password);
+            await mailConnection.ConnectImapAsync(client, config);
 
             var inbox = client.Inbox;
             if (inbox == null)
@@ -443,16 +437,6 @@ public class AutoLabelingService : BackgroundService
         if (string.IsNullOrEmpty(from)) return string.Empty;
         var match = Regex.Match(from, @"<([^>]+)>");
         return match.Success ? match.Groups[1].Value.Trim() : from.Trim();
-    }
-
-    private static SecureSocketOptions GetSecureSocketOptions(int port, bool sslEnabled)
-    {
-        if (sslEnabled)
-        {
-            if (port == 465 || port == 993) return SecureSocketOptions.SslOnConnect;
-            return SecureSocketOptions.StartTls;
-        }
-        return SecureSocketOptions.Auto;
     }
 
     /// <summary>
