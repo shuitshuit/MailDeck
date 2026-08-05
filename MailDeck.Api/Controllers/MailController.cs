@@ -5,7 +5,6 @@ using MailDeck.Api.Models.DTO.Mail;
 using MailDeck.Api.Services;
 using MailKit;
 using MailKit.Net.Imap;
-using MailKit.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MimeKit;
@@ -21,18 +20,18 @@ namespace MailDeck.Api.Controllers;
 public class MailController : BaseAuthController
 {
     private readonly PostgreSqlConnect _db;
-    private readonly IEncryptionService _encryptionService;
+    private readonly IMailConnectionService _mailConnection;
     private readonly IClamAvService _clamAv;
 
     public MailController(
         ILogger<MailController> logger,
         PostgreSqlConnect db,
-        IEncryptionService encryptionService,
+        IMailConnectionService mailConnection,
         IClamAvService clamAv)
         : base(logger)
     {
         _db = db;
-        _encryptionService = encryptionService;
+        _mailConnection = mailConnection;
         _clamAv = clamAv;
     }
 
@@ -52,13 +51,9 @@ public class MailController : BaseAuthController
 
             if (config == null) return NotFound("Configuration not found");
 
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
-
             using (var client = new ImapClient())
             {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                
-                await client.AuthenticateAsync(config.ImapUsername, password);
+                await _mailConnection.ConnectImapAsync(client, config);
 
                 var inbox = client.Inbox;
 
@@ -165,11 +160,9 @@ public class MailController : BaseAuthController
             var configs = await _db.GetMultipleAsync<UserServerConfig>(new { id = configId, user_id = userId });
             var config = configs.FirstOrDefault();
             if (config == null) return NotFound("Configuration not found");
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using (var client = new ImapClient())
             {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await client.AuthenticateAsync(config.ImapUsername, password);
+                await _mailConnection.ConnectImapAsync(client, config);
                 var folder = await client.GetFolderAsync(folderName);
                 await folder.OpenAsync(FolderAccess.ReadOnly);
                 var total = folder.Count;
@@ -268,11 +261,9 @@ public class MailController : BaseAuthController
             }
 
             // Fetch from IMAP and cache
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using (var client = new ImapClient())
             {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await client.AuthenticateAsync(config.ImapUsername, password);
+                await _mailConnection.ConnectImapAsync(client, config);
 
                 var folders = new List<MailFolderResponse>();
                 var imapFolders = await client.GetFoldersAsync(client.PersonalNamespaces[0]);
@@ -384,13 +375,9 @@ public class MailController : BaseAuthController
             if (!uint.TryParse(id, out var uidVal)) return BadRequest("Invalid Message ID");
             var uid = new UniqueId(uidVal);
 
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
-
             using (var client = new ImapClient())
             {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-
-                await client.AuthenticateAsync(config.ImapUsername, password);
+                await _mailConnection.ConnectImapAsync(client, config);
 
                 var inbox = client.Inbox;
 
@@ -480,11 +467,8 @@ public class MailController : BaseAuthController
             if (!uint.TryParse(messageId, out var uidVal)) return BadRequest("Invalid Message ID");
             var uid = new UniqueId(uidVal);
 
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
-
             using var client = new ImapClient();
-            await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-            await client.AuthenticateAsync(config.ImapUsername, password);
+            await _mailConnection.ConnectImapAsync(client, config);
 
             var inbox = client.Inbox;
             if (inbox == null) return NotFound("Inbox folder not found");
@@ -544,11 +528,9 @@ public class MailController : BaseAuthController
             if (config == null) return NotFound("Configuration not found");
             if (!uint.TryParse(id, out var uidVal)) return BadRequest("Invalid Message ID");
             var uid = new UniqueId(uidVal);
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using (var client = new ImapClient())
             {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await client.AuthenticateAsync(config.ImapUsername, password);
+                await _mailConnection.ConnectImapAsync(client, config);
                 var inbox = client.Inbox;
                 if (inbox == null) return NotFound("Inbox folder not found");
                 await inbox.OpenAsync(FolderAccess.ReadWrite);
@@ -582,11 +564,9 @@ public class MailController : BaseAuthController
             if (config == null) return NotFound("Configuration not found");
             if (!uint.TryParse(id, out var uidVal)) return BadRequest("Invalid Message ID");
             var uid = new UniqueId(uidVal);
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using (var client = new ImapClient())
             {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await client.AuthenticateAsync(config.ImapUsername, password);
+                await _mailConnection.ConnectImapAsync(client, config);
                 var inbox = client.Inbox;
                 if (inbox == null) return NotFound("Inbox folder not found");
                 await inbox.OpenAsync(FolderAccess.ReadWrite);
@@ -625,11 +605,9 @@ public class MailController : BaseAuthController
                 uids.Add(new UniqueId(uidVal));
             }
 
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using (var client = new ImapClient())
             {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await client.AuthenticateAsync(config.ImapUsername, password);
+                await _mailConnection.ConnectImapAsync(client, config);
                 var inbox = client.Inbox;
                 if (inbox == null) return NotFound("Inbox folder not found");
                 await inbox.OpenAsync(FolderAccess.ReadWrite);
@@ -663,8 +641,6 @@ public class MailController : BaseAuthController
             var config = configs.FirstOrDefault();
 
             if (config == null) return NotFound("Configuration not found");
-
-            var password = await _encryptionService.DecryptAsync(config.SmtpPassword);
 
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress(config.AccountName.Split('@')[0], config.AccountName));
@@ -726,9 +702,7 @@ public class MailController : BaseAuthController
 
             using (var client = new SmtpClient())
             {
-                await client.ConnectAsync(config.SmtpHost, config.SmtpPort, GetSecureSocketOptions(config.SmtpPort, config.SmtpSslEnabled));
-
-                await client.AuthenticateAsync(config.SmtpUsername, password);
+                await _mailConnection.ConnectSmtpAsync(client, config);
 
                 await client.SendAsync(message);
 
@@ -752,10 +726,8 @@ public class MailController : BaseAuthController
                         f.ImapPath == "送信済み")?.ImapPath
                     ?? "Sent";
 
-                var imapPassword = await _encryptionService.DecryptAsync(config.ImapPassword);
                 using var imapClient = new ImapClient();
-                await imapClient.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await imapClient.AuthenticateAsync(config.ImapUsername, imapPassword);
+                await _mailConnection.ConnectImapAsync(imapClient, config);
                 var sentFolder = await imapClient.GetFolderAsync(sentFolderPath);
                 await sentFolder.OpenAsync(FolderAccess.ReadWrite);
                 await sentFolder.AppendAsync(message, MessageFlags.Seen);
@@ -813,9 +785,7 @@ public class MailController : BaseAuthController
             // Draftsフォルダに保存
             using (var client = new ImapClient())
             {
-                var password = await _encryptionService.DecryptAsync(config.ImapPassword);
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await client.AuthenticateAsync(config.ImapUsername, password);
+                await _mailConnection.ConnectImapAsync(client, config);
                 var draftsFolder = await client.GetFolderAsync(draftsFolderPath);
                 await draftsFolder.OpenAsync(FolderAccess.ReadWrite);
                 await draftsFolder.AppendAsync(message, MessageFlags.Draft);
@@ -855,11 +825,9 @@ public class MailController : BaseAuthController
             if (config == null) return NotFound("Configuration not found");
             if (!uint.TryParse(id, out var uidVal)) return BadRequest("Invalid Draft ID");
             var uid = new UniqueId(uidVal);
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using (var client = new ImapClient())
             {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await client.AuthenticateAsync(config.ImapUsername, password);
+                await _mailConnection.ConnectImapAsync(client, config);
                 var draftsFolder = await client.GetFolderAsync(draftsFolderPath);
                 await draftsFolder.OpenAsync(FolderAccess.ReadOnly);
                 var message = await draftsFolder.GetMessageAsync(uid);
@@ -910,11 +878,9 @@ public class MailController : BaseAuthController
             if (config == null) return NotFound("Configuration not found");
             if (!uint.TryParse(id, out var uidVal)) return BadRequest("Invalid Draft ID");
             var uid = new UniqueId(uidVal);
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using (var client = new ImapClient())
             {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await client.AuthenticateAsync(config.ImapUsername, password);
+                await _mailConnection.ConnectImapAsync(client, config);
                 var draftsFolder = await client.GetFolderAsync(draftsFolderPath);
                 await draftsFolder.OpenAsync(FolderAccess.ReadWrite);
                 var message = new MimeMessage();
@@ -963,11 +929,9 @@ public class MailController : BaseAuthController
             if (config == null) return NotFound("Configuration not found");
             if (!uint.TryParse(id, out var uidVal)) return BadRequest("Invalid Draft ID");
             var uid = new UniqueId(uidVal);
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using (var client = new ImapClient())
             {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await client.AuthenticateAsync(config.ImapUsername, password);
+                await _mailConnection.ConnectImapAsync(client, config);
                 var draftsFolder = await client.GetFolderAsync(draftsFolderPath);
                 await draftsFolder.OpenAsync(FolderAccess.ReadWrite);
                 await draftsFolder.AddFlagsAsync(uid, MessageFlags.Deleted, true);
@@ -1008,20 +972,16 @@ public class MailController : BaseAuthController
             if (config == null) return NotFound("Configuration not found");
             if (!uint.TryParse(id, out var uidVal)) return BadRequest("Invalid Draft ID");
             var uid = new UniqueId(uidVal);
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using (var client = new ImapClient())
             {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await client.AuthenticateAsync(config.ImapUsername, password);
+                await _mailConnection.ConnectImapAsync(client, config);
                 var draftsFolder = await client.GetFolderAsync(draftsFolderPath);
                 await draftsFolder.OpenAsync(FolderAccess.ReadWrite);
                 var message = await draftsFolder.GetMessageAsync(uid);
                 // Send the message via SMTP
                 using (var smtpClient = new SmtpClient())
                 {
-                    var smtpPassword = await _encryptionService.DecryptAsync(config.SmtpPassword);
-                    await smtpClient.ConnectAsync(config.SmtpHost, config.SmtpPort, GetSecureSocketOptions(config.SmtpPort, config.SmtpSslEnabled));
-                    await smtpClient.AuthenticateAsync(config.SmtpUsername, smtpPassword);
+                    await _mailConnection.ConnectSmtpAsync(smtpClient, config);
                     await smtpClient.SendAsync(message);
                     await smtpClient.DisconnectAsync(true);
                 }
@@ -1081,11 +1041,9 @@ public class MailController : BaseAuthController
                 .ImapPath ?? "Drafts"; // デフォルトで"Drafts"を使用
 
             if (config == null) return NotFound("Configuration not found");
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using (var client = new ImapClient())
             {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await client.AuthenticateAsync(config.ImapUsername, password);
+                await _mailConnection.ConnectImapAsync(client, config);
                 var draftsFolder = await client.GetFolderAsync(draftsFolderPath);
                 await draftsFolder.OpenAsync(FolderAccess.ReadOnly);
                 var total = draftsFolder.Count;
@@ -1145,11 +1103,9 @@ public class MailController : BaseAuthController
                 .ImapPath ?? "Junk"; // デフォルトで"Junk"を使用
 
             if (config == null) return NotFound("Configuration not found");
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using (var client = new ImapClient())
             {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await client.AuthenticateAsync(config.ImapUsername, password);
+                await _mailConnection.ConnectImapAsync(client, config);
                 var spamFolder = await client.GetFolderAsync(spamFolderPath);
                 await spamFolder.OpenAsync(FolderAccess.ReadOnly);
                 var total = spamFolder.Count;
@@ -1212,11 +1168,9 @@ public class MailController : BaseAuthController
             if (config == null) return NotFound("Configuration not found");
             if (!uint.TryParse(id, out var uidVal)) return BadRequest("Invalid Message ID");
             var uid = new UniqueId(uidVal);
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using (var client = new ImapClient())
             {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await client.AuthenticateAsync(config.ImapUsername, password);
+                await _mailConnection.ConnectImapAsync(client, config);
                 var inbox = client.Inbox;
                 if (inbox == null) return NotFound("Inbox folder not found");
                 await inbox.OpenAsync(FolderAccess.ReadWrite);
@@ -1255,11 +1209,9 @@ public class MailController : BaseAuthController
                 .ImapPath ?? "Trash"; // デフォルトで"Trash"を使用
 
             if (config == null) return NotFound("Configuration not found");
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using (var client = new ImapClient())
             {
-                await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-                await client.AuthenticateAsync(config.ImapUsername, password);
+                await _mailConnection.ConnectImapAsync(client, config);
                 var trashFolder = await client.GetFolderAsync(trashFolderPath);
                 await trashFolder.OpenAsync(FolderAccess.ReadOnly);
                 var total = trashFolder.Count;
@@ -1324,9 +1276,7 @@ public class MailController : BaseAuthController
             var uid = new UniqueId(uidVal);
 
             using var client = new ImapClient();
-            await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-            var decryptedPassword = await _encryptionService.DecryptAsync(config.ImapPassword);
-            await client.AuthenticateAsync(config.ImapUsername, decryptedPassword);
+            await _mailConnection.ConnectImapAsync(client, config);
 
             var trashFolder = await client.GetFolderAsync(trashFolderPath);
             await trashFolder.OpenAsync(FolderAccess.ReadWrite);
@@ -1374,9 +1324,7 @@ public class MailController : BaseAuthController
             var uid = new UniqueId(uidVal);
 
             using var client = new ImapClient();
-            await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-            var decryptedPassword = await _encryptionService.DecryptAsync(config.ImapPassword);
-            await client.AuthenticateAsync(config.ImapUsername, decryptedPassword);
+            await _mailConnection.ConnectImapAsync(client, config);
 
             var trashFolder = await client.GetFolderAsync(trashFolderPath);
             await trashFolder.OpenAsync(FolderAccess.ReadWrite);
@@ -1422,9 +1370,7 @@ public class MailController : BaseAuthController
                 .ImapPath ?? "Trash";
 
             using var client = new ImapClient();
-            await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-            var decryptedPassword = await _encryptionService.DecryptAsync(config.ImapPassword);
-            await client.AuthenticateAsync(config.ImapUsername, decryptedPassword);
+            await _mailConnection.ConnectImapAsync(client, config);
 
             var trashFolder = await client.GetFolderAsync(trashFolderPath);
             await trashFolder.OpenAsync(FolderAccess.ReadWrite);
@@ -1488,10 +1434,8 @@ public class MailController : BaseAuthController
             trashFolderPath ??= folderPaths.FirstOrDefault(f => f.DisplayName is "Trash" or "ゴミ箱")?
                 .ImapPath ?? "Trash";
 
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using var client = new ImapClient();
-            await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-            await client.AuthenticateAsync(config.ImapUsername, password);
+            await _mailConnection.ConnectImapAsync(client, config);
 
             // Get source folder (default to INBOX if not specified)
             IMailFolder? sourceFolder = !string.IsNullOrEmpty(request.SourceFolder) && request.SourceFolder != "INBOX"
@@ -1545,10 +1489,8 @@ public class MailController : BaseAuthController
             trashFolderPath ??= folderPaths.FirstOrDefault(f => f.DisplayName is "Trash" or "ゴミ箱")?
                 .ImapPath ?? "Trash";
 
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using var client = new ImapClient();
-            await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-            await client.AuthenticateAsync(config.ImapUsername, password);
+            await _mailConnection.ConnectImapAsync(client, config);
 
             var trashFolder = await client.GetFolderAsync(trashFolderPath);
             await trashFolder.OpenAsync(FolderAccess.ReadWrite);
@@ -1597,10 +1539,8 @@ public class MailController : BaseAuthController
             trashFolderPath ??= folderPaths.FirstOrDefault(f => f.DisplayName is "Trash" or "ゴミ箱")?
                 .ImapPath ?? "Trash";
 
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using var client = new ImapClient();
-            await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-            await client.AuthenticateAsync(config.ImapUsername, password);
+            await _mailConnection.ConnectImapAsync(client, config);
 
             var trashFolder = await client.GetFolderAsync(trashFolderPath);
             await trashFolder.OpenAsync(FolderAccess.ReadWrite);
@@ -1638,10 +1578,8 @@ public class MailController : BaseAuthController
             var config = configs.FirstOrDefault();
             if (config == null) return NotFound("Configuration not found");
 
-            var password = await _encryptionService.DecryptAsync(config.ImapPassword);
             using var client = new ImapClient();
-            await client.ConnectAsync(config.ImapHost, config.ImapPort, GetSecureSocketOptions(config.ImapPort, config.ImapSslEnabled));
-            await client.AuthenticateAsync(config.ImapUsername, password);
+            await _mailConnection.ConnectImapAsync(client, config);
 
             var inbox = client.Inbox;
             await inbox.OpenAsync(FolderAccess.ReadOnly);
@@ -1722,21 +1660,5 @@ public class MailController : BaseAuthController
             }
         }
         return normalized.ToLowerInvariant();
-    }
-
-    private SecureSocketOptions GetSecureSocketOptions(int port, bool sslEnabled)
-    {
-        if (sslEnabled)
-        {
-            // 465 (SMTP) and 993 (IMAP) are standard for Implicit SSL
-            if (port == 465 || port == 993)
-            {
-                return SecureSocketOptions.SslOnConnect;
-            }
-            // All other ports (587, 143, 110, etc) use STARTTLS if SSL is enabled
-            return SecureSocketOptions.StartTls;
-        }
-        // If SSL is disabled in UI, use Auto which supports opportunistic encryption but allows plain text
-        return SecureSocketOptions.Auto;
     }
 }

@@ -13,6 +13,20 @@ public class UserServerConfig
     [Name("account_name")]
     public string AccountName { get; set; } = string.Empty;
 
+    // Authentication
+    /// <summary>"password" (IMAP/SMTP password) or "oauth2" (XOAUTH2 access token).</summary>
+    [Name("auth_type")]
+    public string AuthType { get; set; } = AuthTypes.Password;
+    /// <summary>OAuth2 provider identifier ("google"). Null for password accounts.</summary>
+    [Name("oauth_provider")]
+    public string? OauthProvider { get; set; }
+    [Name("oauth_refresh_token")]
+    public string? OauthRefreshToken { get; set; } // Encrypted
+    [Name("oauth_access_token")]
+    public string? OauthAccessToken { get; set; } // Encrypted
+    [Name("oauth_token_expires_at")]
+    public DateTime? OauthTokenExpiresAt { get; set; }
+
     // IMAP
     [Name("imap_host")]
     public string ImapHost { get; set; } = string.Empty;

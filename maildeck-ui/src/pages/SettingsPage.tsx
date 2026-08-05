@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { addServerConfig, deleteServerConfig, getServerConfigs, updateServerConfig } from '../lib/api';
+import { addServerConfig, deleteServerConfig, getServerConfigs, startGoogleOAuth, updateServerConfig } from '../lib/api';
+import type { AuthType } from '../lib/api';
 import ServerConfigModal from '../components/ServerConfigModal';
 import LabelManager from '../components/LabelManager';
 import PasskeySettings from '../components/PasskeySettings';
@@ -9,6 +10,9 @@ import { useConfirm } from '../contexts/ConfirmContext';
 interface ServerConfig {
     id?: string;
     accountName: string;
+    authType?: AuthType;
+    oauthProvider?: string | null;
+    needsReauthorization?: boolean;
     imapHost: string;
     imapPort: number;
     imapSslEnabled: boolean;
@@ -46,6 +50,29 @@ export default function SettingsPage() {
             loadAccounts();
         }
     }, [activeTab]);
+
+    // OAuth の同意画面から戻ってきたときの結果表示。
+    // 結果はクエリに残るとリロードのたびに再表示されるので、読み取ったら消す。
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const result = params.get('oauth');
+        if (!result) return;
+
+        const detail = params.get('detail');
+        if (result === 'success') {
+            toast.success(detail ? `${detail} を連携しました` : 'アカウントを連携しました');
+            loadAccounts();
+        } else {
+            toast.error(`Googleとの連携に失敗しました${detail ? ` (${detail})` : ''}`);
+        }
+
+        params.delete('oauth');
+        params.delete('detail');
+        const query = params.toString();
+        window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+        // 初回マウント時だけ実行する
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleOpenCreateModal = () => {
         setEditingAccount(null);
@@ -93,6 +120,15 @@ export default function SettingsPage() {
         } catch (err) {
             console.error(err);
             toast.error('削除に失敗しました');
+        }
+    };
+
+    const handleReauthorize = async (id: string) => {
+        try {
+            window.location.href = await startGoogleOAuth(id);
+        } catch (err) {
+            console.error(err);
+            toast.error('再認証を開始できませんでした');
         }
     };
 
@@ -186,10 +222,23 @@ export default function SettingsPage() {
                                                     <p className="text-sm text-gray-500 truncate">
                                                         {account.imapUsername}
                                                     </p>
-                                                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-gray-400">
+                                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-gray-400">
+                                                        {account.authType === 'oauth2' && (
+                                                            <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">
+                                                                OAuth2
+                                                            </span>
+                                                        )}
                                                         <span>IMAP: {account.imapHost}</span>
                                                         <span>SMTP: {account.smtpHost}</span>
                                                     </div>
+                                                    {account.needsReauthorization && (
+                                                        <button
+                                                            onClick={() => account.id && handleReauthorize(account.id)}
+                                                            className="mt-1.5 text-xs text-red-600 hover:text-red-700 font-medium underline"
+                                                        >
+                                                            連携が切れています。再認証する
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2">

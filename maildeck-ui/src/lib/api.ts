@@ -15,6 +15,13 @@ export interface ServerConfigPayload {
     smtpPassword: string;
 }
 
+/** 'password' はIMAP/SMTPパスワード認証、'oauth2' はXOAUTH2 (Gmail等)。 */
+export type AuthType = 'password' | 'oauth2';
+
+export interface OAuthProviders {
+    google: boolean;
+}
+
 // 同一オリジン配信 (API の wwwroot) では相対パス。dev では vite proxy が /api を転送。
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -407,6 +414,27 @@ export async function updateServerConfig(id: string, config: ServerConfigPayload
         body: JSON.stringify(config)
     });
     return await response.json();
+}
+
+/**
+ * Which OAuth providers this backend has credentials configured for
+ */
+export async function getOAuthProviders(): Promise<OAuthProviders> {
+    const response = await authFetch('/oauth/providers');
+    return await response.json();
+}
+
+/**
+ * Start the Google consent flow and return the URL to send the browser to.
+ * Pass configId to re-authorize an existing account instead of adding a new one.
+ */
+export async function startGoogleOAuth(configId?: string): Promise<string> {
+    const response = await authFetch('/oauth/google/authorize', {
+        method: 'POST',
+        body: JSON.stringify({ configId: configId ?? null })
+    });
+    const data = await response.json();
+    return data.authorizationUrl as string;
 }
 
 /**
