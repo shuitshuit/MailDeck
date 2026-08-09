@@ -697,14 +697,14 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
         setSelectedMail(null);
     };
 
-    const handleSendMail = async (to: string, subject: string, body: string, configId: string, cc?: string, bcc?: string, replyTo?: string, attachments?: File[]) => {
+    const handleSendMail = async (to: string, subject: string, body: string, configId: string, cc?: string, bcc?: string, replyTo?: string, isHtml?: boolean, attachments?: File[]) => {
         if (!configId) {
             toast.warning('アカウントを選択してください');
             return;
         }
 
         try {
-            await sendMail({ configId, to, subject, body, cc, bcc, replyTo, attachments });
+            await sendMail({ configId, to, subject, body, cc, bcc, replyTo, isHtml, attachments });
             toast.success('メールを送信しました！');
             setIsComposeOpen(false);
         } catch (error) {

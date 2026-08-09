@@ -656,6 +656,21 @@ public class MailController : BaseAuthController
                 message.ReplyTo.Add(new MailboxAddress("", request.ReplyTo));
             message.Subject = request.Subject;
 
+            MimeEntity bodyEntity;
+            if (request.IsHtml)
+            {
+                var plainText = System.Text.RegularExpressions.Regex.Replace(request.Body, "<[^>]+>", "");
+                plainText = System.Net.WebUtility.HtmlDecode(plainText).Trim();
+                var alternative = new MultipartAlternative();
+                alternative.Add(new TextPart("plain") { Text = plainText });
+                alternative.Add(new TextPart("html") { Text = request.Body });
+                bodyEntity = alternative;
+            }
+            else
+            {
+                bodyEntity = new TextPart("plain") { Text = request.Body };
+            }
+
             if (request.Attachments != null && request.Attachments.Count > 0)
             {
                 var fileEntries = new List<(string Name, string MimeType, byte[] Bytes)>();
@@ -680,7 +695,7 @@ public class MailController : BaseAuthController
                 }
 
                 var multipart = new Multipart("mixed");
-                multipart.Add(new TextPart("plain") { Text = request.Body });
+                multipart.Add(bodyEntity);
 
                 foreach (var (name, mimeType, bytes) in fileEntries)
                 {
@@ -697,7 +712,7 @@ public class MailController : BaseAuthController
             }
             else
             {
-                message.Body = new TextPart("plain") { Text = request.Body };
+                message.Body = bodyEntity;
             }
 
             using (var client = new SmtpClient())
