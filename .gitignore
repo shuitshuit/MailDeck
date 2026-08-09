@@ -59,8 +59,9 @@ maildeck-*.json
 infrastructure/k8s/*.yaml
 !infrastructure/k8s/*.example.yaml
 !infrastructure/k8s/00-namespace.yaml
+# RBAC 定義のみ (トークンは apply 時に k8s が生成するのでファイルに機密は無い)
+!infrastructure/k8s/03-ci-rbac.yaml
 !infrastructure/k8s/10-api-deployment.yaml
-!infrastructure/k8s/20-ui-deployment.yaml
 !infrastructure/k8s/30-ingress.yaml
 
 # Tauri
@@ -79,3 +80,6 @@ maildeck-ui/src-tauri/icons/icon_original.png
 maildeck-ui/app-icon.png
 maildeck-ui/android-build.env
 *.keystore
+
+# CI 用 kubeconfig (ServiceAccount トークンを含むためコミット禁止)
+kubeconfig-ci.yaml
