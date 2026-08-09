@@ -29,4 +29,4 @@ foreach ($var in $required) {
 }
 
 Write-Host "Building Android release APK..." -ForegroundColor Cyan
-npm run tauri android build --release
+npm run tauri -- android build --release
