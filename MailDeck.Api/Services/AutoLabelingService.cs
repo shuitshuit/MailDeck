@@ -193,6 +193,23 @@ public class AutoLabelingService : BackgroundService
             using var scope = _serviceProvider.CreateScope();
             var messaging = scope.ServiceProvider.GetRequiredService<FirebaseMessaging>();
 
+            // Last-resort dedup guard: claim this (config, message) pair before sending.
+            // If another pod/cycle already notified it, INSERT affects 0 rows and we skip,
+            // so the same mail is pushed at most once even if the upstream UID claim was raced.
+            if (Guid.TryParse(notification.ConfigId, out var configGuid))
+            {
+                var inserted = await db.ExecuteAsync(
+                    "INSERT INTO notified_messages (config_id, message_uid) VALUES (@ConfigId, @Uid) ON CONFLICT (config_id, message_uid) DO NOTHING",
+                    new { ConfigId = configGuid, Uid = (long)notification.MessageId });
+                if (inserted == 0)
+                {
+                    _logger.LogDebug(
+                        "Skipped push for message {MessageId} (config {ConfigId}): already notified",
+                        notification.MessageId, notification.ConfigId);
+                    return;
+                }
+            }
+
             var subscriptions = await db.AsQueryable<WebPushSubscription>()
                 .Where(s => s.UserId == notification.UserId)
                 .ToListAsync();
