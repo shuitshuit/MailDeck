@@ -6,7 +6,7 @@
   <rect x="10" y="16" width="36" height="26" rx="3" fill="white"/>
 
   <!-- Mail envelope flap (triangle) -->
-  <path d="M10 19L28 31L46 19" stroke="url(#flapGradient)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M10 19L28 31L46 19" stroke="url(#logoGradient)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 
   <!-- Deck lines (stacked cards effect) -->
   <rect x="14" y="12" width="28" height="4" rx="2" fill="white" fill-opacity="0.6"/>
@@ -18,10 +18,6 @@
   <!-- Gradients -->
   <defs>
     <linearGradient id="logoGradient" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#3B82F6"/>
-      <stop offset="1" stop-color="#1D4ED8"/>
-    </linearGradient>
-    <linearGradient id="flapGradient" x1="10" y1="19" x2="46" y2="31" gradientUnits="userSpaceOnUse">
       <stop stop-color="#3B82F6"/>
       <stop offset="1" stop-color="#1D4ED8"/>
     </linearGradient>

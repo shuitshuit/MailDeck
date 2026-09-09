@@ -30,16 +30,16 @@ public class UsersController : BaseAuthController
     public async Task<IActionResult> Sync()
     {
         var userId = GetUserId();
-        var email = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+        // Cognito のアクセストークンには email クレームが含まれないため、
+        // ClaimTypes.Email / "email" の両方を探し、無い場合でも sync は継続する。
+        var email = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value
+            ?? User.Claims.FirstOrDefault(c => c.Type == "email")?.Value;
 
-        if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(email))
+        // userId (sub) はアクセストークン・IDトークンのどちらにも含まれる必須クレーム。
+        if (string.IsNullOrEmpty(userId))
         {
-            var missing = new List<string>();
-            if (string.IsNullOrEmpty(userId)) missing.Add("userId (sub/NameIdentifier)");
-            if (string.IsNullOrEmpty(email)) missing.Add("email");
-            
-            _logger.LogWarning("Invalid token claims. Missing: {MissingFields}", string.Join(", ", missing));
-            return BadRequest($"Invalid token claims. Missing: {string.Join(", ", missing)}");
+            _logger.LogWarning("Invalid token claims. Missing: userId (sub/NameIdentifier)");
+            return BadRequest("Invalid token claims. Missing: userId (sub/NameIdentifier)");
         }
 
         try
@@ -54,7 +54,7 @@ public class UsersController : BaseAuthController
                 var newUser = new User
                 {
                     Id = userId,
-                    Email = email,
+                    Email = email ?? string.Empty,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
@@ -63,10 +63,13 @@ public class UsersController : BaseAuthController
             }
             else
             {
-                // Update existing user email if changed
-                existingUser.Email = email;
+                // email クレームが取得できた場合のみ更新する（アクセストークンでは欠落するため）。
+                if (!string.IsNullOrEmpty(email) && existingUser.Email != email)
+                {
+                    existingUser.Email = email;
+                }
                 existingUser.UpdatedAt = DateTime.UtcNow;
-                
+
                 await _db.UpdateAsync(existingUser);
                 _logger.LogInformation("Updated user: {UserId}", userId);
             }

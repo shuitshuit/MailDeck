@@ -24,16 +24,6 @@ jobs:
       - name: Build
         run: dotnet build MailDeck.Api/MailDeck.Api.csproj -c Release --no-restore
 
-      - name: Publish
-        run: dotnet publish MailDeck.Api/MailDeck.Api.csproj -c Release -o ./build --no-build
-
-      - name: Upload backend artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-build
-          path: ./build/
-          retention-days: 1
-
   build-frontend:
     name: Build Frontend
     runs-on: ubuntu-latest
@@ -66,10 +56,3 @@ jobs:
           VITE_COGNITO_DOMAIN: ${{ secrets.VITE_COGNITO_DOMAIN }}
           VITE_REDIRECT_URI: ${{ secrets.VITE_REDIRECT_URI }}
           VITE_SIGNOUT_URI: ${{ secrets.VITE_SIGNOUT_URI }}
-
-      - name: Upload frontend artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-build
-          path: maildeck-ui/dist/
-          retention-days: 1

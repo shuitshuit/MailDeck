@@ -57,15 +57,19 @@ public class EmailCheckBackgroundService : BackgroundService
             {
                 await CheckEmailsAsync(stoppingToken);
             }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
             catch (Exception ex)
             {
                 _logger.LogErrorWithSql(ex, "Error occurred during email check cycle.");
             }
 
-            // Wait for the configured interval before the next cycle.
-            // Without this delay the loop would spin continuously, re-checking
-            // the same mailbox before the previous LastKnownUid update settles,
-            // producing duplicate notifications for a single email.
+            // Guarantee a fixed interval between cycles. Without this delay the loop
+            // would spin back-to-back whenever configs exist, re-checking the same
+            // mailbox before the previous last_known_uid update settles and increasing
+            // cross-pod polling collisions and load.
             try
             {
                 await Task.Delay(TimeSpan.FromMinutes(_intervalMinutes), stoppingToken);
@@ -208,13 +212,16 @@ RETURNING *;";
         try
         {
             var currentMax = await FetchLastMessageUIDAsync(config, mailConnection, stoppingToken);
+
             if (config.LastKnownUid == 0)
             {
-                config.LastKnownUid = currentMax;
+                // First observation: initialize baseline without notifying existing mail.
+                // Atomic claim so only one pod sets the initial UID.
+                await TryAdvanceLastKnownUidAsync(db, config.Id, oldUid: 0, newUid: currentMax);
             }
             else if (currentMax > config.LastKnownUid)
             {
-                // Found new messages
+                // Fetch first (read-only IMAP is idempotent; double fetch is harmless).
                 var uidsToFetch = new List<UniqueId>();
                 for (uint i = (uint)config.LastKnownUid + 1; i <= currentMax; i++)
                 {
@@ -223,11 +230,25 @@ RETURNING *;";
 
                 if (uidsToFetch.Count > 0)
                 {
+                    var mimeMessages = await FetchMessageAsync(config, mailConnection, uidsToFetch, stoppingToken);
+                    var (fetchedMessages, messages) = mimeMessages;
+
+                    // Atomically claim the UID range before enqueuing. Only the pod whose
+                    // conditional UPDATE affects a row (i.e. last_known_uid still equals the
+                    // value we read) is allowed to enqueue, preventing duplicate notifications
+                    // when multiple pods observe the same new mail.
+                    var claimed = await TryAdvanceLastKnownUidAsync(db, config.Id, oldUid: config.LastKnownUid, newUid: currentMax);
+                    if (!claimed)
+                    {
+                        _logger.LogDebug(
+                            "Skipped enqueue for config {ConfigId}: UID range already claimed by another pod (up to {Uid})",
+                            config.Id, currentMax);
+                        return;
+                    }
+
                     var currentMsgID = 0;
                     try
                     {
-                        var mimeMessages = await FetchMessageAsync(config, mailConnection, uidsToFetch, stoppingToken);
-                        var (fetchedMessages, messages) = mimeMessages;
                         for (int i = 0; i < fetchedMessages.Count; i++)
                         {
                             var msg = fetchedMessages[i];
@@ -257,21 +278,36 @@ RETURNING *;";
                             currentMsgID
                         );
                     }
-
-                    config.LastKnownUid = currentMax;
                 }
             }
-
-            // last_checked_at was already stamped when this config was leased.
-            // Persist the advanced LastKnownUid so the next cycle (on any pod)
-            // does not re-detect the same messages as new.
-            config.LastCheckedAt = DateTime.UtcNow;
-            await db.UpdateAsync(config);
+            else
+            {
+                // No new messages: just record the check time. (last_checked_at was
+                // already stamped when this config was leased; refreshing it here keeps
+                // the timestamp accurate to when the check actually completed.)
+                await db.ExecuteAsync(
+                    "UPDATE user_server_configs SET last_checked_at = NOW() WHERE id = @Id",
+                    new { Id = config.Id });
+            }
         }
         catch (Exception ex)
         {
             _logger.LogErrorWithSql(ex, $"Error checking email for config {config.Id} (User: {config.UserId})");
         }
+    }
+
+    /// <summary>
+    /// Atomically advance last_known_uid using an optimistic conditional UPDATE.
+    /// Returns true only if this pod won the claim (affected exactly one row), i.e.
+    /// last_known_uid was still <paramref name="oldUid"/> at update time.
+    /// Also refreshes last_checked_at.
+    /// </summary>
+    private static async Task<bool> TryAdvanceLastKnownUidAsync(PostgreSqlConnect db, Guid configId, long oldUid, uint newUid)
+    {
+        var affected = await db.ExecuteAsync(
+            "UPDATE user_server_configs SET last_known_uid = @New, last_checked_at = NOW() WHERE id = @Id AND last_known_uid = @Old",
+            new { Id = configId, New = (long)newUid, Old = oldUid });
+        return affected == 1;
     }
 
     private async Task<uint> FetchLastMessageUIDAsync(UserServerConfig config, IMailConnectionService mailConnection, CancellationToken stoppingToken)

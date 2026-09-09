@@ -1,0 +1,65 @@
+# GitHub Actions (deploy.yml) がイメージを更新するための最小権限。
+# cluster-admin 相当の /etc/rancher/k3s/k3s.yaml を CI に渡す代わりに、
+# この ServiceAccount のトークンで kubeconfig を組んで KUBECONFIG secret に入れる。
+#
+# 許可するのは maildeck namespace 内の以下 2 操作のみ:
+#   kubectl set image deployment/maildeck-api ...   → deployments の get/patch
+#   kubectl rollout status deployment/maildeck-api  → deployments/replicasets/pods の get/list/watch
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: maildeck-ci-deployer
+  namespace: maildeck
+---
+# Role (ClusterRole ではない) なので権限は maildeck namespace 内に閉じる。
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: maildeck-ci-deployer
+  namespace: maildeck
+rules:
+  # set image でイメージを差し替える (patch)。
+  # rollout status / undo も Deployment 本体を読む。
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "patch"]
+  # rollout status は内部で ReplicaSet の世代を追う。
+  # rollout undo (ロールバック) 時は履歴参照のため list/get が要る。
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+  # Pod の起動状況確認 (rollout status の待機、失敗時のログ確認)。
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  # 失敗時に kubectl logs で原因を追えるようにする (任意だが実用上あると便利)。
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: maildeck-ci-deployer
+  namespace: maildeck
+subjects:
+  - kind: ServiceAccount
+    name: maildeck-ci-deployer
+    namespace: maildeck
+roleRef:
+  kind: Role
+  name: maildeck-ci-deployer
+  apiGroup: rbac.authorization.k8s.io
+---
+# k8s 1.24+ は ServiceAccount 作成時にトークンを自動生成しないため、
+# 期限なしトークンを明示的に発行する (CI から使う長期トークン)。
+# 短期トークン運用にするなら代わりに `kubectl -n maildeck create token
+# maildeck-ci-deployer --duration=8760h` を使い、この Secret は不要。
+apiVersion: v1
+kind: Secret
+metadata:
+  name: maildeck-ci-deployer-token
+  namespace: maildeck
+  annotations:
+    kubernetes.io/service-account.name: maildeck-ci-deployer
+type: kubernetes.io/service-account-token
