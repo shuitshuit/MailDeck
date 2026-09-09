@@ -114,6 +114,7 @@ export async function sendMail(params: {
     cc?: string;
     bcc?: string;
     replyTo?: string;
+    isHtml?: boolean;
     attachments?: File[];
 }) {
     const formData = new FormData();
@@ -124,6 +125,7 @@ export async function sendMail(params: {
     if (params.cc) formData.append('cc', params.cc);
     if (params.bcc) formData.append('bcc', params.bcc);
     if (params.replyTo) formData.append('replyTo', params.replyTo);
+    formData.append('isHtml', String(params.isHtml ?? false));
     params.attachments?.forEach(file => formData.append('attachments', file));
 
     await authFetch('/mail/send', { method: 'POST', body: formData }, true);
