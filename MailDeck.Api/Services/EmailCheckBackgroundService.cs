@@ -27,6 +27,12 @@ public class EmailCheckBackgroundService : BackgroundService
     /// </summary>
     private const int MaxConnectionsPerHost = 2;
 
+    /// <summary>
+    /// Number of configs leased per batch. Small batches keep each pod's share
+    /// bounded so multiple pods spread the work between them.
+    /// </summary>
+    private const int LeaseBatchSize = 20;
+
     public EmailCheckBackgroundService(
         ILogger<EmailCheckBackgroundService> logger,
         IServiceScopeFactory scopeFactory,
@@ -55,6 +61,19 @@ public class EmailCheckBackgroundService : BackgroundService
             {
                 _logger.LogErrorWithSql(ex, "Error occurred during email check cycle.");
             }
+
+            // Wait for the configured interval before the next cycle.
+            // Without this delay the loop would spin continuously, re-checking
+            // the same mailbox before the previous LastKnownUid update settles,
+            // producing duplicate notifications for a single email.
+            try
+            {
+                await Task.Delay(TimeSpan.FromMinutes(_intervalMinutes), stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
         }
     }
 
@@ -67,62 +86,79 @@ public class EmailCheckBackgroundService : BackgroundService
 
         await db.OpenAsync();
 
-        // Fetch all configs ordered by least recently checked
-        var allConfigs = new List<UserServerConfig>();
-        var pageSize = 20;
-        var pageNumber = 1;
-
+        // Multi-pod safe cycle:
+        // Repeatedly lease a small batch of the least-recently-checked configs with
+        // "FOR UPDATE SKIP LOCKED". Each pod claims a disjoint set of configs, so the
+        // same account is never processed by two pods at once (which would produce
+        // duplicate notifications). We mark last_checked_at inside the lease transaction
+        // and release the row lock immediately, so the slow IMAP work below does not
+        // block other pods.
+        var totalProcessed = 0;
         while (!stoppingToken.IsCancellationRequested)
         {
-            var configs = await db.AsQueryable<UserServerConfig>()
-                .OrderBy(c => c.LastCheckedAt)
-                .Skip((pageNumber - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
-
-            allConfigs.AddRange(configs);
-            if (configs.Count < pageSize)
+            var batch = await LeaseConfigBatchAsync(db, LeaseBatchSize, stoppingToken);
+            if (batch.Count == 0)
                 break;
-            pageNumber++;
-        }
 
-        if (allConfigs.Count == 0)
-        {
-            await Task.Delay(TimeSpan.FromMinutes(_intervalMinutes), stoppingToken);
-            return;
-        }
+            totalProcessed += batch.Count;
 
-        // Round-robin interleave by IMAP host to spread access across different servers
-        var interleaved = InterleaveByHost(allConfigs);
+            // Round-robin interleave by IMAP host so consecutive configs hit different servers.
+            var interleaved = InterleaveByHost(batch);
 
-        // Calculate stagger delay: spread all checks evenly across the interval
-        var totalInterval = TimeSpan.FromMinutes(_intervalMinutes);
-        var staggerDelay = interleaved.Count > 1
-            ? TimeSpan.FromMilliseconds(totalInterval.TotalMilliseconds / interleaved.Count)
-            : TimeSpan.Zero;
-
-        _logger.LogInformation(
-            "Processing {Count} configs across {HostCount} hosts, stagger delay: {StaggerMs}ms",
-            interleaved.Count,
-            allConfigs.Select(c => c.ImapHost).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
-            staggerDelay.TotalMilliseconds);
-
-        // Process configs with staggered starts and per-host concurrency control
-        var tasks = new List<Task>();
-        foreach (var config in interleaved)
-        {
-            if (stoppingToken.IsCancellationRequested) break;
-
-            var semaphore = _hostSemaphores.GetOrAdd(config.ImapHost, _ => new SemaphoreSlim(MaxConnectionsPerHost, MaxConnectionsPerHost));
-            tasks.Add(RunCheckWithThrottle(config, semaphore, db, mailConnection, stoppingToken));
-
-            if (staggerDelay > TimeSpan.Zero)
+            var tasks = new List<Task>();
+            foreach (var config in interleaved)
             {
-                await Task.Delay(staggerDelay, stoppingToken);
+                if (stoppingToken.IsCancellationRequested) break;
+
+                var semaphore = _hostSemaphores.GetOrAdd(config.ImapHost, _ => new SemaphoreSlim(MaxConnectionsPerHost, MaxConnectionsPerHost));
+                tasks.Add(RunCheckWithThrottle(config, semaphore, db, mailConnection, stoppingToken));
             }
+
+            await Task.WhenAll(tasks);
         }
 
-        await Task.WhenAll(tasks);
+        _logger.LogInformation("Email check cycle finished. Configs processed by this pod: {Count}", totalProcessed);
+    }
+
+    /// <summary>
+    /// Atomically lease a batch of configs that are due for checking, using
+    /// <c>FOR UPDATE SKIP LOCKED</c> so concurrent pods claim disjoint rows.
+    /// The lease is recorded by bumping <c>last_checked_at</c> inside the same
+    /// transaction, and the row lock is released as soon as the transaction commits.
+    /// </summary>
+    private async Task<List<UserServerConfig>> LeaseConfigBatchAsync(PostgreSqlConnect db, int batchSize, CancellationToken stoppingToken)
+    {
+        // Only lease configs whose last check is older than the interval (or never checked),
+        // so a pod does not re-grab rows another pod just refreshed within the same cycle.
+        var dueBefore = DateTime.UtcNow - TimeSpan.FromMinutes(_intervalMinutes);
+
+        // A single statement: select-and-lock the due rows, then stamp last_checked_at.
+        // RETURNING gives us the leased rows to process. SKIP LOCKED makes concurrent
+        // pods skip rows already locked by this UPDATE's sub-select.
+        const string sql = @"
+UPDATE user_server_configs
+SET last_checked_at = @Now
+WHERE id IN (
+    SELECT id FROM user_server_configs
+    WHERE last_checked_at IS NULL OR last_checked_at < @DueBefore
+    ORDER BY last_checked_at ASC NULLS FIRST
+    LIMIT @BatchSize
+    FOR UPDATE SKIP LOCKED
+)
+RETURNING *;";
+
+        try
+        {
+            var rows = await db.QueryAsync<UserServerConfig>(
+                sql,
+                new { Now = DateTime.UtcNow, DueBefore = dueBefore, BatchSize = batchSize });
+            return rows?.ToList() ?? new List<UserServerConfig>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogErrorWithSql(ex, "Failed to lease config batch for email check.");
+            return new List<UserServerConfig>();
+        }
     }
 
     /// <summary>
@@ -226,6 +262,9 @@ public class EmailCheckBackgroundService : BackgroundService
                 }
             }
 
+            // last_checked_at was already stamped when this config was leased.
+            // Persist the advanced LastKnownUid so the next cycle (on any pod)
+            // does not re-detect the same messages as new.
             config.LastCheckedAt = DateTime.UtcNow;
             await db.UpdateAsync(config);
         }
