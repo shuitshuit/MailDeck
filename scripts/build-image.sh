@@ -112,8 +112,29 @@ done
 
 # マルチアーキ対応の buildx ビルダーを (再) 作成する。
 # insecure レジストリ設定が変わり得るため毎回作り直して常に最新設定を反映する。
+#
+# 注意: --driver-opt network=host は使わない。
+# buildkitd コンテナをホストのネットワーク名前空間に直結すると、
+# Tailscale (userspace networking) 経由の経路と衝突し、
+# ビルド中の NuGet/npm レジストリアクセスが極端に遅延/タイムアウトする事象を確認した。
+# 代わりに、レジストリホスト名を CI 実行時点の Tailscale IP に解決した上で
+# `docker buildx build --add-host` でビルドコンテナに注入する (下記)。
 docker buildx rm "$BUILDER_NAME" >/dev/null 2>&1 || true
-docker buildx create --name "$BUILDER_NAME" --driver docker-container --driver-opt network=host --config "$BUILDKITD_CONFIG" --use
+docker buildx create --name "$BUILDER_NAME" --driver docker-container --config "$BUILDKITD_CONFIG" --use
+
+# レジストリホスト名 → IP の対応 (docker buildx build --add-host 用)。
+# insecure レジストリは Tailscale MagicDNS ホスト名のことが多く、
+# 隔離された buildkitd コンテナ内では解決できないため名前解決結果を明示的に注入する。
+ADD_HOST_ARGS=""
+for host in $REGISTRIES; do
+  host_only="${host%%:*}"
+  host_ip="$(getent hosts "$host_only" 2>/dev/null | awk '{print $1}' | head -n1)"
+  if [ -n "$host_ip" ]; then
+    ADD_HOST_ARGS="$ADD_HOST_ARGS --add-host $host_only=$host_ip"
+  else
+    echo "警告: $host_only のIP解決に失敗。ビルドコンテナ内で名前解決できない可能性があります。" >&2
+  fi
+done
 
 # クロスアーキビルド用の QEMU エミュレータ登録 (ベストエフォート、失敗しても続行)
 docker run --privileged --rm tonistiigi/binfmt --install all >/dev/null 2>&1 \
@@ -123,5 +144,5 @@ docker buildx inspect --bootstrap
 
 echo "==> building & pushing $IMAGE_TAG (env: $ENV_FILE, platforms: $PLATFORMS)"
 # shellcheck disable=SC2086
-docker buildx build --platform "$PLATFORMS" -f MailDeck.Api/Dockerfile $BUILD_ARGS -t "$IMAGE_TAG" --push .
+docker buildx build --platform "$PLATFORMS" $ADD_HOST_ARGS -f MailDeck.Api/Dockerfile $BUILD_ARGS -t "$IMAGE_TAG" --push .
 echo "==> built & pushed: $IMAGE_TAG ($PLATFORMS)"
