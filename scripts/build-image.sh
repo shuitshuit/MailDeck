@@ -113,7 +113,7 @@ done
 # マルチアーキ対応の buildx ビルダーを (再) 作成する。
 # insecure レジストリ設定が変わり得るため毎回作り直して常に最新設定を反映する。
 docker buildx rm "$BUILDER_NAME" >/dev/null 2>&1 || true
-docker buildx create --name "$BUILDER_NAME" --driver docker-container --config "$BUILDKITD_CONFIG" --use
+docker buildx create --name "$BUILDER_NAME" --driver docker-container --driver-opt network=host --config "$BUILDKITD_CONFIG" --use
 
 # クロスアーキビルド用の QEMU エミュレータ登録 (ベストエフォート、失敗しても続行)
 docker run --privileged --rm tonistiigi/binfmt --install all >/dev/null 2>&1 \
