@@ -60,10 +60,16 @@ jobs:
           scripts/build-image.sh "${REGISTRY}/${IMAGE_NAME}:${GITHUB_SHA}" --push
 
       # latest タグを付け替えて push (再ビルドせずタグ追加)。
+      # buildx (docker-container ドライバ) は --push 時にレジストリへ直接送るため
+      # ホストの Docker daemon にはイメージがロードされない。
+      # そのため `docker tag`/`docker push` ではなく、レジストリ上のマニフェストを
+      # そのまま複製する `docker buildx imagetools create` を使う。
       - name: Tag and push latest
         run: |
-          docker tag "${REGISTRY}/${IMAGE_NAME}:${GITHUB_SHA}" "${REGISTRY}/${IMAGE_NAME}:latest"
-          docker push "${REGISTRY}/${IMAGE_NAME}:latest"
+          docker buildx imagetools create \
+            --builder maildeck-multiarch \
+            --tag "${REGISTRY}/${IMAGE_NAME}:latest" \
+            "${REGISTRY}/${IMAGE_NAME}:${GITHUB_SHA}"
 
       # Tailnet 経由で k3s API を叩く。KUBECONFIG は base64 で注入する。
       - name: Setup kubeconfig
