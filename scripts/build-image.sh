@@ -117,32 +117,39 @@ done
 # buildkitd コンテナをホストのネットワーク名前空間に直結すると、
 # Tailscale (userspace networking) 経由の経路と衝突し、
 # ビルド中の NuGet/npm レジストリアクセスが極端に遅延/タイムアウトする事象を確認した。
-# 代わりに、レジストリホスト名を CI 実行時点の Tailscale IP に解決した上で
-# `docker buildx build --add-host` でビルドコンテナに注入する (下記)。
+#
+# また `docker buildx build --add-host` は RUN 命令内のコンテナには効くが、
+# BuildKit 自身が行う `--push` 時のレジストリ名前解決には効かない
+# (exporting to image / pushing layers の段階で no such host になる)。
+# そのため、隔離された buildkitd コンテナ自体の /etc/hosts に
+# レジストリホスト → IP を直接追記する。
 docker buildx rm "$BUILDER_NAME" >/dev/null 2>&1 || true
 docker buildx create --name "$BUILDER_NAME" --driver docker-container --config "$BUILDKITD_CONFIG" --use
 
-# レジストリホスト名 → IP の対応 (docker buildx build --add-host 用)。
-# insecure レジストリは Tailscale MagicDNS ホスト名のことが多く、
-# 隔離された buildkitd コンテナ内では解決できないため名前解決結果を明示的に注入する。
-ADD_HOST_ARGS=""
-for host in $REGISTRIES; do
-  host_only="${host%%:*}"
-  host_ip="$(getent hosts "$host_only" 2>/dev/null | awk '{print $1}' | head -n1)"
-  if [ -n "$host_ip" ]; then
-    ADD_HOST_ARGS="$ADD_HOST_ARGS --add-host $host_only=$host_ip"
-  else
-    echo "警告: $host_only のIP解決に失敗。ビルドコンテナ内で名前解決できない可能性があります。" >&2
-  fi
-done
+# ビルダーを一度起動してから buildkitd コンテナの /etc/hosts に
+# レジストリホスト → IP を追記する (insecure レジストリは Tailscale
+# MagicDNS ホスト名のことが多く、隔離されたコンテナ内では解決できないため)。
+docker buildx inspect --bootstrap
+BUILDKITD_CONTAINER="$(docker ps --filter "name=buildx_buildkit_${BUILDER_NAME}" --format '{{.Names}}' | head -n1)"
+if [ -n "$BUILDKITD_CONTAINER" ]; then
+  for host in $REGISTRIES; do
+    host_only="${host%%:*}"
+    host_ip="$(getent hosts "$host_only" 2>/dev/null | awk '{print $1}' | head -n1)"
+    if [ -n "$host_ip" ]; then
+      docker exec "$BUILDKITD_CONTAINER" sh -c "echo '$host_ip $host_only' >> /etc/hosts"
+    else
+      echo "警告: $host_only のIP解決に失敗。buildkitdコンテナ内でpush時に名前解決できない可能性があります。" >&2
+    fi
+  done
+else
+  echo "警告: buildkitd コンテナが見つかりません ($BUILDER_NAME)。/etc/hosts の注入をスキップします。" >&2
+fi
 
 # クロスアーキビルド用の QEMU エミュレータ登録 (ベストエフォート、失敗しても続行)
 docker run --privileged --rm tonistiigi/binfmt --install all >/dev/null 2>&1 \
   || echo "警告: QEMU binfmt 登録に失敗またはスキップ (既に登録済みの可能性あり)"
 
-docker buildx inspect --bootstrap
-
 echo "==> building & pushing $IMAGE_TAG (env: $ENV_FILE, platforms: $PLATFORMS)"
 # shellcheck disable=SC2086
-docker buildx build --platform "$PLATFORMS" $ADD_HOST_ARGS -f MailDeck.Api/Dockerfile $BUILD_ARGS -t "$IMAGE_TAG" --push .
+docker buildx build --platform "$PLATFORMS" -f MailDeck.Api/Dockerfile $BUILD_ARGS -t "$IMAGE_TAG" --push .
 echo "==> built & pushed: $IMAGE_TAG ($PLATFORMS)"
