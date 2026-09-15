@@ -51,14 +51,25 @@ public class WebPushController : BaseAuthController
         {
             await _db.OpenAsync();
 
+            var userAgent = request.UserAgent ?? Request.Headers.UserAgent.ToString();
+
+            // Identify the physical device by (user_id, platform, user_agent). FCM tokens
+            // rotate (browser restart, SW update, token refresh), so keying on the token
+            // alone left a stale row behind on every refresh and the same device received
+            // the notification once per stale row. Instead, update the token on the
+            // existing device row so each device keeps exactly one subscription.
             try
             {
                 var existingSubscription = await _db.AsQueryable<WebPushSubscription>()
-                    .Where(s => s.UserId == userId && s.Token == request.Token)
+                    .Where(s => s.UserId == userId
+                        && s.Platform == request.Platform
+                        && s.UserAgent == userAgent)
                     .FirstOrDefaultAsync();
+
                 if (existingSubscription != null)
                 {
-                    existingSubscription!.UpdatedAt = DateTime.UtcNow;
+                    existingSubscription.Token = request.Token;
+                    existingSubscription.UpdatedAt = DateTime.UtcNow;
                     await _db.UpdateAsync(existingSubscription);
                     return Ok(SuccessResponse.Ok());
                 }
@@ -74,6 +85,7 @@ public class WebPushController : BaseAuthController
                 UserId = userId,
                 Token = request.Token,
                 Platform = request.Platform,
+                UserAgent = userAgent,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };

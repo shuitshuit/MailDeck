@@ -19,6 +19,13 @@ public class WebPushSubscription
     [Name("platform")]
     public string Platform { get; set; } = "web";
 
+    /// <summary>
+    /// Client user agent. With (user_id, platform) it identifies the physical device,
+    /// so a refreshed FCM token updates this row instead of adding a duplicate.
+    /// </summary>
+    [Name("user_agent")]
+    public string? UserAgent { get; set; }
+
     [Name("created_at")]
     public DateTime CreatedAt { get; set; }
 
