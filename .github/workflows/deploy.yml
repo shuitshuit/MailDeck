@@ -54,6 +54,17 @@ jobs:
           VITE_SIGNOUT_URI=${{ secrets.VITE_SIGNOUT_URI }}
           EOF
 
+      # Firebase サービスアカウントキーは .gitignore (maildeck-*.json) 対象のため
+      # リポジトリに存在しない。MailDeck.Api.csproj の CopyToOutputDirectory 設定で
+      # publish 時にビルド出力へコピーされる仕組みは既にあるので、
+      # ビルド前にこのファイルだけ secrets から復元する。
+      # (JSON は "$" や引用符を含み得るため、シェル展開されない env 経由で渡す)
+      - name: Restore Firebase service account key from secrets
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > MailDeck.Api/maildeck-e3e14-c48c7854b564.json
+
       # SHA タグでビルド & push (build-image.sh を再利用)。
       - name: Build and push image (SHA tag)
         run: |
