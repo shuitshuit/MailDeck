@@ -210,9 +210,14 @@ public class AutoLabelingService : BackgroundService
                 }
             }
 
-            var subscriptions = await db.AsQueryable<WebPushSubscription>()
+            var subscriptions = (await db.AsQueryable<WebPushSubscription>()
                 .Where(s => s.UserId == notification.UserId)
-                .ToListAsync();
+                .ToListAsync())
+                // Safety net: never send to the same FCM token twice, even if stale
+                // duplicate rows linger. Device-level dedup happens at registration time.
+                .GroupBy(s => s.Token)
+                .Select(g => g.First())
+                .ToList();
             if (subscriptions.Count == 0)
             {
                 _logger.LogDebug("No push subscriptions found for user {UserId}", notification.UserId);
