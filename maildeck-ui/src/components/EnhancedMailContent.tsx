@@ -76,6 +76,17 @@ export default function EnhancedMailContent({
     return [...new Set(matches.map(m => m.value))];
   }, [matches]);
 
+  // Deduplicate matches for the summary panel (same value + same pattern = one entry)
+  const uniqueMatches = useMemo(() => {
+    const seen = new Set<string>();
+    return matches.filter(m => {
+      const key = `${m.pattern.id}:${m.value}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [matches]);
+
   // Process HTML with highlighted matches
   const enhancedHtml = useMemo(() => {
     if (!isHtml || matches.length === 0) {
@@ -134,10 +145,10 @@ export default function EnhancedMailContent({
         {/* Summary panel with action buttons based on action type */}
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="text-sm font-medium text-blue-800 mb-2">
-            検出されたパターン ({matches.length}件):
+            検出されたパターン ({uniqueMatches.length}件):
           </div>
           <div className="flex flex-wrap gap-2">
-            {matches.map((match, index) => (
+            {uniqueMatches.map((match, index) => (
               <div key={index} className="flex items-center space-x-1">
                 <span className="text-sm text-blue-700 font-mono bg-white px-2 py-1 rounded border border-blue-200">
                   {match.value}
