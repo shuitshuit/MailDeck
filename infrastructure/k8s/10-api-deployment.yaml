@@ -68,12 +68,9 @@ spec:
             capabilities:
               drop:
                 - ALL
-          volumeMounts:
-            - name: logs
-              mountPath: /app/logs
-      volumes:
-        - name: logs
-          emptyDir: {}
+      # ログはファイルではなく stdout に CLEF (JSON) で出力し、Promtail が収集して
+      # Loki へ送る (k3s-manifests の infra/monitoring/)。emptyDir へのファイル出力は
+      # Pod 再起動で消えるうえ誰も読まないため廃止した。
 ---
 apiVersion: v1
 kind: Service

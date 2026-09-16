@@ -26,16 +26,36 @@ PostgreSqlConnect.NamingCase = NamingCase.SnakeCase;
 dotenv.net.DotEnv.Load();
 
 #region Initialize Serilog
+// 本番 (k3s) では stdout を Promtail が収集して Loki に送るため、コンソールに
+// CLEF (JSON) を出す。ログの種別分け (requests/performance/maildeck) は Promtail が
+// SourceContext から導出するので、下記ミドルウェアのクラス名を変えると
+// Grafana のダッシュボードが壊れる (k3s-manifests の 51-promtail.yaml も要修正)。
+//
+// ファイル出力は開発環境のみ。k3s では /app/logs が emptyDir で Pod 再起動時に
+// 消えてしまい、収集もされないため意味がない。
+var isProduction = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Production";
+
 // Configure Serilog Global Logger
-Log.Logger = new LoggerConfiguration()
+var loggerConfiguration = new LoggerConfiguration()
     .Enrich.FromLogContext()           // LogContextから情報を取得
     .Enrich.WithSpan()                 // TraceId、SpanIdを自動追加
     .Enrich.WithMachineName()          // マシン名を追加
     .Enrich.WithEnvironmentName()      // 環境名（Development/Production）を追加
     .Enrich.WithProperty("Application", "MailDeck.Api")
     .Enrich.WithProperty("Version", "1.0.0")
-    // コンソール出力（開発時のみ）
-    .WriteTo.Console()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
+    .MinimumLevel.Override("System", LogEventLevel.Warning);
+
+// コンソール出力。本番は Promtail が解析できるよう CLEF (JSON)、開発は人が読める形式。
+loggerConfiguration = isProduction
+    ? loggerConfiguration.WriteTo.Console(new CompactJsonFormatter())
+    : loggerConfiguration.WriteTo.Console();
+
+if (!isProduction)
+{
+    loggerConfiguration = loggerConfiguration
     // リクエストログ専用ファイル（Fluent Bit用JSON形式）
     .WriteTo.Logger(lc => lc
         .Filter.ByIncludingOnly(evt =>
@@ -70,12 +90,10 @@ Log.Logger = new LoggerConfiguration()
             path: "logs/maildeck-.json",
             rollingInterval: RollingInterval.Day,
             retainedFileCountLimit: 7,
-            buffered: false))
-    .MinimumLevel.Information()
-    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
-    .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
-    .MinimumLevel.Override("System", LogEventLevel.Warning)
-    .CreateLogger();
+            buffered: false));
+}
+
+Log.Logger = loggerConfiguration.CreateLogger();
 #endregion
 
 try
