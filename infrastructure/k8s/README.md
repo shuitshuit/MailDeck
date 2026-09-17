@@ -195,6 +195,28 @@ kubectl -n maildeck get secret maildeck-api-secret
 kubectl -n maildeck get certificate
 ```
 
+## ログの見かた
+
+ログは **stdout に CLEF (Serilog `CompactJsonFormatter`) で出力**され、
+`monitoring` namespace の Promtail (DaemonSet) が収集して Loki に送ります。
+**監視基盤のマニフェストは `k3s-manifests` の `infra/monitoring/` が正**です
+(このリポジトリにはミラーしていません)。
+
+- Grafana: `https://grafana.shuit.net` → ダッシュボード `MailDeck` (uid: `maildeck-logs`)
+- 横断検索は Explore でデータソース Loki を選び `{job="maildeck"}` から絞り込む
+- 保持期間は 30 日
+
+`log_type` ラベル (`requests` / `performance` / `maildeck`) は Promtail が
+`SourceContext` から導出しています。そのため:
+
+> ⚠️ **`RequestLoggingMiddleware` / `PerformanceLoggingMiddleware` をリネームすると
+> ダッシュボードが壊れます。** 変更する場合は `k3s-manifests` の
+> `infra/monitoring/51-promtail.yaml` の regex も同時に直してください。
+
+ファイルへのログ出力 (`logs/*.json`) は**開発環境のみ**です
+(`ASPNETCORE_ENVIRONMENT != Production`)。k3s では誰も読まないファイルを
+書くだけになるため無効化しています。
+
 ## 注意点
 
 - **外部公開は NodePort + Traefik**: このクラスタは `--disable=servicelb` のため
