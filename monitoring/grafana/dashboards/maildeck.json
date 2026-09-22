@@ -83,8 +83,8 @@
       "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
       "targets": [
         {
-          "expr": "topk(10, sum by (path) (count_over_time({job=\"maildeck\", log_type=\"requests\"} | json | method != \"OPTIONS\" [$__range])))",
-          "legendFormat": "{{path}}",
+          "expr": "topk(10, sum by (Path) (count_over_time({job=\"maildeck\", log_type=\"requests\"} | json | method != \"OPTIONS\" [$__range])))",
+          "legendFormat": "{{Path}}",
           "refId": "A",
           "instant": true
         }
@@ -232,7 +232,7 @@
       "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
       "targets": [
         {
-          "expr": "{job=\"maildeck\", log_type=\"maildeck\"} | json | SourceContext =~ `(ImapIdleService|AutoLabelingService|EmailCheckBackgroundService|LogCompressionBackgroundService|ChannelService)`",
+          "expr": "{job=\"maildeck\", log_type=\"maildeck\"} | json | SourceContext =~ `.*(ImapIdleService|AutoLabelingService|EmailCheckBackgroundService|LogCompressionBackgroundService|ChannelService)`",
           "legendFormat": "",
           "refId": "A"
         }
