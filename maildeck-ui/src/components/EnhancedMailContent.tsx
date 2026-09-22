@@ -235,7 +235,9 @@ export default function EnhancedMailContent({
         `}</style>
       </>
     );
-  }, [content, isHtml, matches, onCopy, onLinkClick, enhancedHtml]);
+  // uniqueMatches は matches から導出される useMemo 値なので、依存に足しても
+  // 再計算の頻度は変わらない (サマリーパネルで使っている宣言漏れを補うだけ)。
+  }, [content, isHtml, matches, uniqueMatches, onCopy, onLinkClick, enhancedHtml]);
 
   return <div className={`min-w-0 overflow-x-hidden break-words ${className}`}>{enhancedContent}</div>;
 }
