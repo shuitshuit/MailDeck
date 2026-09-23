@@ -111,7 +111,7 @@ export default function ThreadDetailModal({
                 const targetId = initialMessageId ?? (data.length > 0 ? data[data.length - 1].id : undefined);
                 if (targetId !== undefined) {
                     setExpandedIds(new Set([targetId]));
-                    loadMessageDetail(targetId);
+                    loadMessageDetail(targetId, data);
                 }
             } catch {
                 toast.error('スレッドの読み込みに失敗しました');
@@ -123,7 +123,7 @@ export default function ThreadDetailModal({
         load();
     }, [isOpen, configId, threadKey]);
 
-    const loadMessageDetail = async (id: number) => {
+    const loadMessageDetail = async (id: number, messagesOverride?: ThreadMessageSummary[]) => {
         if (loadedDetails.has(id) || loadingIds.has(id)) return;
         setLoadingIds(prev => new Set(prev).add(id));
         try {
@@ -131,7 +131,7 @@ export default function ThreadDetailModal({
             setLoadedDetails(prev => new Map(prev).set(id, detail));
 
             // 展開して本文を表示したら既読にする（未読の場合のみ）
-            const target = messages.find(m => m.id === id);
+            const target = (messagesOverride ?? messages).find(m => m.id === id);
             if (target && !target.isRead) {
                 setMessages(prev => prev.map(m => m.id === id ? { ...m, isRead: true } : m));
                 markAsRead(configId, id).catch(err =>
