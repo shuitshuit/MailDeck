@@ -97,7 +97,7 @@ public class OAuthController : BaseAuthController
         }
 
         var redirectUri = ResolveGoogleRedirectUri();
-        var state = _stateStore.Create(new OAuthState(userId, OAuthProviders.Google, redirectUri, configId));
+        var state = await _stateStore.CreateAsync(new OAuthState(userId, OAuthProviders.Google, redirectUri, configId));
 
         return Ok(new OAuthAuthorizeResponse
         {
@@ -124,7 +124,7 @@ public class OAuthController : BaseAuthController
             return RedirectToFrontend("error", error);
         }
 
-        var pending = string.IsNullOrEmpty(state) ? null : _stateStore.Consume(state);
+        var pending = string.IsNullOrEmpty(state) ? null : await _stateStore.ConsumeAsync(state);
         if (pending is null)
         {
             _logger.LogWarning("Google OAuth callback carried an unknown or expired state value");
