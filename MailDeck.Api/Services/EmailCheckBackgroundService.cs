@@ -290,6 +290,11 @@ RETURNING *;";
                     new { Id = config.Id });
             }
         }
+        catch (OAuthReauthorizationRequiredException ex)
+        {
+            _logger.LogWarning(ex, "OAuth re-authorization required for config {ConfigId} (User: {UserId}); skipping check",
+                config.Id, config.UserId);
+        }
         catch (Exception ex)
         {
             _logger.LogErrorWithSql(ex, $"Error checking email for config {config.Id} (User: {config.UserId})");

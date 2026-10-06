@@ -13,7 +13,22 @@
     <title>MailDeck</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- JavaScript を実行しないクローラー向けの静的な説明 (React のマウント時に置き換えられます) -->
+      <main style="max-width:720px;margin:0 auto;padding:48px 16px;font-family:Inter,sans-serif;line-height:1.7;color:#1f2937">
+        <h1>MailDeck</h1>
+        <p>MailDeck は、Gmail や独自ドメインなど複数のメールアカウントを一つの画面で閲覧・送信・整理できる Web メールクライアントです。</p>
+        <h2>主な機能</h2>
+        <ul>
+          <li>複数のメールアカウント（IMAP/SMTP、Google アカウント連携）の統合受信箱</li>
+          <li>ルールに基づく自動ラベリングと、ラベルごとの新着通知</li>
+          <li>メールに含まれる認証コード（OTP）の自動抽出</li>
+        </ul>
+        <h2>Google アカウントのデータについて</h2>
+        <p>Google アカウントの連携は、ユーザーが連携を選んだ場合のみ行います。Gmail のデータはユーザーにメール機能を提供する目的にのみ使用し、広告や第三者への提供には使用しません。MailDeck による Google API から受け取った情報の利用は、限定的使用の要件を含む Google API サービスのユーザーデータに関するポリシーに準拠します。</p>
+        <p><a href="/privacy">プライバシーポリシー</a> / <a href="/terms">利用規約</a></p>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

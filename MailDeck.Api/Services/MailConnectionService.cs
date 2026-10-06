@@ -159,10 +159,19 @@ public class MailConnectionService : IMailConnectionService
         {
             token = await google.RefreshAccessTokenAsync(refreshToken, ct);
         }
+        catch (OAuthInvalidGrantException ex)
+        {
+            // invalid_grant means the grant expired (consent screen in "Testing" => 7 days),
+            // was revoked, or the password changed: no amount of retrying will help, only a
+            // fresh consent will. Drop the dead tokens so NeedsReauthorization flips to true
+            // and the UI offers re-authorization.
+            await ClearTokensAsync(scope, config, ct);
+            throw new OAuthReauthorizationRequiredException(config.Id,
+                $"OAuth grant for account {config.Id} is no longer valid (invalid_grant); re-authorization required.", ex);
+        }
         catch (Exception ex)
         {
-            // invalid_grant means the user revoked access or changed their password:
-            // no amount of retrying will help, only a fresh consent will.
+            // Transient failure (network, 5xx...): keep the refresh token and let the next attempt retry.
             throw new OAuthReauthorizationRequiredException(config.Id,
                 $"Failed to refresh the OAuth access token for account {config.Id}.", ex);
         }
@@ -182,6 +191,34 @@ public class MailConnectionService : IMailConnectionService
         _logger.LogInformation("Refreshed OAuth access token for account {ConfigId}", config.Id);
 
         return token.AccessToken;
+    }
+
+    private async Task ClearTokensAsync(IServiceScope scope, UserServerConfig config, CancellationToken ct)
+    {
+        config.OauthRefreshToken = null;
+        config.OauthAccessToken = null;
+        config.OauthTokenExpiresAt = null;
+        _tokenCache.TryRemove(config.Id, out _);
+
+        try
+        {
+            var db = scope.ServiceProvider.GetRequiredService<PostgreSqlConnect>();
+            await db.OpenAsync();
+
+            var current = await db.GetAsync<UserServerConfig>(config.Id);
+            if (current is null) return;
+
+            current.OauthRefreshToken = null;
+            current.OauthAccessToken = null;
+            current.OauthTokenExpiresAt = null;
+            current.UpdatedAt = DateTime.UtcNow;
+
+            await db.UpdateAsync(current);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to clear invalid OAuth tokens for account {ConfigId}", config.Id);
+        }
     }
 
     /// <summary>

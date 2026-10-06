@@ -145,8 +145,9 @@ public class GoogleOAuthService : IGoogleOAuthService
             // The body carries Google's error code (invalid_grant when the user revoked
             // access), but it can also echo back request parameters, so keep it out of logs.
             var error = JsonSerializer.Deserialize<GoogleTokenError>(body);
-            throw new InvalidOperationException(
-                $"Google token request failed ({(int)response.StatusCode}): {error?.Error ?? "unknown_error"}");
+            var message = $"Google token request failed ({(int)response.StatusCode}): {error?.Error ?? "unknown_error"}";
+            if (error?.Error == "invalid_grant") throw new OAuthInvalidGrantException(message);
+            throw new InvalidOperationException(message);
         }
 
         var token = JsonSerializer.Deserialize<GoogleTokenResponse>(body);
