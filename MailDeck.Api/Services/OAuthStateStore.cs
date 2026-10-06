@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
-using Microsoft.Extensions.Caching.Memory;
+using MailDeck.Api.Models;
+using Microsoft.Extensions.DependencyInjection;
+using ShuitNet.ORM.PostgreSQL;
 
 namespace MailDeck.Api.Services;
 
@@ -19,40 +21,71 @@ public record OAuthState(string UserId, string Provider, string RedirectUri, Gui
 /// </summary>
 public interface IOAuthStateStore
 {
-    string Create(OAuthState state);
-    OAuthState? Consume(string state);
+    Task<string> CreateAsync(OAuthState state);
+    Task<OAuthState?> ConsumeAsync(string state);
 }
 
+/// <summary>
+/// Backed by PostgreSQL rather than IMemoryCache: authorize and callback are two
+/// separate HTTP requests, and on k3s a RollingUpdate briefly runs the old and new
+/// pod side by side, so the Service can route them to different pods. A pod-local
+/// cache would lose the state written by the other pod and reject the callback as
+/// invalid_state even though the user just completed consent on Google's side.
+/// </summary>
 public class OAuthStateStore : IOAuthStateStore
 {
     private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(10);
 
-    private readonly IMemoryCache _cache;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public OAuthStateStore(IMemoryCache cache)
+    public OAuthStateStore(IServiceScopeFactory scopeFactory)
     {
-        _cache = cache;
+        _scopeFactory = scopeFactory;
     }
 
-    public string Create(OAuthState state)
+    public async Task<string> CreateAsync(OAuthState state)
     {
         var value = Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
-        _cache.Set(CacheKey(value), state, Lifetime);
+        var now = DateTime.UtcNow;
+
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<PostgreSqlConnect>();
+        await db.OpenAsync();
+
+        await db.InsertAsync(new OAuthStateRecord
+        {
+            State = value,
+            UserId = state.UserId,
+            Provider = state.Provider,
+            RedirectUri = state.RedirectUri,
+            ConfigId = state.ConfigId,
+            CreatedAt = now,
+            ExpiresAt = now.Add(Lifetime)
+        });
+
         return value;
     }
 
-    public OAuthState? Consume(string state)
+    public async Task<OAuthState?> ConsumeAsync(string state)
     {
         if (string.IsNullOrWhiteSpace(state)) return null;
 
-        var key = CacheKey(state);
-        if (!_cache.TryGetValue<OAuthState>(key, out var value)) return null;
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<PostgreSqlConnect>();
+        await db.OpenAsync();
 
-        _cache.Remove(key);
-        return value;
+        var record = await db.GetAsync<OAuthStateRecord>(state);
+        if (record is null || record.ExpiresAt < DateTime.UtcNow) return null;
+
+        // Single-use: a concurrent or replayed callback with the same state can
+        // only ever have one winner delete the row.
+        var affected = await db.ExecuteAsync(
+            "DELETE FROM oauth_states WHERE state = @State",
+            new { State = state });
+        if (affected != 1) return null;
+
+        return new OAuthState(record.UserId, record.Provider, record.RedirectUri, record.ConfigId);
     }
-
-    private static string CacheKey(string state) => $"oauth-state:{state}";
 
     private static string Base64UrlEncode(byte[] bytes) =>
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');

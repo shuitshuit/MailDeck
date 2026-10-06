@@ -15,7 +15,7 @@ Googleは2022年5月に「安全性の低いアプリのアクセス」を廃止
 1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作成 (既存でも可)
 2. **APIとサービス → ライブラリ** で **Gmail API** を有効化
 3. **APIとサービス → OAuth同意画面** を設定
-   - User Type: 自分だけで使うなら「外部」+ テストユーザーに自分を追加
+   - User Type: 「外部」を選択し、設定後に公開ステータスを必ず「本番」にする (「テスト」のままだとリフレッシュトークンが7日で失効する。個人利用なら未検証アプリの警告付きのままで可)
    - スコープに以下を追加:
      - `https://mail.google.com/` (IMAP/SMTPのフルアクセス。Gmailの仕様上これ以外では接続不可)
      - `https://www.googleapis.com/auth/userinfo.email` (どのメールボックスを許可したかの判定用)

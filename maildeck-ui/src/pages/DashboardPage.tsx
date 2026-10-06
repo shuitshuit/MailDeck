@@ -18,6 +18,7 @@ import type { SearchQuery } from '../types/search';
 interface Account {
     id: string;
     accountName: string;
+    needsReauthorization?: boolean;
 }
 
 interface Email {
@@ -718,6 +719,19 @@ export default function DashboardPage({ folderType = 'inbox' }: DashboardPagePro
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3">
                 <h1 className="text-xl md:text-2xl font-bold">{displayTitle}</h1>
                 <div className="flex gap-2 w-full md:w-auto">
+            {accounts.some(a => a.needsReauthorization) && (
+                <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <span>
+                        Googleアカウントの連携が切れています ({accounts.filter(a => a.needsReauthorization).map(a => a.accountName).join(', ')})。メールを取得するには再認証が必要です。
+                    </span>
+                    <button
+                        onClick={() => navigate('/settings')}
+                        className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 font-medium text-white hover:bg-amber-700"
+                    >
+                        設定で再認証する
+                    </button>
+                </div>
+            )}
                     <button
                         onClick={() => loadInbox()}
                         className="bg-white text-gray-600 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 shadow-sm font-medium flex items-center justify-center gap-2 flex-1 md:flex-none"
