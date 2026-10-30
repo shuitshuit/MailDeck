@@ -212,6 +212,25 @@ export default function LandingPage() {
                 </div>
             </section>
 
+            {/* Google data usage */}
+            <section id="google-data" className="py-16 px-4 sm:px-6 lg:px-8 bg-white">
+                <div className="max-w-3xl mx-auto">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4">Googleアカウントのデータについて</h2>
+                    <p className="text-gray-600 mb-3">
+                        MailDeckは、ユーザーが連携を選んだ場合に限り、Googleの認可を通じてGmailに接続し、
+                        メールの閲覧・送信・検索・自動ラベリング・新着通知といったメール機能を提供します。
+                    </p>
+                    <p className="text-gray-600">
+                        Gmailのデータは、これらの機能をユーザーに提供する目的にのみ使用し、広告や第三者への提供には使用しません。
+                        MailDeckによるGoogle APIから受け取った情報の利用は、限定的使用の要件を含む
+                        <a href="https://developers.google.com/terms/api-services-user-data-policy" className="text-brand-600 hover:underline" target="_blank" rel="noreferrer">
+                            Google APIサービスのユーザーデータに関するポリシー
+                        </a>
+                        に準拠します。詳細は<Link to="/privacy" className="text-brand-600 hover:underline">プライバシーポリシー</Link>をご確認ください。
+                    </p>
+                </div>
+            </section>
+
             {/* CTA Section */}
             <section className="py-20 px-4 sm:px-6 lg:px-8 bg-brand-600">
                 <div className="max-w-4xl mx-auto text-center">

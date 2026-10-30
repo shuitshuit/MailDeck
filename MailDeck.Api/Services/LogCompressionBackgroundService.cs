@@ -64,6 +64,15 @@ public class LogCompressionBackgroundService : BackgroundService
                 _logger.LogErrorWithSql(ex, "Error occurred while cleaning up notified_messages");
             }
 
+            try
+            {
+                await CleanupExpiredOAuthStatesAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogErrorWithSql(ex, "Error occurred while cleaning up oauth_states");
+            }
+
             await Task.Delay(_checkInterval, stoppingToken);
         }
 
@@ -134,6 +143,25 @@ public class LogCompressionBackgroundService : BackgroundService
         if (deleted > 0)
         {
             _logger.LogInformation("Deleted {Count} expired notified_messages row(s)", deleted);
+        }
+    }
+
+    /// <summary>
+    /// 期限切れの oauth_states 行を削除する (未使用のまま失効した認可リクエスト)。
+    /// </summary>
+    private async Task CleanupExpiredOAuthStatesAsync()
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<PostgreSqlConnect>();
+        await db.OpenAsync();
+
+        var deleted = await db.ExecuteAsync(
+            "DELETE FROM oauth_states WHERE expires_at < NOW()",
+            new { });
+
+        if (deleted > 0)
+        {
+            _logger.LogInformation("Deleted {Count} expired oauth_states row(s)", deleted);
         }
     }
 

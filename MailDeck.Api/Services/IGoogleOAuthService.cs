@@ -23,6 +23,16 @@ public class OAuthReauthorizationRequiredException : Exception
 }
 
 /// <summary>
+/// Google rejected the grant itself (<c>invalid_grant</c>): the refresh token was revoked,
+/// expired (e.g. consent screen still in "Testing" => 7 days) or the password changed.
+/// Retrying never helps; only a fresh consent does.
+/// </summary>
+public class OAuthInvalidGrantException : InvalidOperationException
+{
+    public OAuthInvalidGrantException(string message) : base(message) { }
+}
+
+/// <summary>
 /// Authorization-code flow against Google, used to obtain XOAUTH2 tokens for
 /// Gmail's IMAP/SMTP endpoints.
 /// </summary>

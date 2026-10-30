@@ -195,7 +195,6 @@ try
     builder.Services.AddSingleton<IEncryptionService, KmsEncryptionService>();
 
     // OAuth2 (XOAUTH2) mail accounts
-    builder.Services.AddMemoryCache();
     builder.Services.AddHttpClient<IGoogleOAuthService, GoogleOAuthService>();
     builder.Services.AddSingleton<IOAuthStateStore, OAuthStateStore>();
     builder.Services.AddSingleton<IMailConnectionService, MailConnectionService>();
