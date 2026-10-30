@@ -1599,18 +1599,29 @@ public class MailController : BaseAuthController
             var inbox = client.Inbox;
             await inbox.OpenAsync(FolderAccess.ReadOnly);
 
-            IList<UniqueId> uids;
+            IList<UniqueId> uids = new List<UniqueId>();
             try
             {
                 var query = MailKit.Search.SearchQuery.SubjectContains(threadKey);
                 uids = await inbox.SearchAsync(query);
             }
-            catch
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "IMAP subject search failed for thread; falling back to recent messages");
+            }
+
+            // 件名検索が失敗・0件の場合（非ASCII件名・RFC2047エンコード等）は、
+            // 直近のメッセージを取得してから NormalizeSubject で絞り込む
+            if (uids.Count == 0 && inbox.Count > 0)
             {
                 var total = inbox.Count;
-                var start = Math.Max(0, total - maxMessages);
+                var start = Math.Max(0, total - Math.Max(maxMessages, 500));
                 var fallback = await inbox.FetchAsync(start, total - 1, MessageSummaryItems.UniqueId | MessageSummaryItems.Envelope);
-                uids = fallback.Select(s => s.UniqueId).ToList();
+                uids = fallback
+                    .Where(s => string.IsNullOrEmpty(threadKey) ||
+                                NormalizeSubject(s.Envelope?.Subject ?? string.Empty) == threadKey)
+                    .Select(s => s.UniqueId)
+                    .ToList();
             }
 
             if (uids.Count == 0)
@@ -1619,7 +1630,9 @@ public class MailController : BaseAuthController
                 return Ok(new List<ThreadMessageSummaryResponse>());
             }
 
-            var recentUids = uids.OrderByDescending(u => u.Id).Take(maxMessages).ToList();
+            // 部分一致検索は短いキー(例: "1")で大量にヒットするため、絞り込み前に多めに取得してから maxMessages に切り詰める
+            // FetchAsync に降順の UID リストを渡すと連続UIDの範囲化で取りこぼすため、昇順に並べ直す
+            var recentUids = uids.OrderByDescending(u => u.Id).Take(Math.Max(maxMessages, 500)).OrderBy(u => u.Id).ToList();
             var summaries = await inbox.FetchAsync(recentUids, MessageSummaryItems.Envelope |
                 MessageSummaryItems.InternalDate | MessageSummaryItems.UniqueId | MessageSummaryItems.Flags);
 
@@ -1644,7 +1657,7 @@ public class MailController : BaseAuthController
                 });
             }
 
-            messages = messages.OrderBy(m => m.Date).ToList();
+            messages = messages.OrderByDescending(m => m.Date).Take(maxMessages).OrderBy(m => m.Date).ToList();
             await client.DisconnectAsync(true);
             return Ok(messages);
         }
