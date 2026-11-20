@@ -54,28 +54,9 @@ public class MailLinksController : BaseAuthController
             var config = await _db.GetAsync<UserServerConfig>(request.ConfigId);
             if (config is null || config.UserId != userId) return NotFound("Configuration not found");
 
-            var existing = (await _db.GetMultipleAsync<MailLink>(new
-            {
-                user_id = userId,
-                config_id = request.ConfigId,
-                message_id_header = header
-            })).FirstOrDefault();
+            var linkId = await MailLinkService.GetOrCreateAsync(_db, userId, request.ConfigId, header, request.Subject);
 
-            if (existing is null)
-            {
-                existing = new MailLink
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    ConfigId = request.ConfigId,
-                    MessageIdHeader = header,
-                    Subject = request.Subject,
-                    CreatedAt = DateTime.UtcNow
-                };
-                await _db.InsertAsync(existing);
-            }
-
-            return Ok(new MailLinkResponse { Id = existing.Id, Url = BuildUrl(existing.Id) });
+            return Ok(new MailLinkResponse { Id = linkId, Url = BuildUrl(linkId) });
         }
         catch (Exception ex)
         {
@@ -136,6 +117,6 @@ public class MailLinksController : BaseAuthController
     private string? BuildUrl(Guid id)
     {
         var baseUrl = _configuration["Frontend:Url"]?.TrimEnd('/');
-        return string.IsNullOrEmpty(baseUrl) ? null : $"{baseUrl}/m/{id}";
+        return string.IsNullOrEmpty(baseUrl) ? null : $"{baseUrl}{MailLinkService.PathFor(id)}";
     }
 }

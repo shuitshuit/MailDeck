@@ -224,6 +224,8 @@ public class AutoLabelingService : BackgroundService
                 return;
             }
 
+            var mailLinkPath = await TryGetMailLinkPathAsync(db, notification);
+
             var messageBody = notification.Subject ?? "(No Subject)";
             if (!string.IsNullOrEmpty(notification.BodyText))
             {
@@ -255,6 +257,15 @@ public class AutoLabelingService : BackgroundService
                 else
                 {
                     // Web: 通常のnotification message
+                    var data = new Dictionary<string, string>
+                    {
+                        ["configId"] = notification.ConfigId,
+                        ["messageId"] = notification.MessageId.ToString()
+                    };
+                    // Durable link survives the mail being moved before the user taps the
+                    // notification; the service worker falls back to configId/messageId.
+                    if (mailLinkPath is not null) data["url"] = mailLinkPath;
+
                     message = new Message()
                     {
                         Notification = new Notification
@@ -262,11 +273,7 @@ public class AutoLabelingService : BackgroundService
                             Title = notification.From,
                             Body = messageBody
                         },
-                        Data = new Dictionary<string, string>
-                        {
-                            ["configId"] = notification.ConfigId,
-                            ["messageId"] = notification.MessageId.ToString()
-                        },
+                        Data = data,
                         Token = sub.Token,
                     };
                 }
@@ -290,6 +297,31 @@ public class AutoLabelingService : BackgroundService
         {
             _logger.LogErrorWithSql(ex, "Failed to send push notification for message {MessageId}",
                 notification.MessageId);
+        }
+    }
+
+    /// <summary>
+    /// /m/{id} path for the notified mail, or null when it has no Message-ID or the link
+    /// could not be created (the notification is still sent with configId/messageId).
+    /// </summary>
+    private async Task<string?> TryGetMailLinkPathAsync(ShuitNet.ORM.PostgreSQL.PostgreSqlConnect db, NewEmailNotification notification)
+    {
+        if (string.IsNullOrWhiteSpace(notification.MessageIdHeader)
+            || !Guid.TryParse(notification.ConfigId, out var configId))
+        {
+            return null;
+        }
+
+        try
+        {
+            var linkId = await MailLinkService.GetOrCreateAsync(
+                db, notification.UserId, configId, notification.MessageIdHeader, notification.Subject);
+            return MailLinkService.PathFor(linkId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to create mail link for message {MessageId}", notification.MessageId);
+            return null;
         }
     }
 

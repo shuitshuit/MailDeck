@@ -112,6 +112,7 @@ AWS Cognito (認証)                          PostgreSQL (ShuitNet.ORM)
 - メールへの直リンク (`/m/{id}`)。予定・ToDoのメモなどに貼る用途
 - **PK: UUID**
 - IMAP UIDは移動やUIDVALIDITYの変化で変わるため、`message_id_header` (Message-IDヘッダー) を保存し、開くたびにINBOXを検索してUIDを引き直す
+- Web Push通知の送信時にも作成し、通知クリックで `/m/{id}` を開く (Android ネイティブ通知は従来どおり `configId` + `messageId`)
 - INBOX以外へ移動されたメールは「見つかりません」になる (既知の制限)
 
 #### user_google_integrations テーブル

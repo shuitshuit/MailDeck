@@ -262,7 +262,8 @@ RETURNING *;";
                                 MessageId: (int)msg.UniqueId.Id,
                                 From: msg.Envelope!.From.ToString(),
                                 Subject: msg.Envelope!.Subject ?? "",
-                                BodyText: bodyText
+                                BodyText: bodyText,
+                                MessageIdHeader: mimeMessage.MessageId
                             );
                             await _channelService.EnqueueAsync(notification, stoppingToken);
                             _logger.LogDebug(

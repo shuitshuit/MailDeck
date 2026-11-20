@@ -29,10 +29,14 @@ messaging.onBackgroundMessage((payload) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const { configId, messageId } = event.notification.data ?? {};
-  const url = configId && messageId
-    ? `/inbox?configId=${configId}&messageId=${messageId}`
-    : '/inbox';
+  const { url: linkPath, configId, messageId } = event.notification.data ?? {};
+  // Prefer the durable /m/{id} link: it still finds the mail after a move.
+  // Only accept a same-origin mail link path so a payload cannot redirect elsewhere.
+  const url = typeof linkPath === 'string' && /^\/m\/[0-9a-f-]{36}$/i.test(linkPath)
+    ? linkPath
+    : configId && messageId
+      ? `/inbox?configId=${configId}&messageId=${messageId}`
+      : '/inbox';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
