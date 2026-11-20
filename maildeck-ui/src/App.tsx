@@ -1,11 +1,12 @@
 import { useAuthenticator } from '@aws-amplify/ui-react';
-import { Link, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/auth/LoginPage';
 import SignUpPage from './pages/auth/SignUpPage';
 import ConfirmSignUpPage from './pages/auth/ConfirmSignUpPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import SettingsPage from './pages/SettingsPage';
+import MailLinkPage from './pages/MailLinkPage';
 import Logo from './components/Logo';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -28,13 +29,36 @@ interface ServerConfig {
   accountName: string;
 }
 
+/** sessionStorage key for a /m/{id} mail link opened while signed out */
+const PENDING_MAIL_LINK_KEY = 'maildeck.pendingMailLink';
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { authStatus } = useAuthenticator(context => [context.authStatus]);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (authStatus !== 'authenticated') return;
     syncUser();
   }, [authStatus]);
+
+  // Login always lands on "/", so a mail link opened while signed out would be lost.
+  // Remember it here and go back to it once signed in.
+  useEffect(() => {
+    try {
+      if (authStatus === 'unauthenticated' && location.pathname.startsWith('/m/')) {
+        sessionStorage.setItem(PENDING_MAIL_LINK_KEY, location.pathname);
+      } else if (authStatus === 'authenticated') {
+        const pending = sessionStorage.getItem(PENDING_MAIL_LINK_KEY);
+        if (pending) {
+          sessionStorage.removeItem(PENDING_MAIL_LINK_KEY);
+          if (pending !== location.pathname) navigate(pending, { replace: true });
+        }
+      }
+    } catch {
+      // storage unavailable (private mode etc.): the link just is not restored
+    }
+  }, [authStatus, location.pathname, navigate]);
 
   if (authStatus === 'configuring') {
     return <div className="flex h-screen items-center justify-center">Loading...</div>;
@@ -468,6 +492,13 @@ function App() {
               ) : (
                 <LandingPage />
               )
+            } />
+            <Route path="/m/:linkId" element={
+              <ProtectedRoute>
+                <Layout>
+                  <MailLinkPage />
+                </Layout>
+              </ProtectedRoute>
             } />
             <Route path="/inbox" element={
               <ProtectedRoute>

@@ -25,6 +25,7 @@
     "aws-amplify": "^6.15.8",
     "axios": "^1.13.2",
     "budoux": "^0.8.1",
+    "chrono-node": "^2.10.3",
     "dompurify": "^3.3.1",
     "firebase": "^12.8.0",
     "react": "^19.2.0",

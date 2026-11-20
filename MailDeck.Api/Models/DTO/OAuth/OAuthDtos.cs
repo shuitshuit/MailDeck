@@ -19,3 +19,14 @@ public class OAuthAuthorizeResponse
 {
     public string AuthorizationUrl { get; set; } = string.Empty;
 }
+
+public class GoogleIntegrationStatusResponse
+{
+    /// <summary>False when the server has no Google OAuth credentials; the UI hides the feature.</summary>
+    public bool Available { get; set; }
+
+    public bool Connected { get; set; }
+
+    /// <summary>Google account the grant belongs to.</summary>
+    public string? Email { get; set; }
+}

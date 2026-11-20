@@ -108,6 +108,19 @@ AWS Cognito (認証)                          PostgreSQL (ShuitNet.ORM)
 - **PK: UUID** (推測困難なID)
 - `user_id` 外部キー
 
+#### mail_links テーブル
+- メールへの直リンク (`/m/{id}`)。予定・ToDoのメモなどに貼る用途
+- **PK: UUID**
+- IMAP UIDは移動やUIDVALIDITYの変化で変わるため、`message_id_header` (Message-IDヘッダー) を保存し、開くたびにINBOXを検索してUIDを引き直す
+- INBOX以外へ移動されたメールは「見つかりません」になる (既知の制限)
+
+#### user_google_integrations テーブル
+- Googleカレンダー / Google ToDo連携 (ユーザー単位。Gmailのメールアカウント連携とは別のグラント)
+- PK: Cognito `sub`
+- スコープ: `calendar.events`, `tasks`, `userinfo.email`
+- `refresh_token` / `access_token` は KMS暗号化
+- OAuthは既存の `/api/oauth/google/callback` を共用し、`oauth_states.provider = 'google_integration'` で分岐する
+
 #### web_push_subscriptions テーブル
 - Web Pushエンドポイント
 - **PK: UUID** (推測困難なID)

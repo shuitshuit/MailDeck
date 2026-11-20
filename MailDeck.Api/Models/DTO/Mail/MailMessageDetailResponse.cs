@@ -3,6 +3,8 @@ namespace MailDeck.Api.Models.DTO.Mail;
 public class MailMessageDetailResponse
 {
     public string Id { get; set; } = string.Empty;
+    /// <summary>RFC 5322 Message-ID (without angle brackets); used for durable mail links.</summary>
+    public string? MessageIdHeader { get; set; }
     public string Subject { get; set; } = string.Empty;
     public string From { get; set; } = string.Empty;
     public string To { get; set; } = string.Empty;
