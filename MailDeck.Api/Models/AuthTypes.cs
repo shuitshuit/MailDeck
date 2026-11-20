@@ -16,4 +16,10 @@ public static class AuthTypes
 public static class OAuthProviders
 {
     public const string Google = "google";
+
+    /// <summary>
+    /// Google Calendar / Tasks grant (user_google_integrations). Only used as the
+    /// oauth_states.provider value; never stored on a mail account.
+    /// </summary>
+    public const string GoogleIntegration = "google_integration";
 }

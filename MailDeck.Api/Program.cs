@@ -198,6 +198,8 @@ try
     builder.Services.AddHttpClient<IGoogleOAuthService, GoogleOAuthService>();
     builder.Services.AddSingleton<IOAuthStateStore, OAuthStateStore>();
     builder.Services.AddSingleton<IMailConnectionService, MailConnectionService>();
+    builder.Services.AddScoped<IGoogleIntegrationAccessService, GoogleIntegrationAccessService>();
+    builder.Services.AddHttpClient<IGoogleWorkspaceClient, GoogleWorkspaceClient>();
 
     // Channel Service for auto-labeling
     builder.Services.AddSingleton<ChannelService>();

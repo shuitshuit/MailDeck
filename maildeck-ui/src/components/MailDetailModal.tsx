@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getMessage, getLabelsForMessage, addLabelToMessage, removeLabelFromMessage, createLabel, getCustomActionPatterns, moveToTrash, deleteFromTrash, restoreFromTrash, sendMail, downloadAttachment } from '../lib/api';
+import { getMessage, getLabelsForMessage, addLabelToMessage, removeLabelFromMessage, createLabel, getCustomActionPatterns, moveToTrash, deleteFromTrash, restoreFromTrash, sendMail, downloadAttachment, createMailLink } from '../lib/api';
 import { useModalClose } from '../hooks/useModalClose';
 import { useTranslation } from '../hooks/useTranslation';
 import type { Label } from '../types/label';
@@ -8,6 +8,8 @@ import LabelSelector from './LabelSelector';
 import LabelModal from './LabelModal';
 import EnhancedMailContent from './EnhancedMailContent';
 import TranslatorApiGuideModal from './TranslatorApiGuideModal';
+import ScheduleExtractModal from './ScheduleExtractModal';
+import type { ScheduleSourceMail } from './ScheduleExtractModal';
 import { useToast } from '../contexts/ToastContext';
 import { useLabels } from '../contexts/LabelContext';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -50,6 +52,8 @@ interface AttachmentInfo {
 
 interface MessageDetail {
     id: string;
+    /** Message-ID header (durable across folder moves); used for mail links */
+    messageIdHeader?: string | null;
     subject: string;
     from: string;
     to: string;
@@ -97,6 +101,31 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
     const [translatedContent, setTranslatedContent] = useState<string | null>(null);
     const [showTranslation, setShowTranslation] = useState(false);
     const [showApiGuide, setShowApiGuide] = useState(false);
+
+    // Schedule / ToDo extraction
+    const [showSchedule, setShowSchedule] = useState(false);
+    const scheduleMail = useMemo<ScheduleSourceMail | null>(() => message && {
+        subject: message.subject,
+        bodyText: message.bodyText,
+        bodyHtml: message.bodyHtml,
+        date: message.date,
+        messageIdHeader: message.messageIdHeader,
+    }, [message]);
+
+    const handleCopyMailLink = async () => {
+        if (!message?.messageIdHeader) {
+            toast.error('このメールにはリンクを作成できません (Message-IDがありません)');
+            return;
+        }
+        try {
+            const link = await createMailLink(configId, message.messageIdHeader, message.subject);
+            await navigator.clipboard.writeText(link.url);
+            toast.success('メールへのリンクをコピーしました');
+        } catch (err) {
+            console.error(err);
+            toast.error('リンクのコピーに失敗しました');
+        }
+    };
 
     // Check if HTML has external images
     const checkForImages = useMemo(() => {
@@ -576,6 +605,28 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                                 </svg>
                             </button>
                         )}
+                        {/* Schedule / ToDo button */}
+                        <button
+                            onClick={() => setShowSchedule(true)}
+                            disabled={!message}
+                            className="text-gray-500 hover:text-brand-600 hover:bg-brand-50 p-2.5 rounded-lg transition-colors disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                            title="予定・ToDoに追加"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6h.008v.008H12v-.008zM12 15h.008v.008H12V15zm0 2.25h.008v.008H12v-.008zM9.75 15h.008v.008H9.75V15zm0 2.25h.008v.008H9.75v-.008zM7.5 15h.008v.008H7.5V15zm0 2.25h.008v.008H7.5v-.008zm6.75-4.5h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V15zm0 2.25h.008v.008h-.008v-.008zm2.25-4.5h.008v.008H16.5v-.008zm0 2.25h.008v.008H16.5V15z" />
+                            </svg>
+                        </button>
+                        {/* Copy mail link button */}
+                        <button
+                            onClick={handleCopyMailLink}
+                            disabled={!message}
+                            className="text-gray-500 hover:text-brand-600 hover:bg-brand-50 p-2.5 rounded-lg transition-colors disabled:opacity-50 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                            title="メールへのリンクをコピー"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                            </svg>
+                        </button>
                         {/* Translation button */}
                         <button
                             onClick={handleTranslate}
@@ -882,6 +933,16 @@ export default function MailDetailModal({ isOpen, onClose, configId, messageId, 
                 onClose={() => setIsLabelModalOpen(false)}
                 onSave={handleCreateLabel}
             />
+
+            {/* Schedule / ToDo extraction modal */}
+            {scheduleMail && (
+                <ScheduleExtractModal
+                    isOpen={showSchedule}
+                    onClose={() => setShowSchedule(false)}
+                    configId={configId}
+                    mail={scheduleMail}
+                />
+            )}
 
             {/* Chrome Translator API guide modal */}
             <TranslatorApiGuideModal

@@ -106,6 +106,74 @@ public class OAuthController : BaseAuthController
     }
 
     /// <summary>
+    /// Starts the consent flow for the Google Calendar / Tasks integration. This is a
+    /// separate grant from the Gmail mail accounts and is stored per user.
+    /// </summary>
+    [HttpPost("google/integration/authorize")]
+    [ProducesResponseType(typeof(OAuthAuthorizeResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> StartGoogleIntegrationAuthorization()
+    {
+        var userId = GetUserId();
+
+        if (!_google.IsConfigured)
+        {
+            return BadRequest("Google OAuth is not configured on this server.");
+        }
+
+        await _db.OpenAsync();
+        var existing = await _db.GetAsync<UserGoogleIntegration>(userId);
+
+        var redirectUri = ResolveGoogleRedirectUri();
+        var state = await _stateStore.CreateAsync(
+            new OAuthState(userId, OAuthProviders.GoogleIntegration, redirectUri, null));
+
+        return Ok(new OAuthAuthorizeResponse
+        {
+            AuthorizationUrl = _google.BuildAuthorizationUrl(
+                state, redirectUri, existing?.GoogleEmail, GoogleScopes.CalendarAndTasks)
+        });
+    }
+
+    /// <summary>Whether the user has connected Google Calendar / Tasks, and with which account.</summary>
+    [HttpGet("google/integration")]
+    [ProducesResponseType(typeof(GoogleIntegrationStatusResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetGoogleIntegration()
+    {
+        var userId = GetUserId();
+
+        await _db.OpenAsync();
+        var integration = await _db.GetAsync<UserGoogleIntegration>(userId);
+
+        return Ok(new GoogleIntegrationStatusResponse
+        {
+            Available = _google.IsConfigured,
+            Connected = integration is not null,
+            Email = integration?.GoogleEmail
+        });
+    }
+
+    /// <summary>Disconnects Google Calendar / Tasks and revokes the grant at Google.</summary>
+    [HttpDelete("google/integration")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> DeleteGoogleIntegration(CancellationToken ct)
+    {
+        var userId = GetUserId();
+
+        await _db.OpenAsync();
+        var integration = await _db.GetAsync<UserGoogleIntegration>(userId);
+        if (integration is null) return NoContent();
+
+        var refreshToken = await _encryptionService.DecryptAsync(integration.RefreshToken);
+        await _google.RevokeAsync(refreshToken, ct);
+        await _db.DeleteAsync(integration);
+
+        _logger.LogInformation("Disconnected Google integration for user {UserId}", userId);
+        return NoContent();
+    }
+
+    /// <summary>
     /// Google redirects the browser here after consent. There is no bearer token on
     /// this request, so the user is identified through the single-use state value.
     /// </summary>
@@ -131,9 +199,11 @@ public class OAuthController : BaseAuthController
             return RedirectToFrontend("error", "invalid_state");
         }
 
+        var queryKey = pending.Provider == OAuthProviders.GoogleIntegration ? IntegrationQueryKey : MailQueryKey;
+
         if (string.IsNullOrEmpty(code))
         {
-            return RedirectToFrontend("error", "missing_code");
+            return RedirectToFrontend("error", "missing_code", queryKey);
         }
 
         try
@@ -143,10 +213,17 @@ public class OAuthController : BaseAuthController
             {
                 // Without a refresh token the account would stop working in an hour.
                 _logger.LogError("Google did not return a refresh token for user {UserId}", pending.UserId);
-                return RedirectToFrontend("error", "no_refresh_token");
+                return RedirectToFrontend("error", "no_refresh_token", queryKey);
             }
 
             var email = await _google.GetEmailAddressAsync(token.AccessToken, ct);
+
+            if (pending.Provider == OAuthProviders.GoogleIntegration)
+            {
+                await SaveGoogleIntegrationAsync(pending.UserId, email, token);
+                return RedirectToFrontend("success", email, IntegrationQueryKey);
+            }
+
             await SaveGoogleAccountAsync(pending, email, token);
 
             return RedirectToFrontend("success", email);
@@ -154,8 +231,45 @@ public class OAuthController : BaseAuthController
         catch (Exception ex)
         {
             _logger.LogErrorWithSql(ex, "Failed to complete Google OAuth for user {UserId}", pending.UserId);
-            return RedirectToFrontend("error", "exchange_failed");
+            return RedirectToFrontend("error", "exchange_failed", queryKey);
         }
+    }
+
+    private async Task SaveGoogleIntegrationAsync(string userId, string email, OAuthTokenResult token)
+    {
+        var encryptedAccessToken = await _encryptionService.EncryptAsync(token.AccessToken);
+        var encryptedRefreshToken = await _encryptionService.EncryptAsync(token.RefreshToken!);
+        var now = DateTime.UtcNow;
+
+        await _db.OpenAsync();
+        var existing = await _db.GetAsync<UserGoogleIntegration>(userId);
+
+        if (existing is not null)
+        {
+            existing.GoogleEmail = email;
+            existing.AccessToken = encryptedAccessToken;
+            existing.RefreshToken = encryptedRefreshToken;
+            existing.TokenExpiresAt = token.ExpiresAtUtc;
+            existing.Scopes = GoogleScopes.CalendarAndTasks;
+            existing.UpdatedAt = now;
+            await _db.UpdateAsync(existing);
+        }
+        else
+        {
+            await _db.InsertAsync(new UserGoogleIntegration
+            {
+                UserId = userId,
+                GoogleEmail = email,
+                AccessToken = encryptedAccessToken,
+                RefreshToken = encryptedRefreshToken,
+                TokenExpiresAt = token.ExpiresAtUtc,
+                Scopes = GoogleScopes.CalendarAndTasks,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+        }
+
+        _logger.LogInformation("Connected Google integration for user {UserId}", userId);
     }
 
     /// <summary>
@@ -242,9 +356,15 @@ public class OAuthController : BaseAuthController
             : configured;
     }
 
-    private IActionResult RedirectToFrontend(string status, string? detail)
+    /// <summary>Settings-page query key for the Gmail mail-account flow.</summary>
+    private const string MailQueryKey = "oauth";
+
+    /// <summary>Settings-page query key for the Calendar / Tasks integration flow.</summary>
+    private const string IntegrationQueryKey = "google_integration";
+
+    private IActionResult RedirectToFrontend(string status, string? detail, string queryKey = MailQueryKey)
     {
-        var query = $"?oauth={Uri.EscapeDataString(status)}";
+        var query = $"?{queryKey}={Uri.EscapeDataString(status)}";
         if (!string.IsNullOrEmpty(detail))
         {
             query += $"&detail={Uri.EscapeDataString(detail)}";

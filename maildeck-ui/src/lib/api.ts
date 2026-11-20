@@ -419,6 +419,16 @@ export async function updateServerConfig(id: string, config: ServerConfigPayload
 }
 
 /**
+ * Toggle push notifications on/off for a mail account
+ */
+export async function toggleServerConfigNotify(id: string) {
+    const response = await authFetch(`/serverconfig/${id}/notify/toggle`, {
+        method: 'POST'
+    });
+    return await response.json();
+}
+
+/**
  * Which OAuth providers this backend has credentials configured for
  */
 export async function getOAuthProviders(): Promise<OAuthProviders> {
@@ -842,4 +852,135 @@ export async function deleteBlockedSender(id: string) {
 export async function toggleBlockedSender(id: string) {
     const response = await authFetch(`/blocked-senders/${id}/toggle`, { method: 'POST' });
     return await response.json();
+}
+
+// ---------------------------------------------------------------------------
+// Mail links (durable /m/{id} links to a single mail)
+// ---------------------------------------------------------------------------
+
+export interface MailLink {
+    id: string;
+    /** Absolute URL to paste into calendar events / tasks / notes. */
+    url: string;
+}
+
+/**
+ * Get (or create) the durable link for a mail. Idempotent per mail.
+ */
+export async function createMailLink(configId: string, messageIdHeader: string, subject?: string): Promise<MailLink> {
+    const response = await authFetch('/mail-links', {
+        method: 'POST',
+        body: JSON.stringify({ configId, messageIdHeader, subject: subject?.slice(0, 500) ?? null })
+    });
+    const data = await response.json() as { id: string; url?: string | null };
+    // The API builds the URL from Frontend:Url; fall back to our own origin when it is unset.
+    return { id: data.id, url: data.url ?? `${window.location.origin}/m/${data.id}` };
+}
+
+export type ResolveMailLinkResult =
+    | { status: 'found'; configId: string; messageId: number; subject?: string | null }
+    | { status: 'message_not_found'; subject?: string | null }
+    | { status: 'link_not_found' };
+
+/**
+ * Resolve a mail link to the mail's current location. Not-found is a result, not an error.
+ */
+export async function resolveMailLink(linkId: string): Promise<ResolveMailLinkResult> {
+    try {
+        const response = await authFetch(`/mail-links/${encodeURIComponent(linkId)}/resolve`);
+        const data = await response.json();
+        return { status: 'found', configId: data.configId, messageId: data.messageId, subject: data.subject };
+    } catch (err) {
+        // authFetch throws with the response body as the message
+        const text = err instanceof Error ? err.message : '';
+        try {
+            const body = JSON.parse(text) as { error?: string; subject?: string | null };
+            if (body.error === 'message_not_found') return { status: 'message_not_found', subject: body.subject };
+            if (body.error === 'link_not_found') return { status: 'link_not_found' };
+        } catch {
+            // not a JSON error body
+        }
+        throw err;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Google Calendar / Tasks integration
+// ---------------------------------------------------------------------------
+
+export interface GoogleIntegrationStatus {
+    /** False when the server has no Google OAuth credentials configured. */
+    available: boolean;
+    connected: boolean;
+    email?: string | null;
+}
+
+export async function getGoogleIntegration(): Promise<GoogleIntegrationStatus> {
+    const response = await authFetch('/oauth/google/integration');
+    return await response.json();
+}
+
+/** Returns the Google consent URL for the Calendar / Tasks integration. */
+export async function startGoogleIntegration(): Promise<string> {
+    const response = await authFetch('/oauth/google/integration/authorize', { method: 'POST' });
+    const data = await response.json();
+    return data.authorizationUrl as string;
+}
+
+export async function disconnectGoogleIntegration(): Promise<void> {
+    await authFetch('/oauth/google/integration', { method: 'DELETE' });
+}
+
+/** Thrown when the user has to connect (or reconnect) Google Calendar / Tasks. */
+export class GoogleIntegrationRequiredError extends Error {
+    constructor() {
+        super('google_integration_required');
+        this.name = 'GoogleIntegrationRequiredError';
+    }
+}
+
+export interface GoogleCreated {
+    id: string;
+    htmlLink?: string | null;
+}
+
+export interface CalendarEventPayload {
+    title: string;
+    /** "yyyy-MM-ddTHH:mm", or "yyyy-MM-dd" when allDay */
+    start: string;
+    end?: string | null;
+    allDay: boolean;
+    timeZone?: string;
+    location?: string | null;
+    notes?: string | null;
+}
+
+export interface TaskPayload {
+    title: string;
+    /** "yyyy-MM-dd" */
+    due?: string | null;
+    notes?: string | null;
+}
+
+async function postGoogle(endpoint: string, payload: unknown): Promise<GoogleCreated> {
+    try {
+        const response = await authFetch(endpoint, { method: 'POST', body: JSON.stringify(payload) });
+        return await response.json();
+    } catch (err) {
+        if (err instanceof Error && err.message.includes('google_integration_required')) {
+            throw new GoogleIntegrationRequiredError();
+        }
+        throw err;
+    }
+}
+
+export async function createGoogleCalendarEvent(payload: CalendarEventPayload): Promise<GoogleCreated> {
+    return postGoogle('/google/calendar/events', {
+        ...payload,
+        timeZone: payload.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+}
+
+export async function createGoogleTask(payload: TaskPayload): Promise<GoogleCreated> {
+    return postGoogle('/google/tasks', payload);
 }

@@ -1,5 +1,16 @@
 namespace MailDeck.Api.Services;
 
+/// <summary>Scope sets requested from Google for each kind of grant.</summary>
+public static class GoogleScopes
+{
+    /// <summary>Gmail IMAP/SMTP over XOAUTH2.</summary>
+    public const string Mail = "https://mail.google.com/ https://www.googleapis.com/auth/userinfo.email";
+
+    /// <summary>Adding events to Google Calendar and tasks to Google Tasks.</summary>
+    public const string CalendarAndTasks =
+        "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/userinfo.email";
+}
+
 /// <summary>
 /// Tokens returned by Google's OAuth2 token endpoint.
 /// <paramref name="RefreshToken"/> is only present on the initial code exchange
@@ -44,7 +55,8 @@ public interface IGoogleOAuthService
     /// <summary>Redirect URI from configuration, or null when it should be derived from the request.</summary>
     string? ConfiguredRedirectUri { get; }
 
-    string BuildAuthorizationUrl(string state, string redirectUri, string? loginHint = null);
+    /// <param name="scopes">Space-separated scopes; defaults to <see cref="GoogleScopes.Mail"/>.</param>
+    string BuildAuthorizationUrl(string state, string redirectUri, string? loginHint = null, string? scopes = null);
 
     Task<OAuthTokenResult> ExchangeCodeAsync(string code, string redirectUri, CancellationToken ct = default);
 

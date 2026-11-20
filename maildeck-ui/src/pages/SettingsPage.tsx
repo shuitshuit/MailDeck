@@ -4,6 +4,7 @@ import type { AuthType } from '../lib/api';
 import ServerConfigModal from '../components/ServerConfigModal';
 import LabelManager from '../components/LabelManager';
 import PasskeySettings from '../components/PasskeySettings';
+import GoogleIntegrationCard from '../components/GoogleIntegrationCard';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -265,6 +266,8 @@ export default function SettingsPage() {
                                     ))}
                                 </div>
                             )}
+
+                            <GoogleIntegrationCard />
                         </div>
                     )}
 

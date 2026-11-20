@@ -423,6 +423,7 @@ public class MailController : BaseAuthController
                 var result = new MailMessageDetailResponse
                 {
                     Id = uid.Id.ToString(),
+                    MessageIdHeader = message.MessageId,
                     Subject = message.Subject ?? string.Empty,
                     From = message.From.ToString(),
                     To = message.To.ToString(),

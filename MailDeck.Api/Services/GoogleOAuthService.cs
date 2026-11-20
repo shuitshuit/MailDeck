@@ -16,7 +16,6 @@ public class GoogleOAuthService : IGoogleOAuthService
     private const string RevokeEndpoint = "https://oauth2.googleapis.com/revoke";
     private const string UserInfoEndpoint = "https://www.googleapis.com/oauth2/v3/userinfo";
 
-    private const string Scopes = "https://mail.google.com/ https://www.googleapis.com/auth/userinfo.email";
 
     private readonly HttpClient _httpClient;
     private readonly ILogger<GoogleOAuthService> _logger;
@@ -36,7 +35,7 @@ public class GoogleOAuthService : IGoogleOAuthService
 
     public string? ConfiguredRedirectUri { get; }
 
-    public string BuildAuthorizationUrl(string state, string redirectUri, string? loginHint = null)
+    public string BuildAuthorizationUrl(string state, string redirectUri, string? loginHint = null, string? scopes = null)
     {
         EnsureConfigured();
 
@@ -45,13 +44,15 @@ public class GoogleOAuthService : IGoogleOAuthService
             ["client_id"] = _clientId!,
             ["redirect_uri"] = redirectUri,
             ["response_type"] = "code",
-            ["scope"] = Scopes,
+            ["scope"] = scopes ?? GoogleScopes.Mail,
             ["state"] = state,
             // offline + consent guarantees a refresh token even when the user has
             // already granted access to this client before.
             ["access_type"] = "offline",
             ["prompt"] = "consent",
-            ["include_granted_scopes"] = "true"
+            // Incremental auth would merge the Gmail grant into the calendar token (and vice
+            // versa); keep each grant limited to what it was requested for.
+            ["include_granted_scopes"] = scopes is null || scopes == GoogleScopes.Mail ? "true" : "false"
         };
 
         if (!string.IsNullOrWhiteSpace(loginHint))
